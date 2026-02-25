@@ -175,12 +175,26 @@ body {
 
 /* Sidebar - desktop */
 .sidebar {
-  width: 260px;
-  min-width: 260px;
   background: #181825;
   border-right: 1px solid #313244;
   overflow: hidden;
   flex-shrink: 0;
+}
+
+/* Sidebar resize handle */
+.sidebar-resize {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  margin-left: -2px;
+}
+
+.sidebar-resize:hover,
+.sidebar-resize:active {
+  background: #89b4fa;
 }
 
 /* Sidebar backdrop - hidden on desktop */
@@ -267,10 +281,14 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    width: 100%;
-    min-width: 0;
+    width: 100% !important;
+    min-width: 0 !important;
     z-index: 50;
     border-right: none;
+  }
+
+  .sidebar-resize {
+    display: none;
   }
 
   .sidebar-backdrop {

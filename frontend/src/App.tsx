@@ -37,6 +37,10 @@ export default function App() {
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [showNewSession, setShowNewSession] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const stored = localStorage.getItem("sidebarWidth");
+    return stored ? Number(stored) : 260;
+  });
   const [mountedSessions, setMountedSessions] = useState<string[]>([]);
   const [sessionActivity, setSessionActivity] = useState<Record<string, ActivityState>>({});
   const [showSettings, setShowSettings] = useState(false);
@@ -49,6 +53,33 @@ export default function App() {
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
   const settingsRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+
+  const handleSidebarDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const onMove = (ev: MouseEvent) => {
+      if (!draggingRef.current) return;
+      const newWidth = Math.max(180, Math.min(ev.clientX, 500));
+      setSidebarWidth(newWidth);
+    };
+    const onUp = () => {
+      draggingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      setSidebarWidth((w) => {
+        localStorage.setItem("sidebarWidth", String(w));
+        return w;
+      });
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, []);
 
   const authHeaders = useCallback(
     () => ({
@@ -356,17 +387,20 @@ export default function App() {
 
         {/* Sidebar */}
         {sidebarOpen && (
-          <aside className="sidebar">
-            <SessionList
-              sessions={sessions}
-              activeSessions={activeSessions}
-              focusedSessionId={focusedSessionId}
-              sessionActivity={sessionActivity}
-              onSelect={selectSession}
-              onResume={handleResume}
-              onNewSession={() => setShowNewSession(true)}
-            />
-          </aside>
+          <>
+            <aside className="sidebar" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
+              <SessionList
+                sessions={sessions}
+                activeSessions={activeSessions}
+                focusedSessionId={focusedSessionId}
+                sessionActivity={sessionActivity}
+                onSelect={selectSession}
+                onResume={handleResume}
+                onNewSession={() => setShowNewSession(true)}
+              />
+            </aside>
+            <div className="sidebar-resize" onMouseDown={handleSidebarDragStart} />
+          </>
         )}
 
         {/* Terminal Area */}
