@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:xtermjs.org)",
+      "WebFetch(domain:vitejs.dev)",
+      "WebFetch(domain:vite.dev)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:stackoverflow.com)",
+      "WebFetch(domain:css-tricks.com)",
+      "WebFetch(domain:en.wikipedia.org)",
+      "Bash(git:*)",
+      "Bash(echo claude not found in PATH:*)",
+      "Bash(echo pywinpty not installed:*)",
+      "Bash(echo:*)",
+      "Bash(echo trying pwd:*)",
+      "Bash(cd \"C:/Users/STOICPC_QQQ/Documents/ClaudeCodeRemote/frontend\" && npm install 2>&1)",
+      "Bash(cd:*)"
+    ]
+  }
+}

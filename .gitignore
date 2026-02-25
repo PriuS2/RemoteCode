@@ -1,0 +1,29 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Build output (served by backend)
+backend/static/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Env
+.env
