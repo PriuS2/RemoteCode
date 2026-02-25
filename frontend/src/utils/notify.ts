@@ -43,7 +43,6 @@ export function sendBrowserNotification(title: string, body: string) {
     try {
       const n = new Notification(title, {
         body,
-        icon: "/favicon.ico",
         tag: "ccr-done",
       });
       // Auto-close after 5 seconds

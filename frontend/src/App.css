@@ -15,7 +15,7 @@ body {
   display: flex;
   flex-direction: column;
   width: 100vw;
-  height: 100vh;
+  height: 100dvh;
 }
 
 /* Header */
@@ -77,15 +77,22 @@ body {
   display: flex;
   flex: 1;
   min-height: 0;
+  position: relative;
 }
 
-/* Sidebar */
+/* Sidebar - desktop */
 .sidebar {
   width: 260px;
   min-width: 260px;
   background: #181825;
   border-right: 1px solid #313244;
   overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* Sidebar backdrop - hidden on desktop */
+.sidebar-backdrop {
+  display: none;
 }
 
 /* Terminal area */
@@ -138,4 +145,37 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #585b70;
+}
+
+/* ===== Mobile (< 768px) ===== */
+@media (max-width: 768px) {
+  .app-container {
+    height: 100dvh;
+  }
+
+  /* Sidebar = full-screen overlay */
+  .sidebar {
+    position: fixed;
+    top: 44px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    min-width: 0;
+    z-index: 50;
+    border-right: none;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 49;
+  }
+
+  /* Terminal takes full width */
+  .terminal-area {
+    width: 100%;
+  }
 }

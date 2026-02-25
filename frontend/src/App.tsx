@@ -94,6 +94,8 @@ export default function App() {
     setSessionActivity({});
   };
 
+  const isMobile = () => window.innerWidth <= 768;
+
   const selectSession = (id: string) => {
     setActiveSessionId(id);
     // Clear "done" badge when viewing
@@ -106,6 +108,8 @@ export default function App() {
     if (!mountedSessions.includes(id)) {
       setMountedSessions((prev) => [...prev, id]);
     }
+    // Auto-close sidebar on mobile
+    if (isMobile()) setSidebarOpen(false);
   };
 
   const handleActivityChange = useCallback(
@@ -215,6 +219,11 @@ export default function App() {
       </header>
 
       <div className="app-body">
+        {/* Sidebar backdrop (mobile) */}
+        {sidebarOpen && (
+          <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
+        )}
+
         {/* Sidebar */}
         {sidebarOpen && (
           <aside className="sidebar">
