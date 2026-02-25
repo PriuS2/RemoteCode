@@ -1,9 +1,10 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import { useWebSocket, getWsUrl } from "../hooks/useWebSocket";
+import MobileKeyBar from "./MobileKeyBar";
 
 export type ActivityState = "idle" | "processing" | "done";
 
@@ -11,6 +12,7 @@ interface TerminalProps {
   sessionId: string;
   token: string;
   visible?: boolean;
+  fontSize?: number;
   onActivityChange?: (sessionId: string, state: ActivityState) => void;
 }
 
@@ -29,6 +31,7 @@ export default function Terminal({
   sessionId,
   token,
   visible = true,
+  fontSize = 14,
   onActivityChange,
 }: TerminalProps) {
   const innerRef = useRef<HTMLDivElement>(null);
@@ -80,7 +83,7 @@ export default function Terminal({
 
     const term = new XTerm({
       cursorBlink: true,
-      fontSize: 14,
+      fontSize,
       fontFamily: "'Cascadia Code', 'Consolas', monospace",
       theme: {
         background: "#1e1e2e",
@@ -149,6 +152,18 @@ export default function Terminal({
     };
   }, [sendInput, sendResize]);
 
+  // fontSize change -> update terminal
+  useEffect(() => {
+    if (termRef.current && fitAddonRef.current) {
+      termRef.current.options.fontSize = fontSize;
+      try {
+        fitAddonRef.current.fit();
+      } catch {
+        // ignore
+      }
+    }
+  }, [fontSize]);
+
   // visible -> refit + refresh
   useEffect(() => {
     if (visible && termRef.current && fitAddonRef.current) {
@@ -163,6 +178,19 @@ export default function Terminal({
       return () => clearTimeout(timer);
     }
   }, [visible]);
+
+  const handleKeyBarInput = useCallback(
+    (data: string) => {
+      sendInput(data);
+      // Detect Enter key from key bar
+      if (data.includes("\r") || data.includes("\n")) {
+        enterTimeRef.current = Date.now();
+      }
+      // Refocus terminal
+      termRef.current?.focus();
+    },
+    [sendInput],
+  );
 
   const showBanner = status !== "connected";
 
@@ -193,6 +221,7 @@ export default function Terminal({
         </div>
       )}
       <div ref={innerRef} style={{ flex: 1, minHeight: 0 }} />
+      <MobileKeyBar onKey={handleKeyBarInput} />
     </div>
   );
 }

@@ -25,6 +25,11 @@ function getStoredToken(): string | null {
   return localStorage.getItem("token");
 }
 
+function getStoredFontSize(key: string, fallback: number): number {
+  const v = localStorage.getItem(key);
+  return v ? Number(v) : fallback;
+}
+
 export default function App() {
   const [token, setToken] = useState<string | null>(getStoredToken);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -33,11 +38,15 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mountedSessions, setMountedSessions] = useState<string[]>([]);
   const [sessionActivity, setSessionActivity] = useState<Record<string, ActivityState>>({});
+  const [showSettings, setShowSettings] = useState(false);
+  const [webFontSize, setWebFontSize] = useState(() => getStoredFontSize("webFontSize", 14));
+  const [terminalFontSize, setTerminalFontSize] = useState(() => getStoredFontSize("terminalFontSize", 14));
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeSessionIdRef = useRef(activeSessionId);
   activeSessionIdRef.current = activeSessionId;
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
+  const settingsRef = useRef<HTMLDivElement>(null);
 
   const authHeaders = useCallback(
     () => ({
@@ -63,6 +72,32 @@ export default function App() {
       // ignore
     }
   }, [token, authHeaders]);
+
+  // Persist font sizes
+  useEffect(() => {
+    localStorage.setItem("webFontSize", String(webFontSize));
+    document.documentElement.style.setProperty("--web-fs", webFontSize + "px");
+    document.documentElement.style.setProperty("--web-fs-sm", (webFontSize - 1) + "px");
+    document.documentElement.style.setProperty("--web-fs-xs", (webFontSize - 3) + "px");
+    document.documentElement.style.setProperty("--web-fs-xxs", (webFontSize - 4) + "px");
+  }, [webFontSize]);
+
+  useEffect(() => {
+    localStorage.setItem("terminalFontSize", String(terminalFontSize));
+  }, [terminalFontSize]);
+
+  // Close settings when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setShowSettings(false);
+      }
+    };
+    if (showSettings) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showSettings]);
 
   // Request notification permission on login
   useEffect(() => {
@@ -213,9 +248,59 @@ export default function App() {
           </button>
           <span className="app-title">Claude Code Remote</span>
         </div>
-        <button className="logout-btn" onClick={handleLogout}>
-          Logout
-        </button>
+        <div className="header-right" ref={settingsRef}>
+          <button
+            className="settings-btn"
+            onClick={() => setShowSettings(!showSettings)}
+            title="Settings"
+          >
+            {"\u2699"}
+          </button>
+          {showSettings && (
+            <div className="settings-panel">
+              <div className="settings-section">
+                <label className="settings-label">Web Font Size</label>
+                <div className="settings-control">
+                  <button
+                    className="size-btn"
+                    onClick={() => setWebFontSize((s) => Math.max(10, s - 1))}
+                  >
+                    −
+                  </button>
+                  <span className="size-value">{webFontSize}px</span>
+                  <button
+                    className="size-btn"
+                    onClick={() => setWebFontSize((s) => Math.min(24, s + 1))}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              <div className="settings-section">
+                <label className="settings-label">Terminal Font Size</label>
+                <div className="settings-control">
+                  <button
+                    className="size-btn"
+                    onClick={() => setTerminalFontSize((s) => Math.max(8, s - 1))}
+                  >
+                    −
+                  </button>
+                  <span className="size-value">{terminalFontSize}px</span>
+                  <button
+                    className="size-btn"
+                    onClick={() => setTerminalFontSize((s) => Math.min(28, s + 1))}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              <div className="settings-divider" />
+              <button className="settings-logout" onClick={handleLogout}>
+                Logout
+              </button>
+            </div>
+          )}
+        </div>
       </header>
 
       <div className="app-body">
@@ -261,6 +346,7 @@ export default function App() {
               sessionId={sid}
               token={token}
               visible={sid === activeSessionId}
+              fontSize={terminalFontSize}
               onActivityChange={handleActivityChange}
             />
           ))}

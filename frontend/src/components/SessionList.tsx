@@ -89,7 +89,7 @@ export default function SessionList({
           padding: "12px 16px",
           borderBottom: "1px solid #313244",
           fontWeight: 600,
-          fontSize: 14,
+          fontSize: "var(--web-fs)",
           color: "#cdd6f4",
         }}
       >
@@ -103,7 +103,7 @@ export default function SessionList({
               padding: "16px",
               color: "#6c7086",
               textAlign: "center",
-              fontSize: 13,
+              fontSize: "var(--web-fs-sm)",
             }}
           >
             No sessions
@@ -156,7 +156,7 @@ export default function SessionList({
                 />
                 <span
                   style={{
-                    fontSize: 13,
+                    fontSize: "var(--web-fs-sm)",
                     fontWeight: 500,
                     color: "#cdd6f4",
                     overflow: "hidden",
@@ -175,7 +175,7 @@ export default function SessionList({
 
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize: "var(--web-fs-xs)",
                   color: "#6c7086",
                   marginLeft: 16,
                   overflow: "hidden",
@@ -196,7 +196,7 @@ export default function SessionList({
               >
                 <span
                   style={{
-                    fontSize: 10,
+                    fontSize: "var(--web-fs-xxs)",
                     padding: "2px 6px",
                     borderRadius: 4,
                     background: "#313244",
@@ -280,7 +280,7 @@ export default function SessionList({
           style={{
             width: "100%",
             padding: "8px 16px",
-            fontSize: 13,
+            fontSize: "var(--web-fs-sm)",
             fontWeight: 600,
             background: "#89b4fa",
             color: "#1e1e2e",
@@ -309,7 +309,7 @@ function ActionButton({
     <button
       onClick={onClick}
       style={{
-        fontSize: 10,
+        fontSize: "var(--web-fs-xxs)",
         padding: "2px 6px",
         borderRadius: 4,
         background: "transparent",

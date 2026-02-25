@@ -16,7 +16,11 @@
       "Bash(echo:*)",
       "Bash(echo trying pwd:*)",
       "Bash(cd \"C:/Users/STOICPC_QQQ/Documents/ClaudeCodeRemote/frontend\" && npm install 2>&1)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(head:*)",
+      "Bash(cd C:/Users/STOICPC_QQQ/Documents/ClaudeCodeRemote/frontend && npx tsc --noEmit 2>&1)",
+      "Bash(cd C:\\\\Users\\\\STOICPC_QQQ\\\\Documents\\\\ClaudeCodeRemote\\\\frontend:*)",
+      "Bash(cd C:/Users/STOICPC_QQQ/Documents/ClaudeCodeRemote/frontend && npm run build 2>&1)"
     ]
   }
 }
