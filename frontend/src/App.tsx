@@ -33,7 +33,8 @@ function getStoredFontSize(key: string, fallback: number): number {
 export default function App() {
   const [token, setToken] = useState<string | null>(getStoredToken);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeSessions, setActiveSessions] = useState<string[]>([]);
+  const [focusedIndex, setFocusedIndex] = useState(0);
   const [showNewSession, setShowNewSession] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mountedSessions, setMountedSessions] = useState<string[]>([]);
@@ -42,8 +43,9 @@ export default function App() {
   const [webFontSize, setWebFontSize] = useState(() => getStoredFontSize("webFontSize", 14));
   const [terminalFontSize, setTerminalFontSize] = useState(() => getStoredFontSize("terminalFontSize", 14));
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const activeSessionIdRef = useRef(activeSessionId);
-  activeSessionIdRef.current = activeSessionId;
+  const activeSessionsRef = useRef(activeSessions);
+  activeSessionsRef.current = activeSessions;
+  const focusedSessionId = activeSessions[focusedIndex] ?? null;
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
   const settingsRef = useRef<HTMLDivElement>(null);
@@ -124,15 +126,39 @@ export default function App() {
     localStorage.removeItem("token");
     setToken(null);
     setSessions([]);
-    setActiveSessionId(null);
+    setActiveSessions([]);
+    setFocusedIndex(0);
     setMountedSessions([]);
     setSessionActivity({});
   };
 
   const isMobile = () => window.innerWidth <= 768;
 
-  const selectSession = (id: string) => {
-    setActiveSessionId(id);
+  const selectSession = (id: string, split = false) => {
+    const forceSingle = isMobile() ? true : !split;
+
+    if (forceSingle) {
+      // Single mode
+      setActiveSessions([id]);
+      setFocusedIndex(0);
+    } else {
+      // Split mode
+      setActiveSessions((prev) => {
+        if (prev.length < 2) {
+          if (prev.includes(id)) return prev; // already shown
+          return [...prev, id];
+        } else {
+          // Replace focused panel
+          const newArr = [...prev];
+          newArr[focusedIndex] = id;
+          return newArr;
+        }
+      });
+      if (activeSessions.length < 2) {
+        setFocusedIndex(1);
+      }
+    }
+
     // Clear "done" badge when viewing
     setSessionActivity((prev) => {
       if (prev[id] === "done") {
@@ -147,18 +173,28 @@ export default function App() {
     if (isMobile()) setSidebarOpen(false);
   };
 
+  const closeSplitPanel = (index: number) => {
+    setActiveSessions((prev) => {
+      const remaining = prev.filter((_, i) => i !== index);
+      return remaining;
+    });
+    setFocusedIndex(0);
+  };
+
   const handleActivityChange = useCallback(
     (sessionId: string, state: ActivityState) => {
+      const isViewing = activeSessionsRef.current.includes(sessionId);
+
       setSessionActivity((prev) => {
         // If user is currently viewing this session and it's "done", set idle instead
-        if (state === "done" && activeSessionIdRef.current === sessionId) {
+        if (state === "done" && isViewing) {
           return { ...prev, [sessionId]: "idle" };
         }
         return { ...prev, [sessionId]: state };
       });
 
       // Notify when done and not viewing that session
-      if (state === "done" && activeSessionIdRef.current !== sessionId) {
+      if (state === "done" && !isViewing) {
         const session = sessionsRef.current.find((s) => s.id === sessionId);
         const name = session?.name || "Session";
         playNotificationSound();
@@ -174,12 +210,21 @@ export default function App() {
     fetchSessions();
   };
 
+  const removeFromActiveSessions = (id: string) => {
+    setActiveSessions((prev) => {
+      const next = prev.filter((sid) => sid !== id);
+      if (next.length === 0) setFocusedIndex(0);
+      else setFocusedIndex((fi) => Math.min(fi, next.length - 1));
+      return next;
+    });
+  };
+
   const handleSuspend = async (id: string) => {
     await fetch(`/api/sessions/${id}/suspend`, {
       method: "POST",
       headers: authHeaders(),
     });
-    if (activeSessionId === id) setActiveSessionId(null);
+    removeFromActiveSessions(id);
     setMountedSessions((prev) => prev.filter((sid) => sid !== id));
     setSessionActivity((prev) => {
       const next = { ...prev };
@@ -205,7 +250,7 @@ export default function App() {
       method: "DELETE",
       headers: authHeaders(),
     });
-    if (activeSessionId === id) setActiveSessionId(null);
+    removeFromActiveSessions(id);
     setMountedSessions((prev) => prev.filter((sid) => sid !== id));
     setSessionActivity((prev) => {
       const next = { ...prev };
@@ -220,7 +265,7 @@ export default function App() {
       method: "DELETE",
       headers: authHeaders(),
     });
-    if (activeSessionId === id) setActiveSessionId(null);
+    removeFromActiveSessions(id);
     setMountedSessions((prev) => prev.filter((sid) => sid !== id));
     setSessionActivity((prev) => {
       const next = { ...prev };
@@ -314,13 +359,11 @@ export default function App() {
           <aside className="sidebar">
             <SessionList
               sessions={sessions}
-              activeSessionId={activeSessionId}
+              activeSessions={activeSessions}
+              focusedSessionId={focusedSessionId}
               sessionActivity={sessionActivity}
               onSelect={selectSession}
-              onSuspend={handleSuspend}
               onResume={handleResume}
-              onTerminate={handleTerminate}
-              onDelete={handleDelete}
               onNewSession={() => setShowNewSession(true)}
             />
           </aside>
@@ -340,16 +383,31 @@ export default function App() {
             </div>
           )}
 
-          {mountedSessions.map((sid) => (
-            <Terminal
-              key={sid}
-              sessionId={sid}
-              token={token}
-              visible={sid === activeSessionId}
-              fontSize={terminalFontSize}
-              onActivityChange={handleActivityChange}
-            />
-          ))}
+          {mountedSessions.map((sid) => {
+            const panelIndex = activeSessions.indexOf(sid);
+            const isVisible = panelIndex !== -1;
+            const splitMode = activeSessions.length === 2;
+            const sessionName = sessions.find((s) => s.id === sid)?.name || "Session";
+            return (
+              <Terminal
+                key={sid}
+                sessionId={sid}
+                token={token}
+                visible={isVisible}
+                fontSize={terminalFontSize}
+                onActivityChange={handleActivityChange}
+                panelIndex={panelIndex}
+                splitMode={splitMode}
+                isFocused={isVisible && panelIndex === focusedIndex}
+                onFocus={() => { if (panelIndex !== -1) setFocusedIndex(panelIndex); }}
+                sessionName={sessionName}
+                onClosePanel={() => { if (panelIndex !== -1) closeSplitPanel(panelIndex); }}
+                onSuspend={() => handleSuspend(sid)}
+                onMaximize={() => selectSession(sid)}
+                onTerminate={() => handleTerminate(sid)}
+              />
+            );
+          })}
         </main>
       </div>
 

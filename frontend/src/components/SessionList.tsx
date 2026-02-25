@@ -12,13 +12,11 @@ interface Session {
 
 interface SessionListProps {
   sessions: Session[];
-  activeSessionId: string | null;
+  activeSessions: string[];
+  focusedSessionId: string | null;
   sessionActivity: Record<string, ActivityState>;
-  onSelect: (id: string) => void;
-  onSuspend: (id: string) => void;
+  onSelect: (id: string, split?: boolean) => void;
   onResume: (id: string) => void;
-  onTerminate: (id: string) => void;
-  onDelete: (id: string) => void;
   onNewSession: () => void;
 }
 
@@ -73,13 +71,11 @@ const DoneBadge = () => (
 
 export default function SessionList({
   sessions,
-  activeSessionId,
+  activeSessions,
+  focusedSessionId,
   sessionActivity,
   onSelect,
-  onSuspend,
   onResume,
-  onTerminate,
-  onDelete,
   onNewSession,
 }: SessionListProps) {
   return (
@@ -111,30 +107,45 @@ export default function SessionList({
         )}
 
         {sessions.map((session) => {
-          const isActive = session.id === activeSessionId;
+          const isFocused = session.id === focusedSessionId;
+          const isActiveNotFocused = !isFocused && activeSessions.includes(session.id);
+          const isHighlighted = isFocused || isActiveNotFocused;
           const activity = sessionActivity[session.id];
+
+          const borderColor = isFocused
+            ? "#89b4fa"
+            : isActiveNotFocused
+              ? "#585b70"
+              : "transparent";
+          const bgColor = isFocused
+            ? "#313244"
+            : isActiveNotFocused
+              ? "#252535"
+              : "transparent";
+
           return (
             <div
               key={session.id}
               style={{
                 padding: "10px 16px",
                 cursor: "pointer",
-                background: isActive ? "#313244" : "transparent",
-                borderLeft: isActive ? "3px solid #89b4fa" : "3px solid transparent",
+                background: bgColor,
+                borderLeft: `3px solid ${borderColor}`,
                 transition: "background 0.15s",
               }}
-              onClick={() => {
-                if (session.status === "active") onSelect(session.id);
+              onClick={(e) => {
+                if (session.status === "active") onSelect(session.id, e.shiftKey);
                 if (session.status === "closed" || session.status === "suspended")
                   onResume(session.id);
               }}
               onMouseEnter={(e) => {
-                if (!isActive)
+                if (!isHighlighted)
                   (e.currentTarget as HTMLDivElement).style.background = "#28283d";
               }}
               onMouseLeave={(e) => {
-                if (!isActive)
-                  (e.currentTarget as HTMLDivElement).style.background = "transparent";
+                if (!isHighlighted)
+                  (e.currentTarget as HTMLDivElement).style.background =
+                    bgColor === "transparent" ? "transparent" : bgColor;
               }}
             >
               <div
@@ -205,69 +216,6 @@ export default function SessionList({
                 >
                   {STATUS_LABELS[session.status] || session.status}
                 </span>
-
-                {session.status === "active" && (
-                  <>
-                    <ActionButton
-                      label="Suspend"
-                      color="#f9e2af"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSuspend(session.id);
-                      }}
-                    />
-                    <ActionButton
-                      label="Kill"
-                      color="#f38ba8"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onTerminate(session.id);
-                      }}
-                    />
-                  </>
-                )}
-
-                {session.status === "suspended" && (
-                  <>
-                    <ActionButton
-                      label="Resume"
-                      color="#a6e3a1"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onResume(session.id);
-                      }}
-                    />
-                    <ActionButton
-                      label="Delete"
-                      color="#f38ba8"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete(session.id);
-                      }}
-                    />
-                  </>
-                )}
-
-                {session.status === "closed" && (
-                  <>
-                    <ActionButton
-                      label="Reopen"
-                      color="#a6e3a1"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onResume(session.id);
-                      }}
-                    />
-                    <ActionButton
-                      label="Delete"
-                      color="#f38ba8"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete(session.id);
-                      }}
-                    />
-                  </>
-                )}
               </div>
             </div>
           );
@@ -275,6 +223,9 @@ export default function SessionList({
       </div>
 
       <div style={{ padding: "12px 16px", borderTop: "1px solid #313244" }}>
+        {activeSessions.length === 1 && (
+          <div className="split-hint">Shift+Click to split view</div>
+        )}
         <button
           onClick={onNewSession}
           style={{
@@ -293,38 +244,5 @@ export default function SessionList({
         </button>
       </div>
     </div>
-  );
-}
-
-function ActionButton({
-  label,
-  color,
-  onClick,
-}: {
-  label: string;
-  color: string;
-  onClick: (e: React.MouseEvent) => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        fontSize: "var(--web-fs-xxs)",
-        padding: "2px 6px",
-        borderRadius: 4,
-        background: "transparent",
-        color,
-        border: `1px solid ${color}40`,
-        cursor: "pointer",
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLButtonElement).style.background = `${color}20`;
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-      }}
-    >
-      {label}
-    </button>
   );
 }

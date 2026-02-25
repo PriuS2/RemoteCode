@@ -14,6 +14,15 @@ interface TerminalProps {
   visible?: boolean;
   fontSize?: number;
   onActivityChange?: (sessionId: string, state: ActivityState) => void;
+  panelIndex: number;
+  splitMode: boolean;
+  isFocused: boolean;
+  onFocus: () => void;
+  sessionName: string;
+  onClosePanel: () => void;
+  onSuspend: () => void;
+  onMaximize: () => void;
+  onTerminate: () => void;
 }
 
 const STATUS_STYLE: Record<string, React.CSSProperties> = {
@@ -33,6 +42,15 @@ export default function Terminal({
   visible = true,
   fontSize = 14,
   onActivityChange,
+  panelIndex,
+  splitMode,
+  isFocused,
+  onFocus,
+  sessionName,
+  onClosePanel,
+  onSuspend,
+  onMaximize,
+  onTerminate,
 }: TerminalProps) {
   const innerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
@@ -164,7 +182,7 @@ export default function Terminal({
     }
   }, [fontSize]);
 
-  // visible -> refit + refresh
+  // visible / splitMode / panelIndex -> refit + refresh
   useEffect(() => {
     if (visible && termRef.current && fitAddonRef.current) {
       const timer = setTimeout(() => {
@@ -177,7 +195,14 @@ export default function Terminal({
       }, 50);
       return () => clearTimeout(timer);
     }
-  }, [visible]);
+  }, [visible, splitMode, panelIndex]);
+
+  // Focus management
+  useEffect(() => {
+    if (visible && isFocused && termRef.current) {
+      termRef.current.focus();
+    }
+  }, [visible, isFocused]);
 
   const handleKeyBarInput = useCallback(
     (data: string) => {
@@ -194,18 +219,92 @@ export default function Terminal({
 
   const showBanner = status !== "connected";
 
-  return (
-    <div
-      style={{
+  // Compute position style
+  const positionStyle: React.CSSProperties = splitMode
+    ? {
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        width: "50%",
+        left: panelIndex === 0 ? 0 : "50%",
+        borderLeft: panelIndex === 1 ? "1px solid #313244" : undefined,
+      }
+    : {
         position: "absolute",
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
+      };
+
+  return (
+    <div
+      style={{
+        ...positionStyle,
         display: visible ? "flex" : "none",
         flexDirection: "column",
       }}
+      onMouseDown={onFocus}
     >
+      {/* Terminal title bar */}
+      <div
+        style={{
+          height: 28,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 10px",
+          fontSize: 11,
+          fontWeight: 600,
+          color: "#cdd6f4",
+          background: splitMode
+            ? (isFocused ? "#313244" : "#1e1e2e")
+            : "#181825",
+          borderBottom: splitMode
+            ? `2px solid ${isFocused ? "#89b4fa" : "#313244"}`
+            : "1px solid #313244",
+          flexShrink: 0,
+          userSelect: "none",
+        }}
+      >
+        <span
+          style={{
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          {sessionName}
+        </span>
+        <div style={{ display: "flex", gap: 2, marginLeft: 8, flexShrink: 0 }}>
+          {/* Minimize = Suspend */}
+          <TitleBarBtn
+            icon={<MinimizeIcon />}
+            title="Suspend"
+            hoverColor="#f9e2af"
+            onClick={(e) => { e.stopPropagation(); onSuspend(); }}
+          />
+          {/* Maximize = single mode (split only) */}
+          {splitMode && (
+            <TitleBarBtn
+              icon={<MaximizeIcon />}
+              title="Maximize"
+              hoverColor="#89b4fa"
+              onClick={(e) => { e.stopPropagation(); onMaximize(); }}
+            />
+          )}
+          {/* Close = Kill */}
+          <TitleBarBtn
+            icon={<CloseIcon />}
+            title="Kill"
+            hoverColor="#f38ba8"
+            onClick={(e) => { e.stopPropagation(); onTerminate(); }}
+          />
+        </div>
+      </div>
+
       {showBanner && (
         <div
           style={{
@@ -221,7 +320,71 @@ export default function Terminal({
         </div>
       )}
       <div ref={innerRef} style={{ flex: 1, minHeight: 0 }} />
-      <MobileKeyBar onKey={handleKeyBarInput} />
+      {!splitMode && <MobileKeyBar onKey={handleKeyBarInput} />}
     </div>
   );
 }
+
+/* ---- Title bar helper components ---- */
+
+function TitleBarBtn({
+  icon,
+  title,
+  hoverColor,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  hoverColor: string;
+  onClick: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        background: "none",
+        border: "none",
+        color: "#6c7086",
+        cursor: "pointer",
+        padding: "2px 4px",
+        borderRadius: 3,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        lineHeight: 1,
+      }}
+      onMouseEnter={(e) => {
+        const btn = e.currentTarget as HTMLButtonElement;
+        btn.style.color = hoverColor;
+        btn.style.background = `${hoverColor}18`;
+      }}
+      onMouseLeave={(e) => {
+        const btn = e.currentTarget as HTMLButtonElement;
+        btn.style.color = "#6c7086";
+        btn.style.background = "none";
+      }}
+    >
+      {icon}
+    </button>
+  );
+}
+
+const MinimizeIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <line x1="2" y1="9" x2="10" y2="9" />
+  </svg>
+);
+
+const MaximizeIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="2" width="8" height="8" />
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <line x1="3" y1="3" x2="9" y2="9" />
+    <line x1="9" y1="3" x2="3" y2="9" />
+  </svg>
+);

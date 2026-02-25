@@ -19,6 +19,7 @@ class PtyInstance:
     process: PtyProcess
     work_path: str
     _closed: bool = field(default=False, init=False)
+    _output_buffer: str = field(default="", init=False)
 
     def read(self, length: int = 4096) -> Optional[str]:
         """Blocking read. Returns data, empty string (transient), or None (dead)."""
@@ -35,6 +36,15 @@ class PtyInstance:
             logger.warning(f"[READ] {self.session_id}: {type(e).__name__}: {e}")
             self._closed = True
             return None
+
+    def append_output(self, data: str) -> None:
+        """최근 출력을 버퍼에 저장 (최대 8KB)."""
+        self._output_buffer += data
+        if len(self._output_buffer) > 8192:
+            self._output_buffer = self._output_buffer[-8192:]
+
+    def get_output_buffer(self) -> str:
+        return self._output_buffer
 
     def write(self, data: str) -> None:
         if not self._closed:

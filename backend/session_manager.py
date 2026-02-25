@@ -1,8 +1,7 @@
 import asyncio
-import glob
-import json
 import logging
 import os
+import re
 import uuid
 from typing import Optional
 
@@ -74,22 +73,34 @@ class SessionManager:
 
         instance = pty_manager.get(session_id)
         if instance and instance.is_alive():
-            # /exit 명령으로 Claude Code 정상 종료
-            instance.write("/exit\n")
+            # /exit 명령을 한 글자씩 보내고, Enter를 딜레이 후 전송
+            for ch in "/exit":
+                instance.write(ch)
+                await asyncio.sleep(0.02)
+            await asyncio.sleep(0.3)
+            instance.write("\r")
+            await asyncio.sleep(0.5)
+            instance.write("\r")
 
-            # 종료 대기 (최대 10초)
+            # 종료 대기 (최대 10초) - pty_to_ws가 출력을 버퍼에 저장함
             for _ in range(100):
                 if not instance.is_alive():
                     break
                 await asyncio.sleep(0.1)
 
-            # claude_session_id 캡처 시도
-            claude_sid = await self._capture_claude_session_id(session["work_path"])
-            if claude_sid:
+            # 버퍼에서 --resume UUID 추출
+            await asyncio.sleep(0.5)  # WebSocket reader가 마지막 출력을 버퍼에 쓸 시간
+            output = instance.get_output_buffer()
+            resume_pattern = re.compile(r"--resume\s+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})")
+            match = resume_pattern.search(output)
+            if match:
+                claude_sid = match.group(1)
                 await db_update_session(session_id, claude_session_id=claude_sid)
-                logger.info(f"Captured claude_session_id: {claude_sid}")
+                logger.info(f"Captured claude_session_id from output: {claude_sid}")
+            else:
+                logger.warning(f"Could not find --resume UUID in output buffer ({len(output)} chars)")
 
-            # PTY 정리 (이미 종료됐을 수 있음)
+            # PTY 정리
             pty_manager.remove(session_id)
 
         await db_update_session(session_id, status="suspended")
@@ -147,30 +158,5 @@ class SessionManager:
 
         await db_delete_session(session_id)
         logger.info(f"Session deleted: {session_id}")
-
-    async def _capture_claude_session_id(self, work_path: str) -> Optional[str]:
-        """~/.claude/projects/ 디렉토리에서 claude_session_id 캡처."""
-        try:
-            home = os.path.expanduser("~")
-            projects_dir = os.path.join(home, ".claude", "projects")
-            if not os.path.isdir(projects_dir):
-                return None
-
-            # 가장 최근 수정된 세션 파일 탐색
-            pattern = os.path.join(projects_dir, "**", "*.json")
-            files = glob.glob(pattern, recursive=True)
-            if not files:
-                return None
-
-            # 최신 파일에서 세션 ID 추출
-            latest = max(files, key=os.path.getmtime)
-            with open(latest, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, dict) and "sessionId" in data:
-                    return data["sessionId"]
-        except Exception as e:
-            logger.warning(f"Failed to capture claude_session_id: {e}")
-        return None
-
 
 session_manager = SessionManager()

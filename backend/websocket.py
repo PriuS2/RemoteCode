@@ -24,6 +24,7 @@ async def pty_to_ws(ws: WebSocket, instance: PtyInstance) -> None:
                     pass
                 break
             if data:
+                instance.append_output(data)
                 await ws.send_json({"type": "output", "data": data})
         await ws.send_json({"type": "status", "data": "closed"})
     except WebSocketDisconnect:
