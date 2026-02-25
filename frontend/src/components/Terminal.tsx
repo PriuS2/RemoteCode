@@ -1,10 +1,11 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import { useWebSocket, getWsUrl } from "../hooks/useWebSocket";
 import MobileKeyBar from "./MobileKeyBar";
+import FileExplorer from "./FileExplorer";
 
 export type ActivityState = "idle" | "processing" | "done";
 
@@ -19,6 +20,7 @@ interface TerminalProps {
   isFocused: boolean;
   onFocus: () => void;
   sessionName: string;
+  workPath: string;
   onClosePanel: () => void;
   onSuspend: () => void;
   onMaximize: () => void;
@@ -47,6 +49,7 @@ export default function Terminal({
   isFocused,
   onFocus,
   sessionName,
+  workPath,
   onClosePanel,
   onSuspend,
   onMaximize,
@@ -60,6 +63,14 @@ export default function Terminal({
   const enterTimeRef = useRef(0);
   const onActivityChangeRef = useRef(onActivityChange);
   onActivityChangeRef.current = onActivityChange;
+
+  const [explorerOpen, setExplorerOpen] = useState(false);
+  const [explorerWidth, setExplorerWidth] = useState(() => {
+    const stored = localStorage.getItem("explorerWidth");
+    return stored ? Number(stored) : 240;
+  });
+  const explorerDragRef = useRef(false);
+  const isMobile = () => window.innerWidth <= 768;
 
   const wsUrl = sessionId ? getWsUrl(sessionId, token) : null;
 
@@ -182,20 +193,26 @@ export default function Terminal({
     }
   }, [fontSize]);
 
-  // visible / splitMode / panelIndex -> refit + refresh
+  // visible / splitMode / panelIndex / explorerOpen -> refit + refresh
   useEffect(() => {
     if (visible && termRef.current && fitAddonRef.current) {
-      const timer = setTimeout(() => {
-        try {
-          fitAddonRef.current?.fit();
-          termRef.current?.refresh(0, termRef.current.rows - 1);
-        } catch {
-          // ignore
-        }
-      }, 50);
-      return () => clearTimeout(timer);
+      // Double-rAF: wait for browser to fully compute layout after DOM change
+      let cancelled = false;
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        requestAnimationFrame(() => {
+          if (cancelled) return;
+          try {
+            fitAddonRef.current?.fit();
+            termRef.current?.refresh(0, termRef.current.rows - 1);
+          } catch {
+            // ignore
+          }
+        });
+      });
+      return () => { cancelled = true; };
     }
-  }, [visible, splitMode, panelIndex]);
+  }, [visible, splitMode, panelIndex, explorerOpen, explorerWidth]);
 
   // Focus management
   useEffect(() => {
@@ -216,6 +233,44 @@ export default function Terminal({
     },
     [sendInput],
   );
+
+  const handleInsertPath = useCallback(
+    (text: string) => {
+      sendInput(text);
+      termRef.current?.focus();
+    },
+    [sendInput],
+  );
+
+  const handleExplorerResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    explorerDragRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const startX = e.clientX;
+    const startWidth = explorerWidth;
+
+    const onMove = (ev: MouseEvent) => {
+      if (!explorerDragRef.current) return;
+      const delta = ev.clientX - startX;
+      const newWidth = Math.max(180, Math.min(startWidth + delta, 400));
+      setExplorerWidth(newWidth);
+    };
+    const onUp = () => {
+      explorerDragRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      setExplorerWidth((w) => {
+        localStorage.setItem("explorerWidth", String(w));
+        return w;
+      });
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [explorerWidth]);
 
   const showBanner = status !== "connected";
 
@@ -279,6 +334,14 @@ export default function Terminal({
           {sessionName}
         </span>
         <div style={{ display: "flex", gap: 2, marginLeft: 8, flexShrink: 0 }}>
+          {/* File Explorer toggle */}
+          <TitleBarBtn
+            icon={<FolderIcon />}
+            title="File Explorer"
+            hoverColor="#a6e3a1"
+            active={explorerOpen}
+            onClick={(e) => { e.stopPropagation(); setExplorerOpen((o) => !o); }}
+          />
           {/* Minimize = Suspend */}
           <TitleBarBtn
             icon={<MinimizeIcon />}
@@ -319,7 +382,26 @@ export default function Terminal({
           {status === "disconnected" && "Disconnected - Reconnecting..."}
         </div>
       )}
-      <div ref={innerRef} style={{ flex: 1, minHeight: 0 }} />
+      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+        {explorerOpen && (
+          <div style={{ width: isMobile() ? undefined : explorerWidth, flexShrink: 0 }}>
+            <FileExplorer
+              token={token}
+              rootPath={workPath}
+              onInsertPath={handleInsertPath}
+              onClose={() => setExplorerOpen(false)}
+              isMobile={isMobile()}
+            />
+          </div>
+        )}
+        {explorerOpen && !isMobile() && (
+          <div
+            className="file-explorer-resize"
+            onMouseDown={handleExplorerResizeStart}
+          />
+        )}
+        <div ref={innerRef} style={{ flex: 1, minHeight: 0 }} />
+      </div>
       {!splitMode && <MobileKeyBar onKey={handleKeyBarInput} />}
     </div>
   );
@@ -331,11 +413,13 @@ function TitleBarBtn({
   icon,
   title,
   hoverColor,
+  active,
   onClick,
 }: {
   icon: React.ReactNode;
   title: string;
   hoverColor: string;
+  active?: boolean;
   onClick: (e: React.MouseEvent) => void;
 }) {
   return (
@@ -343,9 +427,9 @@ function TitleBarBtn({
       onClick={onClick}
       title={title}
       style={{
-        background: "none",
+        background: active ? `${hoverColor}18` : "none",
         border: "none",
-        color: "#6c7086",
+        color: active ? hoverColor : "#6c7086",
         cursor: "pointer",
         padding: "2px 4px",
         borderRadius: 3,
@@ -361,8 +445,8 @@ function TitleBarBtn({
       }}
       onMouseLeave={(e) => {
         const btn = e.currentTarget as HTMLButtonElement;
-        btn.style.color = "#6c7086";
-        btn.style.background = "none";
+        btn.style.color = active ? hoverColor : "#6c7086";
+        btn.style.background = active ? `${hoverColor}18` : "none";
       }}
     >
       {icon}
@@ -386,5 +470,11 @@ const CloseIcon = () => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
     <line x1="3" y1="3" x2="9" y2="9" />
     <line x1="9" y1="3" x2="3" y2="9" />
+  </svg>
+);
+
+const FolderIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 3C1 2.45 1.45 2 2 2h2.5l1 1.5H10c.55 0 1 .45 1 1V9.5c0 .55-.45 1-1 1H2c-.55 0-1-.45-1-1V3z" />
   </svg>
 );

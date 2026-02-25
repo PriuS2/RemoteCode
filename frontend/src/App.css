@@ -254,6 +254,19 @@ body {
   background: #585b70;
 }
 
+/* File explorer resize handle */
+.file-explorer-resize {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.file-explorer-resize:hover,
+.file-explorer-resize:active {
+  background: #89b4fa;
+}
+
 /* Split view hint */
 .split-hint {
   text-align: center;
@@ -288,6 +301,10 @@ body {
   }
 
   .sidebar-resize {
+    display: none;
+  }
+
+  .file-explorer-resize {
     display: none;
   }
 

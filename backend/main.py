@@ -140,6 +140,98 @@ async def browse_directory(
     return BrowseResponse(current=path, parent=parent, folders=folders, drives=drives)
 
 
+class FileEntry(BaseModel):
+    name: str
+    type: str           # "file" | "folder"
+    size: int | None = None
+    modified: str | None = None
+    extension: str | None = None
+
+
+class FilesResponse(BaseModel):
+    current: str
+    parent: str | None = None
+    entries: list[FileEntry] = []
+    drives: list[str] | None = None
+
+
+@app.get("/api/files", response_model=FilesResponse)
+async def list_files(
+    path: str = "", _user: str = Depends(get_current_user)
+):
+    if not path:
+        path = os.path.expanduser("~")
+
+    path = os.path.abspath(path)
+
+    # Windows drive list
+    drives = []
+    if os.name == "nt":
+        import string
+        for letter in string.ascii_uppercase:
+            drive = f"{letter}:\\"
+            if os.path.exists(drive):
+                drives.append(drive)
+
+    if not os.path.isdir(path):
+        raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
+
+    parent = os.path.dirname(path)
+    if parent == path:
+        parent = None
+
+    folders: list[FileEntry] = []
+    files: list[FileEntry] = []
+
+    try:
+        from datetime import datetime, timezone
+
+        for entry in sorted(os.scandir(path), key=lambda e: e.name.lower()):
+            try:
+                entry.name.encode("utf-8")
+            except (UnicodeEncodeError, OSError):
+                continue
+
+            try:
+                stat = entry.stat(follow_symlinks=False)
+                modified = datetime.fromtimestamp(
+                    stat.st_mtime, tz=timezone.utc
+                ).isoformat()
+            except (PermissionError, OSError):
+                modified = None
+
+            if entry.is_dir(follow_symlinks=False):
+                folders.append(FileEntry(
+                    name=entry.name,
+                    type="folder",
+                    size=None,
+                    modified=modified,
+                    extension=None,
+                ))
+            elif entry.is_file(follow_symlinks=False):
+                ext = os.path.splitext(entry.name)[1].lower() or None
+                try:
+                    size = stat.st_size if modified else None
+                except Exception:
+                    size = None
+                files.append(FileEntry(
+                    name=entry.name,
+                    type="file",
+                    size=size,
+                    modified=modified,
+                    extension=ext,
+                ))
+    except PermissionError:
+        raise HTTPException(status_code=403, detail=f"Access denied: {path}")
+
+    return FilesResponse(
+        current=path,
+        parent=parent,
+        entries=folders + files,
+        drives=drives or None,
+    )
+
+
 class MkdirRequest(BaseModel):
     path: str
     name: str

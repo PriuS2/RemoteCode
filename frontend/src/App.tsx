@@ -421,7 +421,9 @@ export default function App() {
             const panelIndex = activeSessions.indexOf(sid);
             const isVisible = panelIndex !== -1;
             const splitMode = activeSessions.length === 2;
-            const sessionName = sessions.find((s) => s.id === sid)?.name || "Session";
+            const session = sessions.find((s) => s.id === sid);
+            const sessionName = session?.name || "Session";
+            const sessionWorkPath = session?.work_path || "";
             return (
               <Terminal
                 key={sid}
@@ -435,6 +437,7 @@ export default function App() {
                 isFocused={isVisible && panelIndex === focusedIndex}
                 onFocus={() => { if (panelIndex !== -1) setFocusedIndex(panelIndex); }}
                 sessionName={sessionName}
+                workPath={sessionWorkPath}
                 onClosePanel={() => { if (panelIndex !== -1) closeSplitPanel(panelIndex); }}
                 onSuspend={() => handleSuspend(sid)}
                 onMaximize={() => selectSession(sid)}
