@@ -275,6 +275,31 @@ async def open_in_explorer(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/file-content")
+async def read_file_content(
+    path: str, _user: str = Depends(get_current_user)
+):
+    path = os.path.abspath(path)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=400, detail=f"Not a file: {path}")
+
+    MAX_SIZE = 512 * 1024  # 512KB
+    try:
+        size = os.path.getsize(path)
+        truncated = size > MAX_SIZE
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read(MAX_SIZE)
+        return {
+            "content": content,
+            "size": size,
+            "truncated": truncated,
+        }
+    except PermissionError:
+        raise HTTPException(status_code=403, detail=f"Access denied: {path}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class MkdirRequest(BaseModel):
     path: str
     name: str

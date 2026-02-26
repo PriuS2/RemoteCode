@@ -26,6 +26,41 @@ interface FileExplorerProps {
 
 type ViewMode = "grid" | "list";
 
+const TEXT_EXTENSIONS = new Set([
+  ".txt", ".md", ".csv", ".tsv", ".log", ".json", ".jsonl",
+  ".xml", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf", ".env",
+  ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs",
+  ".py", ".pyw", ".pyi",
+  ".rs", ".go", ".java", ".kt", ".c", ".cpp", ".h", ".hpp", ".cs",
+  ".rb", ".php", ".swift", ".scala", ".lua", ".r",
+  ".html", ".htm", ".css", ".scss", ".sass", ".less",
+  ".sql", ".graphql", ".gql",
+  ".sh", ".bash", ".zsh", ".fish", ".bat", ".ps1", ".cmd",
+  ".dockerfile", ".gitignore", ".gitattributes", ".editorconfig",
+  ".makefile", ".cmake",
+  ".lock", ".pid", ".svg",
+]);
+
+const TEXT_NAMES = new Set([
+  "makefile", "dockerfile", "vagrantfile", "procfile",
+  "gemfile", "rakefile", "cmakelists.txt",
+  ".gitignore", ".gitattributes", ".editorconfig",
+  ".prettierrc", ".eslintrc", ".babelrc",
+  "license", "readme", "changelog", "authors",
+]);
+
+function isTextFile(ext: string | null, name?: string): boolean {
+  if (ext && TEXT_EXTENSIONS.has(ext.toLowerCase())) return true;
+  if (name && TEXT_NAMES.has(name.toLowerCase())) return true;
+  return false;
+}
+
+interface PreviewFile {
+  name: string;
+  path: string;
+  extension: string | null;
+}
+
 function getRelativePath(rootPath: string, fullPath: string): string {
   // Normalize both paths: backslash → forward slash, remove trailing slash
   const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/$/, "");
@@ -69,6 +104,11 @@ export default function FileExplorer({
     return (localStorage.getItem("fileExplorerView") as ViewMode) || "list";
   });
   const [showHidden, setShowHidden] = useState(false);
+  const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
+  const [previewContent, setPreviewContent] = useState<string>("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewTruncated, setPreviewTruncated] = useState(false);
+  const [previewSize, setPreviewSize] = useState(0);
 
   const isLocal = (() => {
     const h = window.location.hostname;
@@ -153,15 +193,49 @@ export default function FileExplorer({
   const handleFileClick = (entry: FileEntry) => {
     const sep = currentPath.endsWith("\\") || currentPath.endsWith("/") ? "" : "/";
     const fullPath = currentPath + sep + entry.name;
-    const rel = getRelativePath(rootPath, fullPath);
-    onInsertPath(rel);
+
+    if (isTextFile(entry.extension, entry.name)) {
+      openPreview({ name: entry.name, path: fullPath, extension: entry.extension });
+    } else {
+      const rel = getRelativePath(rootPath, fullPath);
+      onInsertPath(rel);
+    }
   };
 
-  const handleFolderInsert = (entry: FileEntry) => {
+  const openPreview = useCallback(async (file: PreviewFile) => {
+    setPreviewFile(file);
+    setPreviewLoading(true);
+    setPreviewContent("");
+    setPreviewTruncated(false);
+    try {
+      const res = await fetch(
+        `/api/file-content?path=${encodeURIComponent(file.path)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.detail || "Failed to read file");
+      }
+      const data = await res.json();
+      setPreviewContent(data.content);
+      setPreviewTruncated(data.truncated);
+      setPreviewSize(data.size);
+    } catch (e: unknown) {
+      setPreviewContent(e instanceof Error ? `Error: ${e.message}` : "Failed to read file");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [token]);
+
+  const handleInsertEntry = (entry: FileEntry) => {
     const sep = currentPath.endsWith("\\") || currentPath.endsWith("/") ? "" : "/";
     const fullPath = currentPath + sep + entry.name;
     const rel = getRelativePath(rootPath, fullPath);
-    onInsertPath(rel.endsWith("/") ? rel : rel + "/");
+    if (entry.type === "folder") {
+      onInsertPath(rel.endsWith("/") ? rel : rel + "/");
+    } else {
+      onInsertPath(rel);
+    }
   };
 
   const canGoBack = (() => {
@@ -169,6 +243,36 @@ export default function FileExplorer({
     const normRoot = rootPath.replace(/\\/g, "/").replace(/\/$/, "").toLowerCase();
     return normCur !== normRoot;
   })();
+
+  const handleInsertPreviewPath = () => {
+    if (!previewFile) return;
+    const rel = getRelativePath(rootPath, previewFile.path);
+    onInsertPath(rel);
+  };
+
+  const bodyOrPreview = previewFile ? (
+    <FilePreview
+      file={previewFile}
+      content={previewContent}
+      loading={previewLoading}
+      truncated={previewTruncated}
+      size={previewSize}
+      onClose={() => setPreviewFile(null)}
+      onInsertPath={handleInsertPreviewPath}
+    />
+  ) : (
+    <ExplorerBody
+      entries={visibleEntries}
+      viewMode={viewMode}
+      loading={loading}
+      error={error}
+      canGoBack={canGoBack}
+      onBack={handleBack}
+      onNavigate={handleNavigate}
+      onFileClick={handleFileClick}
+      onInsertEntry={handleInsertEntry}
+    />
+  );
 
   // Mobile: full-screen overlay
   if (isMobile) {
@@ -198,18 +302,9 @@ export default function FileExplorer({
           onToggleView={() => setViewMode((v) => (v === "grid" ? "list" : "grid"))}
           onToggleHidden={() => setShowHidden((h) => !h)}
           onClose={onClose}
+          isPreview={!!previewFile}
         />
-        <ExplorerBody
-          entries={visibleEntries}
-          viewMode={viewMode}
-          loading={loading}
-          error={error}
-          canGoBack={canGoBack}
-          onBack={handleBack}
-          onNavigate={handleNavigate}
-          onFileClick={handleFileClick}
-          onFolderInsert={handleFolderInsert}
-        />
+        {bodyOrPreview}
       </div>
     );
   }
@@ -238,18 +333,9 @@ export default function FileExplorer({
         onToggleView={() => setViewMode((v) => (v === "grid" ? "list" : "grid"))}
         onToggleHidden={() => setShowHidden((h) => !h)}
         onClose={onClose}
+        isPreview={!!previewFile}
       />
-      <ExplorerBody
-        entries={visibleEntries}
-        viewMode={viewMode}
-        loading={loading}
-        error={error}
-        canGoBack={canGoBack}
-        onBack={handleBack}
-        onNavigate={handleNavigate}
-        onFileClick={handleFileClick}
-        onFolderInsert={handleFolderInsert}
-      />
+      {bodyOrPreview}
     </div>
   );
 }
@@ -268,6 +354,7 @@ function ExplorerHeader({
   onToggleView,
   onToggleHidden,
   onClose,
+  isPreview,
 }: {
   displayPath: string;
   viewMode: ViewMode;
@@ -280,6 +367,7 @@ function ExplorerHeader({
   onToggleView: () => void;
   onToggleHidden: () => void;
   onClose: () => void;
+  isPreview?: boolean;
 }) {
   return (
     <div
@@ -333,87 +421,91 @@ function ExplorerHeader({
         {displayPath}
       </span>
 
-      {/* Refresh */}
-      <button
-        onClick={onRefresh}
-        title="Refresh"
-        style={{
-          background: "none",
-          border: "none",
-          color: "#6c7086",
-          cursor: "pointer",
-          padding: "2px 4px",
-          display: "flex",
-          alignItems: "center",
-          borderRadius: 3,
-          flexShrink: 0,
-        }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
-      >
-        <RefreshIcon />
-      </button>
+      {!isPreview && (
+        <>
+          {/* Refresh */}
+          <button
+            onClick={onRefresh}
+            title="Refresh"
+            style={{
+              background: "none",
+              border: "none",
+              color: "#6c7086",
+              cursor: "pointer",
+              padding: "2px 4px",
+              display: "flex",
+              alignItems: "center",
+              borderRadius: 3,
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+          >
+            <RefreshIcon />
+          </button>
 
-      {/* Open in system explorer (local network only) */}
-      {isLocal && (
-        <button
-          onClick={onOpenNative}
-          title="Open in system explorer"
-          style={{
-            background: "none",
-            border: "none",
-            color: "#6c7086",
-            cursor: "pointer",
-            padding: "2px 4px",
-            display: "flex",
-            alignItems: "center",
-            borderRadius: 3,
-            flexShrink: 0,
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#f9e2af"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
-        >
-          <OpenExternalIcon />
-        </button>
+          {/* Open in system explorer (local network only) */}
+          {isLocal && (
+            <button
+              onClick={onOpenNative}
+              title="Open in system explorer"
+              style={{
+                background: "none",
+                border: "none",
+                color: "#6c7086",
+                cursor: "pointer",
+                padding: "2px 4px",
+                display: "flex",
+                alignItems: "center",
+                borderRadius: 3,
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#f9e2af"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+            >
+              <OpenExternalIcon />
+            </button>
+          )}
+
+          {/* Hidden toggle */}
+          <button
+            onClick={onToggleHidden}
+            title={showHidden ? "Hide hidden files" : "Show hidden files"}
+            style={{
+              background: "none",
+              border: "none",
+              color: showHidden ? "#a6e3a1" : "#6c7086",
+              cursor: "pointer",
+              padding: "2px 4px",
+              fontSize: 10,
+              fontWeight: 700,
+              borderRadius: 3,
+              flexShrink: 0,
+            }}
+          >
+            .*
+          </button>
+
+          {/* View mode toggle */}
+          <button
+            onClick={onToggleView}
+            title={viewMode === "grid" ? "List view" : "Grid view"}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#6c7086",
+              cursor: "pointer",
+              padding: "2px 4px",
+              display: "flex",
+              alignItems: "center",
+              borderRadius: 3,
+              flexShrink: 0,
+            }}
+          >
+            {viewMode === "grid" ? <ListIcon /> : <GridIcon />}
+          </button>
+        </>
       )}
-
-      {/* Hidden toggle */}
-      <button
-        onClick={onToggleHidden}
-        title={showHidden ? "Hide hidden files" : "Show hidden files"}
-        style={{
-          background: "none",
-          border: "none",
-          color: showHidden ? "#a6e3a1" : "#6c7086",
-          cursor: "pointer",
-          padding: "2px 4px",
-          fontSize: 10,
-          fontWeight: 700,
-          borderRadius: 3,
-          flexShrink: 0,
-        }}
-      >
-        .*
-      </button>
-
-      {/* View mode toggle */}
-      <button
-        onClick={onToggleView}
-        title={viewMode === "grid" ? "List view" : "Grid view"}
-        style={{
-          background: "none",
-          border: "none",
-          color: "#6c7086",
-          cursor: "pointer",
-          padding: "2px 4px",
-          display: "flex",
-          alignItems: "center",
-          borderRadius: 3,
-          flexShrink: 0,
-        }}
-      >
-        {viewMode === "grid" ? <ListIcon /> : <GridIcon />}
-      </button>
 
       {/* Close */}
       <button
@@ -451,7 +543,7 @@ function ExplorerBody({
   onBack,
   onNavigate,
   onFileClick,
-  onFolderInsert,
+  onInsertEntry,
 }: {
   entries: FileEntry[];
   viewMode: ViewMode;
@@ -461,7 +553,7 @@ function ExplorerBody({
   onBack: () => void;
   onNavigate: (name: string) => void;
   onFileClick: (entry: FileEntry) => void;
-  onFolderInsert: (entry: FileEntry) => void;
+  onInsertEntry: (entry: FileEntry) => void;
 }) {
   if (loading) {
     return (
@@ -500,7 +592,7 @@ function ExplorerBody({
               entry={entry}
               onNavigate={onNavigate}
               onFileClick={onFileClick}
-              onFolderInsert={onFolderInsert}
+              onInsertEntry={onInsertEntry}
             />
           ))}
         </div>
@@ -518,7 +610,7 @@ function ExplorerBody({
           entry={entry}
           onNavigate={onNavigate}
           onFileClick={onFileClick}
-          onFolderInsert={onFolderInsert}
+          onInsertEntry={onInsertEntry}
         />
       ))}
     </div>
@@ -531,12 +623,12 @@ function GridItem({
   entry,
   onNavigate,
   onFileClick,
-  onFolderInsert,
+  onInsertEntry,
 }: {
   entry: FileEntry;
   onNavigate: (name: string) => void;
   onFileClick: (entry: FileEntry) => void;
-  onFolderInsert: (entry: FileEntry) => void;
+  onInsertEntry: (entry: FileEntry) => void;
 }) {
   const isFolder = entry.type === "folder";
 
@@ -582,38 +674,36 @@ function GridItem({
       >
         {entry.name}
       </span>
-      {/* Folder @ insert button */}
-      {isFolder && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onFolderInsert(entry);
-          }}
-          title="Insert path"
-          style={{
-            position: "absolute",
-            top: 2,
-            right: 2,
-            background: "none",
-            border: "none",
-            color: "#6c7086",
-            cursor: "pointer",
-            fontSize: 10,
-            fontWeight: 700,
-            borderRadius: 3,
-            padding: "1px 3px",
-            lineHeight: 1,
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.color = "#a6e3a1";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.color = "#6c7086";
-          }}
-        >
-          @
-        </button>
-      )}
+      {/* @ insert button */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onInsertEntry(entry);
+        }}
+        title="Insert path"
+        style={{
+          position: "absolute",
+          top: 2,
+          right: 2,
+          background: "none",
+          border: "1px solid #45475a",
+          color: "#6c7086",
+          cursor: "pointer",
+          fontSize: 12,
+          fontWeight: 700,
+          borderRadius: 4,
+          padding: "2px 5px",
+          lineHeight: 1,
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.color = "#a6e3a1";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.color = "#6c7086";
+        }}
+      >
+        @
+      </button>
     </div>
   );
 }
@@ -624,12 +714,12 @@ function ListItem({
   entry,
   onNavigate,
   onFileClick,
-  onFolderInsert,
+  onInsertEntry,
 }: {
   entry: FileEntry;
   onNavigate: (name: string) => void;
   onFileClick: (entry: FileEntry) => void;
-  onFolderInsert: (entry: FileEntry) => void;
+  onInsertEntry: (entry: FileEntry) => void;
 }) {
   const isFolder = entry.type === "folder";
 
@@ -685,35 +775,186 @@ function ListItem({
           {formatDate(entry.modified)}
         </span>
       )}
-      {/* Folder @ insert button */}
-      {isFolder && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onFolderInsert(entry);
+      {/* @ insert button */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onInsertEntry(entry);
+        }}
+        title="Insert path"
+        style={{
+          background: "none",
+          border: "1px solid #45475a",
+          color: "#6c7086",
+          cursor: "pointer",
+          fontSize: 12,
+          fontWeight: 700,
+          borderRadius: 4,
+          padding: "2px 6px",
+          flexShrink: 0,
+          lineHeight: 1,
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.color = "#a6e3a1";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.color = "#6c7086";
+        }}
+      >
+        @
+      </button>
+    </div>
+  );
+}
+
+/* ---- File Preview ---- */
+
+function FilePreview({
+  file,
+  content,
+  loading,
+  truncated,
+  size,
+  onClose,
+  onInsertPath,
+}: {
+  file: PreviewFile;
+  content: string;
+  loading: boolean;
+  truncated: boolean;
+  size: number;
+  onClose: () => void;
+  onInsertPath: () => void;
+}) {
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      {/* Preview header bar */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "4px 8px",
+          borderBottom: "1px solid #313244",
+          flexShrink: 0,
+          background: "#181825",
+        }}
+      >
+        <FileIcon extension={file.extension} size={16} />
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontSize: 11,
+            fontWeight: 600,
+            color: "#cdd6f4",
           }}
-          title="Insert path"
+          title={file.name}
+        >
+          {file.name}
+        </span>
+        {size > 0 && (
+          <span style={{ fontSize: 10, color: "#6c7086", flexShrink: 0 }}>
+            {formatSize(size)}
+          </span>
+        )}
+        {/* Insert @path button */}
+        <button
+          onClick={onInsertPath}
+          title="Insert @path"
+          style={{
+            background: "none",
+            border: "1px solid #45475a",
+            color: "#a6e3a1",
+            cursor: "pointer",
+            padding: "1px 6px",
+            fontSize: 10,
+            fontWeight: 700,
+            borderRadius: 3,
+            flexShrink: 0,
+            lineHeight: "16px",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "#a6e3a118";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "none";
+          }}
+        >
+          @
+        </button>
+        {/* Close preview */}
+        <button
+          onClick={onClose}
+          title="Close preview"
           style={{
             background: "none",
             border: "none",
             color: "#6c7086",
             cursor: "pointer",
-            fontSize: 11,
-            fontWeight: 700,
+            padding: "2px 4px",
+            display: "flex",
+            alignItems: "center",
             borderRadius: 3,
-            padding: "1px 4px",
             flexShrink: 0,
-            lineHeight: 1,
           }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.color = "#a6e3a1";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.color = "#6c7086";
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <line x1="3" y1="3" x2="9" y2="9" />
+            <line x1="9" y1="3" x2="3" y2="9" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Content area */}
+      {loading ? (
+        <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: 12 }}>
+          Loading...
+        </div>
+      ) : (
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: 0,
+            margin: 0,
           }}
         >
-          @
-        </button>
+          <pre
+            style={{
+              margin: 0,
+              padding: "8px 10px",
+              fontSize: 11,
+              fontFamily: "'Cascadia Code', 'Consolas', monospace",
+              color: "#cdd6f4",
+              whiteSpace: "pre",
+              overflowX: "auto",
+              lineHeight: 1.5,
+              tabSize: 4,
+            }}
+          >
+            {content}
+          </pre>
+          {truncated && (
+            <div
+              style={{
+                padding: "6px 10px",
+                fontSize: 10,
+                color: "#f9e2af",
+                borderTop: "1px solid #313244",
+                background: "#181825",
+                textAlign: "center",
+              }}
+            >
+              File truncated (showing first 512KB of {formatSize(size)})
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

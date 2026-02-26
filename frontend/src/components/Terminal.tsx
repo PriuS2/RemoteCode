@@ -254,7 +254,8 @@ export default function Terminal({
     const onMove = (ev: MouseEvent) => {
       if (!explorerDragRef.current) return;
       const delta = ev.clientX - startX;
-      const newWidth = Math.max(180, Math.min(startWidth + delta, 400));
+      const maxWidth = Math.floor(window.innerWidth * 0.7);
+      const newWidth = Math.max(180, Math.min(startWidth + delta, maxWidth));
       setExplorerWidth(newWidth);
     };
     const onUp = () => {
