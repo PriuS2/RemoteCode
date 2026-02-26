@@ -29,7 +29,8 @@
       "Bash(.venv/Scripts/pip install:*)",
       "Bash(pip install:*)",
       "Bash(python:*)",
-      "Bash(winget install:*)"
+      "Bash(winget install:*)",
+      "Bash(npm run:*)"
     ]
   }
 }

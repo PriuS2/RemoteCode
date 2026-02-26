@@ -359,11 +359,12 @@ body {
   /* Mobile key bar */
   .mobile-keybar {
     display: block;
-    height: 44px;
+    height: 118px;
     flex-shrink: 0;
     background: #181825;
     border-top: 1px solid #313244;
-    overflow: hidden;
+    overflow: visible;
+    position: relative;
   }
 
   /* Hide split hint on mobile */
