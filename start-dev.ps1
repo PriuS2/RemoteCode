@@ -1,6 +1,6 @@
 # Claude Code Remote - Development Start Script
 
-Set-Location "C:\Users\STOICPC_QQQ\Documents\ClaudeCodeRemote"
+#Set-Location "C:\Users\STOICPC_QQQ\Documents\ClaudeCodeRemote"
 
 if (-not (Test-Path ".\.venv\Scripts\python.exe")) {
     Write-Host "[ERROR] venv not found. Run setup.bat first." -ForegroundColor Red
@@ -9,21 +9,31 @@ if (-not (Test-Path ".\.venv\Scripts\python.exe")) {
 }
 & ".\.venv\Scripts\Activate.ps1"
 
+# Create default .env if not exists
+if (-not (Test-Path ".\.env")) {
+    @"
+CCR_HOST=0.0.0.0
+CCR_PORT=8080
+CCR_CLAUDE_COMMAND=claude
+CCR_PASSWORD=changeme
+CCR_JWT_SECRET=change-this-secret-key
+CCR_JWT_EXPIRE_HOURS=72
+CCR_DB_PATH=sessions.db
+"@ | Set-Content ".\.env" -Encoding UTF8
+    Write-Host "[OK] .env created with defaults" -ForegroundColor Yellow
+}
+
 # Load .env
-if (Test-Path ".\.env") {
-    Get-Content ".\.env" | ForEach-Object {
-        $line = $_.Trim()
-        if ($line -and -not $line.StartsWith("#")) {
-            $parts = $line.Split("=", 2)
-            if ($parts.Length -eq 2) {
-                [System.Environment]::SetEnvironmentVariable($parts[0].Trim(), $parts[1].Trim(), "Process")
-            }
+Get-Content ".\.env" | ForEach-Object {
+    $line = $_.Trim()
+    if ($line -and -not $line.StartsWith("#")) {
+        $parts = $line.Split("=", 2)
+        if ($parts.Length -eq 2) {
+            [System.Environment]::SetEnvironmentVariable($parts[0].Trim(), $parts[1].Trim(), "Process")
         }
     }
-    Write-Host "[OK] .env loaded" -ForegroundColor Green
-} else {
-    Write-Host "[WARN] .env not found, using defaults" -ForegroundColor Yellow
 }
+Write-Host "[OK] .env loaded" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "Starting Claude Code Remote (DEV MODE)" -ForegroundColor Cyan

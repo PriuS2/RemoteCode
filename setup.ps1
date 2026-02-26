@@ -1,6 +1,6 @@
 # Claude Code Remote - Setup Script
 
-Set-Location "C:\Users\STOICPC_QQQ\Documents\ClaudeCodeRemote"
+#Set-Location "C:\Users\STOICPC_QQQ\Documents\ClaudeCodeRemote"
 
 Write-Host ""
 Write-Host "===============================" -ForegroundColor Cyan

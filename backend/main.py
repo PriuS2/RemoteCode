@@ -93,11 +93,16 @@ async def health_check():
 
 # --- Browse API (인증 필요) ---
 
+class UserFolder(BaseModel):
+    label: str
+    path: str
+
 class BrowseResponse(BaseModel):
     current: str
     parent: str | None = None
     folders: list[str]
     drives: list[str] | None = None
+    user_folders: list[UserFolder] | None = None
 
 
 @app.get("/api/browse", response_model=BrowseResponse)
@@ -137,7 +142,18 @@ async def browse_directory(
     except PermissionError:
         raise HTTPException(status_code=403, detail=f"Access denied: {path}")
 
-    return BrowseResponse(current=path, parent=parent, folders=folders, drives=drives)
+    # User preset folders
+    home = os.path.expanduser("~")
+    user_folders = []
+    for label, folder_name in [("Desktop", "Desktop"), ("Documents", "Documents"), ("Downloads", "Downloads")]:
+        fp = os.path.join(home, folder_name)
+        if os.path.isdir(fp):
+            user_folders.append(UserFolder(label=label, path=fp))
+
+    return BrowseResponse(
+        current=path, parent=parent, folders=folders,
+        drives=drives, user_folders=user_folders or None,
+    )
 
 
 class FileEntry(BaseModel):

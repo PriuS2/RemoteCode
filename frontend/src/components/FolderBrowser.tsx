@@ -7,11 +7,17 @@ interface FolderBrowserProps {
   onCancel: () => void;
 }
 
+interface UserFolder {
+  label: string;
+  path: string;
+}
+
 interface BrowseData {
   current: string;
   parent: string | null;
   folders: string[];
   drives: string[] | null;
+  user_folders: UserFolder[] | null;
 }
 
 const IconFolder = () => (
@@ -311,6 +317,41 @@ export default function FolderBrowser({
                   }}
                 >
                   {drive.replace("\\", "")}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* User folder presets */}
+        {data?.user_folders && data.user_folders.length > 0 && (
+          <div
+            style={{
+              padding: "6px 16px 0",
+              display: "flex",
+              gap: 4,
+              flexWrap: "wrap",
+            }}
+          >
+            {data.user_folders.map((uf) => {
+              const active = data.current.toLowerCase() === uf.path.toLowerCase();
+              return (
+                <button
+                  key={uf.path}
+                  onClick={() => browse(uf.path)}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background: active ? "#f9e2af" : "#313244",
+                    color: active ? "#1e1e2e" : "#a6adc8",
+                    border: "none",
+                    borderRadius: 4,
+                    cursor: "pointer",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  {uf.label}
                 </button>
               );
             })}
