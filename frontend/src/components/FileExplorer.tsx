@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { IconFolder, FileIcon } from "../utils/fileIcons";
+import hljs from "highlight.js";
 
 interface FileEntry {
   name: string;
@@ -250,6 +251,15 @@ export default function FileExplorer({
     onInsertPath(rel);
   };
 
+  const handleInsertSelection = (startLine: number, endLine: number, text: string) => {
+    if (!previewFile) return;
+    const rel = getRelativePath(rootPath, previewFile.path);
+    const lineRange = startLine === endLine
+      ? `{line : ${startLine}}`
+      : `{line : ${startLine}:${endLine}}`;
+    onInsertPath(`${rel}\n${lineRange}\n${text}`);
+  };
+
   const bodyOrPreview = previewFile ? (
     <FilePreview
       file={previewFile}
@@ -259,6 +269,7 @@ export default function FileExplorer({
       size={previewSize}
       onClose={() => setPreviewFile(null)}
       onInsertPath={handleInsertPreviewPath}
+      onInsertSelection={handleInsertSelection}
     />
   ) : (
     <ExplorerBody
@@ -809,6 +820,26 @@ function ListItem({
 
 /* ---- File Preview ---- */
 
+const EXT_TO_LANG: Record<string, string> = {
+  ".ts": "typescript", ".tsx": "typescript", ".js": "javascript", ".jsx": "javascript",
+  ".mjs": "javascript", ".cjs": "javascript",
+  ".py": "python", ".pyw": "python", ".pyi": "python",
+  ".rs": "rust", ".go": "go", ".java": "java", ".kt": "kotlin",
+  ".c": "c", ".cpp": "cpp", ".h": "c", ".hpp": "cpp", ".cs": "csharp",
+  ".rb": "ruby", ".php": "php", ".swift": "swift", ".scala": "scala",
+  ".lua": "lua", ".r": "r",
+  ".html": "xml", ".htm": "xml", ".xml": "xml", ".svg": "xml",
+  ".css": "css", ".scss": "scss", ".sass": "scss", ".less": "less",
+  ".json": "json", ".jsonl": "json",
+  ".yaml": "yaml", ".yml": "yaml", ".toml": "ini", ".ini": "ini",
+  ".sql": "sql", ".graphql": "graphql", ".gql": "graphql",
+  ".sh": "bash", ".bash": "bash", ".zsh": "bash", ".fish": "bash",
+  ".bat": "dos", ".cmd": "dos", ".ps1": "powershell",
+  ".md": "markdown", ".csv": "plaintext", ".tsv": "plaintext",
+  ".txt": "plaintext", ".log": "plaintext",
+  ".dockerfile": "dockerfile",
+};
+
 function FilePreview({
   file,
   content,
@@ -817,6 +848,7 @@ function FilePreview({
   size,
   onClose,
   onInsertPath,
+  onInsertSelection,
 }: {
   file: PreviewFile;
   content: string;
@@ -825,7 +857,101 @@ function FilePreview({
   size: number;
   onClose: () => void;
   onInsertPath: () => void;
+  onInsertSelection?: (startLine: number, endLine: number, text: string) => void;
 }) {
+  const [previewFontSize, setPreviewFontSize] = useState(() => {
+    const v = localStorage.getItem("previewFontSize");
+    return v ? Number(v) : 12;
+  });
+  // Line selection: drag on gutter to select range
+  const [selStart, setSelStart] = useState<number | null>(null);
+  const [selEnd, setSelEnd] = useState<number | null>(null);
+  const [hoverLine, setHoverLine] = useState<number | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+  const dragEndRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem("previewFontSize", String(previewFontSize));
+  }, [previewFontSize]);
+
+  const handleGutterMouseDown = (lineNum: number) => {
+    setSelStart(lineNum);
+    setSelEnd(null);
+    setHoverLine(null);
+    dragEndRef.current = lineNum;
+    isDraggingRef.current = true;
+    document.body.style.userSelect = "none";
+  };
+
+  // Finalize drag on mouseup anywhere
+  useEffect(() => {
+    const handleMouseUp = () => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        document.body.style.userSelect = "";
+        const endLine = dragEndRef.current;
+        if (endLine !== null) {
+          setSelEnd(endLine);
+          setHoverLine(null);
+        }
+      }
+    };
+    document.addEventListener("mouseup", handleMouseUp);
+    return () => document.removeEventListener("mouseup", handleMouseUp);
+  }, []);
+
+  // The effective visual range (accounting for hover preview)
+  const rangeFrom = selStart !== null
+    ? Math.min(selStart, selEnd ?? hoverLine ?? selStart)
+    : null;
+  const rangeTo = selStart !== null
+    ? Math.max(selStart, selEnd ?? hoverLine ?? selStart)
+    : null;
+
+  // Is range finalized (both clicks done)?
+  const rangeFinalized = selStart !== null && selEnd !== null;
+
+  const clearSelection = () => {
+    setSelStart(null);
+    setSelEnd(null);
+    setHoverLine(null);
+  };
+
+  // Reset selection when file changes
+  useEffect(() => {
+    clearSelection();
+  }, [file.path]);
+
+  // Build selected text from lines
+  const getSelectedText = useCallback(() => {
+    if (rangeFrom === null || rangeTo === null) return "";
+    const allLines = content.split("\n");
+    return allLines.slice(rangeFrom - 1, rangeTo).join("\n");
+  }, [content, rangeFrom, rangeTo]);
+
+  const lines = useMemo(() => content.split("\n"), [content]);
+  const lineCount = lines.length;
+  const gutterWidth = Math.max(String(lineCount).length * 8 + 16, 32);
+
+  const highlighted = useMemo(() => {
+    if (!content || loading) return "";
+    const lang = file.extension ? EXT_TO_LANG[file.extension.toLowerCase()] : undefined;
+    try {
+      if (lang && lang !== "plaintext") {
+        return hljs.highlight(content, { language: lang }).value;
+      }
+      return hljs.highlightAuto(content).value;
+    } catch {
+      return "";
+    }
+  }, [content, loading, file.extension]);
+
+  const highlightedLines = useMemo(() => {
+    if (!highlighted) return lines.map((l) => l || " ");
+    return highlighted.split("\n");
+  }, [highlighted, lines]);
+
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
       {/* Preview header bar */}
@@ -861,6 +987,36 @@ function FilePreview({
             {formatSize(size)}
           </span>
         )}
+        {/* Font size controls */}
+        <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+          <button
+            onClick={() => setPreviewFontSize((s) => Math.max(8, s - 1))}
+            title="Decrease font size"
+            style={{
+              background: "none", border: "none", color: "#6c7086", cursor: "pointer",
+              fontSize: 12, fontWeight: 700, padding: "0 3px", lineHeight: 1, borderRadius: 3,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+          >
+            -
+          </button>
+          <span style={{ fontSize: 9, color: "#6c7086", minWidth: 20, textAlign: "center" }}>
+            {previewFontSize}
+          </span>
+          <button
+            onClick={() => setPreviewFontSize((s) => Math.min(24, s + 1))}
+            title="Increase font size"
+            style={{
+              background: "none", border: "none", color: "#6c7086", cursor: "pointer",
+              fontSize: 12, fontWeight: 700, padding: "0 3px", lineHeight: 1, borderRadius: 3,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+          >
+            +
+          </button>
+        </div>
         {/* Insert @path button */}
         <button
           onClick={onInsertPath}
@@ -917,29 +1073,152 @@ function FilePreview({
           Loading...
         </div>
       ) : (
-        <div
-          style={{
-            flex: 1,
-            overflowY: "auto",
-            padding: 0,
-            margin: 0,
-          }}
-        >
-          <pre
+        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+          {/* Selection bar - absolute overlay, no layout shift */}
+          {rangeFinalized && onInsertSelection && rangeFrom !== null && rangeTo !== null && (
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                zIndex: 10,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "4px 8px",
+                background: "rgba(30, 30, 46, 0.97)",
+                borderBottom: "1px solid #45475a",
+                backdropFilter: "blur(4px)",
+              }}
+            >
+              <span style={{ fontSize: 11, color: "#89b4fa" }}>
+                L{rangeFrom}{rangeFrom !== rangeTo ? `-${rangeTo}` : ""}
+              </span>
+              <span style={{ fontSize: 10, color: "#6c7086" }}>
+                ({rangeTo - rangeFrom + 1} lines)
+              </span>
+              <div style={{ flex: 1 }} />
+              <button
+                className="sel-insert-btn"
+                onClick={() => {
+                  onInsertSelection(rangeFrom, rangeTo, getSelectedText());
+                  clearSelection();
+                }}
+                title="Insert @path with selected lines"
+                style={{
+                  background: "#313244",
+                  border: "1px solid #45475a",
+                  color: "#a6e3a1",
+                  cursor: "pointer",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  borderRadius: 4,
+                  padding: "2px 10px",
+                  lineHeight: "18px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = "#45475a";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = "#313244";
+                }}
+              >
+                @ Insert
+              </button>
+              <button
+                onClick={clearSelection}
+                title="Clear selection"
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#6c7086",
+                  cursor: "pointer",
+                  padding: "2px 4px",
+                  display: "flex",
+                  alignItems: "center",
+                  borderRadius: 3,
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                  <line x1="3" y1="3" x2="9" y2="9" />
+                  <line x1="9" y1="3" x2="3" y2="9" />
+                </svg>
+              </button>
+            </div>
+          )}
+          <div
+            ref={contentRef}
             style={{
+              width: "100%",
+              height: "100%",
+              overflow: "auto",
               margin: 0,
-              padding: "8px 10px",
-              fontSize: 11,
-              fontFamily: "'Cascadia Code', 'Consolas', monospace",
-              color: "#cdd6f4",
-              whiteSpace: "pre",
-              overflowX: "auto",
-              lineHeight: 1.5,
-              tabSize: 4,
             }}
           >
-            {content}
-          </pre>
+          <table
+            style={{
+              borderCollapse: "collapse",
+              fontFamily: "'Cascadia Code', 'Consolas', monospace",
+              fontSize: previewFontSize,
+              lineHeight: 1.6,
+              tabSize: 4,
+              width: "100%",
+            }}
+          >
+            <tbody>
+              {highlightedLines.map((line, i) => {
+                const lineNum = i + 1;
+                const inRange = rangeFrom !== null && rangeTo !== null
+                  && lineNum >= rangeFrom && lineNum <= rangeTo;
+                return (
+                  <tr key={i}>
+                    <td
+                      onMouseDown={() => handleGutterMouseDown(lineNum)}
+                      onMouseEnter={() => {
+                        if (isDraggingRef.current) {
+                          setHoverLine(lineNum);
+                          dragEndRef.current = lineNum;
+                        }
+                      }}
+                      style={{
+                        width: gutterWidth,
+                        minWidth: gutterWidth,
+                        padding: "0 8px 0 8px",
+                        textAlign: "right",
+                        color: inRange ? "#89b4fa" : "#45475a",
+                        userSelect: "none",
+                        whiteSpace: "nowrap",
+                        verticalAlign: "top",
+                        borderRight: "1px solid #313244",
+                        background: inRange ? "#1e1e2e" : "#11111b",
+                        position: "sticky",
+                        left: 0,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {lineNum}
+                    </td>
+                    <td
+                      className="hljs"
+                      style={{
+                        padding: "0 12px",
+                        whiteSpace: "pre",
+                        verticalAlign: "top",
+                        background: inRange ? "rgba(137,180,250,0.08)" : undefined,
+                      }}
+                      dangerouslySetInnerHTML={{ __html: line || " " }}
+                    />
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
           {truncated && (
             <div
               style={{
@@ -949,11 +1228,14 @@ function FilePreview({
                 borderTop: "1px solid #313244",
                 background: "#181825",
                 textAlign: "center",
+                position: "sticky",
+                left: 0,
               }}
             >
               File truncated (showing first 512KB of {formatSize(size)})
             </div>
           )}
+          </div>
         </div>
       )}
     </div>

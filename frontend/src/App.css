@@ -5,6 +5,41 @@
   --web-fs-xxs: 10px;
 }
 
+/* highlight.js — Catppuccin Mocha */
+.hljs { color: #cdd6f4; }
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in,
+.hljs-type { color: #cba6f7; }
+.hljs-string,
+.hljs-template-variable,
+.hljs-addition { color: #a6e3a1; }
+.hljs-comment,
+.hljs-quote { color: #6c7086; font-style: italic; }
+.hljs-number,
+.hljs-literal,
+.hljs-regexp { color: #fab387; }
+.hljs-title,
+.hljs-title\.function_,
+.hljs-section { color: #89b4fa; }
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-tag { color: #f9e2af; }
+.hljs-tag { color: #f38ba8; }
+.hljs-name { color: #89b4fa; }
+.hljs-selector-id,
+.hljs-selector-class { color: #94e2d5; }
+.hljs-symbol,
+.hljs-bullet { color: #f5c2e7; }
+.hljs-meta { color: #fab387; }
+.hljs-params { color: #cdd6f4; }
+.hljs-property { color: #89dceb; }
+.hljs-punctuation { color: #9399b2; }
+.hljs-operator { color: #94e2d5; }
+.hljs-deletion { color: #f38ba8; background: rgba(243,139,168,0.1); }
+.hljs-addition { background: rgba(166,227,161,0.1); }
+
 * {
   margin: 0;
   padding: 0;
