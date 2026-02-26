@@ -54,6 +54,12 @@ export default function App() {
   sessionsRef.current = sessions;
   const settingsRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
+  const [splitRatio, setSplitRatio] = useState(() => {
+    const v = localStorage.getItem("splitRatio");
+    return v ? Number(v) : 0.5;
+  });
+  const splitDragging = useRef(false);
+  const terminalAreaRef = useRef<HTMLElement>(null);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
 
   // Track visual viewport to handle mobile keyboard
@@ -134,6 +140,32 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("terminalFontSize", String(terminalFontSize));
   }, [terminalFontSize]);
+
+  useEffect(() => {
+    localStorage.setItem("splitRatio", String(splitRatio));
+  }, [splitRatio]);
+
+  const handleSplitDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    splitDragging.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    const onMove = (ev: MouseEvent) => {
+      if (!splitDragging.current || !terminalAreaRef.current) return;
+      const rect = terminalAreaRef.current.getBoundingClientRect();
+      const ratio = (ev.clientX - rect.left) / rect.width;
+      setSplitRatio(Math.max(0.2, Math.min(0.8, ratio)));
+    };
+    const onUp = () => {
+      splitDragging.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, []);
 
   // Close settings when clicking outside
   useEffect(() => {
@@ -402,7 +434,7 @@ export default function App() {
         )}
 
         {/* Terminal Area */}
-        <main className="terminal-area">
+        <main className="terminal-area" ref={terminalAreaRef}>
           {mountedSessions.length === 0 && (
             <div className="empty-state">
               <p>No active session</p>
@@ -433,6 +465,7 @@ export default function App() {
                 onActivityChange={handleActivityChange}
                 panelIndex={panelIndex}
                 splitMode={splitMode}
+                splitRatio={splitRatio}
                 isFocused={isVisible && panelIndex === focusedIndex}
                 onFocus={() => { if (panelIndex !== -1) setFocusedIndex(panelIndex); }}
                 sessionName={sessionName}
@@ -444,6 +477,33 @@ export default function App() {
               />
             );
           })}
+
+          {/* Split divider handle */}
+          {activeSessions.length === 2 && (
+            <div
+              onMouseDown={handleSplitDragStart}
+              style={{
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                left: `${splitRatio * 100}%`,
+                width: 6,
+                marginLeft: -3,
+                cursor: "col-resize",
+                zIndex: 10,
+              }}
+            >
+              <div style={{
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                left: 2,
+                width: 2,
+                background: splitDragging.current ? "#89b4fa" : "#313244",
+                transition: "background 0.15s",
+              }} />
+            </div>
+          )}
         </main>
       </div>
 

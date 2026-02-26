@@ -18,6 +18,7 @@ interface TerminalProps {
   onActivityChange?: (sessionId: string, state: ActivityState) => void;
   panelIndex: number;
   splitMode: boolean;
+  splitRatio?: number;
   isFocused: boolean;
   onFocus: () => void;
   sessionName: string;
@@ -48,6 +49,7 @@ export default function Terminal({
   onActivityChange,
   panelIndex,
   splitMode,
+  splitRatio = 0.5,
   isFocused,
   onFocus,
   sessionName,
@@ -311,7 +313,7 @@ export default function Terminal({
       });
       return () => { cancelled = true; };
     }
-  }, [visible, splitMode, panelIndex, explorerOpen, explorerWidth]);
+  }, [visible, splitMode, splitRatio, panelIndex, explorerOpen, explorerWidth]);
 
   // Mobile custom scrollbar — track viewport scroll position
   useEffect(() => {
@@ -410,8 +412,8 @@ export default function Terminal({
         position: "absolute",
         top: 0,
         bottom: 0,
-        width: "50%",
-        left: panelIndex === 0 ? 0 : "50%",
+        width: panelIndex === 0 ? `${splitRatio * 100}%` : `${(1 - splitRatio) * 100}%`,
+        left: panelIndex === 0 ? 0 : `${splitRatio * 100}%`,
         borderLeft: panelIndex === 1 ? "1px solid #313244" : undefined,
       }
     : {
