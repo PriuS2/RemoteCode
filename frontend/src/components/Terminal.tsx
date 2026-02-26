@@ -70,7 +70,10 @@ export default function Terminal({
     return stored ? Number(stored) : 240;
   });
   const explorerDragRef = useRef(false);
-  const isMobile = () => window.innerWidth <= 768;
+  const isMobileDevice = () => window.innerWidth <= 768;
+  const isMobile = isMobileDevice;
+  const [scrollThumb, setScrollThumb] = useState<{ top: number; height: number } | null>(null);
+  const [scrollbarActive, setScrollbarActive] = useState(false);
 
   const wsUrl = sessionId ? getWsUrl(sessionId, token) : null;
 
@@ -172,8 +175,99 @@ export default function Terminal({
     });
     observer.observe(innerRef.current);
 
+    // Mobile touch scroll — immediately block xterm, handle scroll ourselves
+    const container = innerRef.current;
+    const viewport = container.querySelector(".xterm-viewport") as HTMLElement | null;
+    const xtermScreen = container.querySelector(".xterm-screen") as HTMLElement | null;
+    const SCROLLBAR_ZONE = 20; // px from right edge — scrollbar touch zone
+    let startX = 0;
+    let startY = 0;
+    let lastY = 0;
+    let didScroll = false;
+    let onScrollbar = false;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      lastY = startY;
+      didScroll = false;
+
+      // Check if touch is on the scrollbar area (right edge)
+      const rect = container.getBoundingClientRect();
+      onScrollbar = (startX >= rect.right - SCROLLBAR_ZONE);
+      if (onScrollbar) setScrollbarActive(true);
+
+      // Block xterm immediately so it never interferes
+      if (xtermScreen) xtermScreen.style.pointerEvents = "none";
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1 || !viewport) return;
+      const curY = e.touches[0].clientY;
+
+      if (onScrollbar) {
+        // Scrollbar drag: map touch Y position to scroll position
+        e.preventDefault();
+        const vpRect = viewport.getBoundingClientRect();
+        const ratio = (curY - vpRect.top) / vpRect.height;
+        const maxScroll = viewport.scrollHeight - viewport.clientHeight;
+        viewport.scrollTop = Math.max(0, Math.min(ratio * maxScroll, maxScroll));
+        didScroll = true;
+        return;
+      }
+
+      // Start scrolling after 5px vertical movement
+      if (!didScroll) {
+        const dy = Math.abs(curY - startY);
+        const dx = Math.abs(e.touches[0].clientX - startX);
+        if (dy > 5 && dy > dx) {
+          didScroll = true;
+        } else {
+          return;
+        }
+      }
+
+      e.preventDefault();
+      viewport.scrollTop += (lastY - curY);
+      lastY = curY;
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      // Restore xterm pointer events
+      if (xtermScreen) xtermScreen.style.pointerEvents = "";
+
+      if (onScrollbar) { onScrollbar = false; setScrollbarActive(false); return; }
+
+      // If it was a tap (no scroll), forward click to xterm
+      if (!didScroll && e.changedTouches.length === 1) {
+        const t = e.changedTouches[0];
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        if (el && container.contains(el)) {
+          el.dispatchEvent(new MouseEvent("mousedown", {
+            clientX: t.clientX, clientY: t.clientY, bubbles: true,
+          }));
+          el.dispatchEvent(new MouseEvent("mouseup", {
+            clientX: t.clientX, clientY: t.clientY, bubbles: true,
+          }));
+          el.dispatchEvent(new MouseEvent("click", {
+            clientX: t.clientX, clientY: t.clientY, bubbles: true,
+          }));
+        }
+      }
+    };
+
+    container.addEventListener("touchstart", onTouchStart, { capture: true, passive: true });
+    container.addEventListener("touchmove", onTouchMove, { capture: true, passive: false });
+    container.addEventListener("touchend", onTouchEnd, { capture: true, passive: true });
+    container.addEventListener("touchcancel", onTouchEnd, { capture: true, passive: true });
+
     return () => {
       observer.disconnect();
+      container.removeEventListener("touchstart", onTouchStart, { capture: true });
+      container.removeEventListener("touchmove", onTouchMove, { capture: true });
+      container.removeEventListener("touchend", onTouchEnd, { capture: true });
+      container.removeEventListener("touchcancel", onTouchEnd, { capture: true });
       if (activityTimerRef.current) clearTimeout(activityTimerRef.current);
       termRef.current = null;
       fitAddonRef.current = null;
@@ -213,6 +307,36 @@ export default function Terminal({
       return () => { cancelled = true; };
     }
   }, [visible, splitMode, panelIndex, explorerOpen, explorerWidth]);
+
+  // Mobile custom scrollbar — track viewport scroll position
+  useEffect(() => {
+    if (!isMobileDevice()) return;
+    const container = innerRef.current;
+    if (!container) return;
+    const viewport = container.querySelector(".xterm-viewport") as HTMLElement | null;
+    if (!viewport) return;
+
+    const update = () => {
+      const { scrollTop, scrollHeight, clientHeight } = viewport;
+      if (scrollHeight <= clientHeight) { setScrollThumb(null); return; }
+      const ratio = clientHeight / scrollHeight;
+      const thumbH = Math.max(ratio * clientHeight, 30);
+      const trackSpace = clientHeight - thumbH;
+      const scrollRatio = scrollTop / (scrollHeight - clientHeight);
+      setScrollThumb({ top: scrollRatio * trackSpace, height: thumbH });
+    };
+
+    viewport.addEventListener("scroll", update, { passive: true });
+    // Also update on resize / content changes
+    const mo = new MutationObserver(update);
+    mo.observe(viewport, { childList: true, subtree: true, characterData: true });
+    update();
+
+    return () => {
+      viewport.removeEventListener("scroll", update);
+      mo.disconnect();
+    };
+  }, [visible]);
 
   // Focus management
   useEffect(() => {
@@ -343,6 +467,19 @@ export default function Terminal({
             active={explorerOpen}
             onClick={(e) => { e.stopPropagation(); setExplorerOpen((o) => !o); }}
           />
+          {/* Refresh terminal */}
+          <TitleBarBtn
+            icon={<RefreshIcon />}
+            title="Refresh"
+            hoverColor="#94e2d5"
+            onClick={(e) => {
+              e.stopPropagation();
+              try {
+                fitAddonRef.current?.fit();
+                termRef.current?.refresh(0, (termRef.current?.rows ?? 1) - 1);
+              } catch { /* ignore */ }
+            }}
+          />
           {/* Minimize = Suspend */}
           <TitleBarBtn
             icon={<MinimizeIcon />}
@@ -401,7 +538,37 @@ export default function Terminal({
             onMouseDown={handleExplorerResizeStart}
           />
         )}
-        <div ref={innerRef} style={{ flex: 1, minHeight: 0 }} />
+        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+          <div ref={innerRef} style={{ width: "100%", height: "100%" }} />
+          {/* Mobile custom scrollbar */}
+          {scrollThumb && isMobile() && (
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                right: 0,
+                width: 18,
+                height: "100%",
+                pointerEvents: "none",
+                zIndex: 10,
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  top: scrollThumb.top,
+                  right: 2,
+                  width: 10,
+                  height: scrollThumb.height,
+                  borderRadius: 5,
+                  background: scrollbarActive ? "rgba(137, 180, 250, 0.9)" : "rgba(88, 91, 112, 0.8)",
+                  border: scrollbarActive ? "1px solid rgba(137, 180, 250, 0.6)" : "1px solid rgba(108, 112, 134, 0.4)",
+                  transition: "background 0.15s, border 0.15s",
+                }}
+              />
+            </div>
+          )}
+        </div>
       </div>
       {!splitMode && <MobileKeyBar onKey={handleKeyBarInput} />}
     </div>
@@ -471,6 +638,13 @@ const CloseIcon = () => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
     <line x1="3" y1="3" x2="9" y2="9" />
     <line x1="9" y1="3" x2="3" y2="9" />
+  </svg>
+);
+
+const RefreshIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1.5 2v3h3" />
+    <path d="M2.1 7.5a4 4 0 1 0 .6-4.2L1.5 5" />
   </svg>
 );
 

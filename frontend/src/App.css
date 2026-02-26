@@ -370,4 +370,10 @@ body {
   .split-hint {
     display: none;
   }
+
+  /* Hide native xterm scrollbar on mobile — replaced by custom touch scrollbar */
+  .xterm .xterm-viewport::-webkit-scrollbar {
+    width: 0;
+    display: none;
+  }
 }
