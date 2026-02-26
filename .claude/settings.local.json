@@ -30,7 +30,12 @@
       "Bash(pip install:*)",
       "Bash(python:*)",
       "Bash(winget install:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(cloudflared tunnel:*)",
+      "Bash(powershell.exe:*)",
+      "Bash(\"$CLOUDFLARED\":*)",
+      "Bash(\"$CLOUDFLARED\" tunnel:*)",
+      "Bash(wc:*)"
     ]
   }
 }

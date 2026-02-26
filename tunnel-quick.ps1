@@ -1,4 +1,4 @@
-# Claude Code Remote - Cloudflare Named Tunnel
+# Claude Code Remote - Cloudflare Quick Tunnel
 
 Set-Location "C:\Users\tjseh\Documents\ClaudeCodeRemote"
 
@@ -18,52 +18,29 @@ if (-not (Get-Command "cloudflared" -ErrorAction SilentlyContinue)) {
     Write-Host "[OK] cloudflared installed" -ForegroundColor Green
 }
 
-# Load .env
-$backendPort = "8080"
-$vitePort = "5173"
-$domain = "pri-u.net"
+# Load .env to read port
+$port = "8080"
 if (Test-Path ".\.env") {
     Get-Content ".\.env" | ForEach-Object {
         $line = $_.Trim()
         if ($line -and -not $line.StartsWith("#")) {
             $parts = $line.Split("=", 2)
-            if ($parts.Length -eq 2) {
-                $key = $parts[0].Trim()
-                $val = $parts[1].Trim()
-                switch ($key) {
-                    "CCR_PORT"      { $backendPort = $val }
-                    "CCR_VITE_PORT" { $vitePort = $val }
-                    "CCR_DOMAIN"    { $domain = $val }
-                }
+            if ($parts.Length -eq 2 -and $parts[0].Trim() -eq "CCR_PORT") {
+                $port = $parts[1].Trim()
             }
         }
     }
 }
 
-# Generate config.yml
-$tunnelId = "7592bba9-abe6-4da3-ac60-d37e918f25b4"
-$credFile = "$env:USERPROFILE\.cloudflared\$tunnelId.json"
-$configPath = "$env:USERPROFILE\.cloudflared\config.yml"
-
-@"
-tunnel: $tunnelId
-credentials-file: $credFile
-
-ingress:
-  - hostname: $domain
-    service: http://localhost:$vitePort
-  - service: http_status:404
-"@ | Set-Content $configPath -Encoding UTF8
-
 Write-Host ""
 Write-Host "===============================" -ForegroundColor Cyan
-Write-Host "  Cloudflare Named Tunnel" -ForegroundColor Cyan
+Write-Host "  Cloudflare Quick Tunnel" -ForegroundColor Cyan
 Write-Host "===============================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  Local:  http://localhost:$vitePort -> :$backendPort (proxy)" -ForegroundColor Green
-Write-Host "  Public: https://$domain" -ForegroundColor Green
+Write-Host "  Local:  http://localhost:$port" -ForegroundColor Green
+Write-Host "  Tunnel: Starting..." -ForegroundColor Yellow
 Write-Host ""
 Write-Host "  (Ctrl+C to stop)" -ForegroundColor DarkGray
 Write-Host ""
 
-cloudflared tunnel run ccr-tunnel
+cloudflared tunnel --url "http://localhost:$port"

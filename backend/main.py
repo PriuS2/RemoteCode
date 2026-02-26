@@ -91,6 +91,10 @@ class CreateSessionRequest(BaseModel):
     create_folder: bool = False
 
 
+class RenameSessionRequest(BaseModel):
+    name: str
+
+
 class SessionResponse(BaseModel):
     id: str
     claude_session_id: str | None = None
@@ -465,6 +469,21 @@ async def resume_session(
         return session
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.patch("/api/sessions/{session_id}/rename")
+async def rename_session(
+    session_id: str, req: RenameSessionRequest, _user: str = Depends(get_current_user)
+):
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name cannot be empty")
+    try:
+        from .database import update_session as db_update_session
+        await db_update_session(session_id, name=name)
+        return {"detail": "Session renamed", "name": name}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.delete("/api/sessions/{session_id}")

@@ -39,7 +39,7 @@ Write-Host "[OK] .env loaded" -ForegroundColor Green
 Write-Host ""
 Write-Host "Starting Claude Code Remote (DEV MODE)" -ForegroundColor Cyan
 Write-Host "  Backend:  http://localhost:$($env:CCR_PORT)" -ForegroundColor Green
-Write-Host "  Frontend: http://localhost:5173" -ForegroundColor Green
+Write-Host "  Frontend: http://localhost:$(if ($env:CCR_VITE_PORT) { $env:CCR_VITE_PORT } else { '5173' })" -ForegroundColor Green
 Write-Host ""
 
 $backend = Start-Process -NoNewWindow -PassThru -FilePath ".\.venv\Scripts\python.exe" -ArgumentList "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", $env:CCR_PORT, "--reload"

@@ -43,7 +43,7 @@ if ($LASTEXITCODE -ne 0) {
     Read-Host "Press Enter to exit"
     exit 1
 }
-Set-Location "C:\Users\STOICPC_QQQ\Documents\ClaudeCodeRemote"
+#Set-Location "C:\Users\STOICPC_QQQ\Documents\ClaudeCodeRemote"
 Write-Host "[OK] Frontend dependencies installed" -ForegroundColor Green
 
 Write-Host ""

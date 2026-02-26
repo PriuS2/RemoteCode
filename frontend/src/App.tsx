@@ -354,6 +354,15 @@ export default function App() {
     fetchSessions();
   };
 
+  const handleRename = async (id: string, newName: string) => {
+    await fetch(`/api/sessions/${id}/rename`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ name: newName }),
+    });
+    fetchSessions();
+  };
+
   if (!token) {
     return <Login onLogin={handleLogin} />;
   }
@@ -427,6 +436,10 @@ export default function App() {
                 onSelect={selectSession}
                 onResume={handleResume}
                 onNewSession={() => setShowNewSession(true)}
+                onDelete={handleDelete}
+                onRename={handleRename}
+                onSuspend={handleSuspend}
+                onTerminate={handleTerminate}
               />
             </aside>
             <div className="sidebar-resize" onMouseDown={handleSidebarDragStart} />
