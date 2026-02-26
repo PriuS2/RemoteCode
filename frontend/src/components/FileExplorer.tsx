@@ -165,6 +165,7 @@ export default function FileExplorer({
           showHidden={showHidden}
           canGoBack={canGoBack}
           onBack={handleBack}
+          onRefresh={() => fetchFiles(currentPath)}
           onToggleView={() => setViewMode((v) => (v === "grid" ? "list" : "grid"))}
           onToggleHidden={() => setShowHidden((h) => !h)}
           onClose={onClose}
@@ -174,6 +175,8 @@ export default function FileExplorer({
           viewMode={viewMode}
           loading={loading}
           error={error}
+          canGoBack={canGoBack}
+          onBack={handleBack}
           onNavigate={handleNavigate}
           onFileClick={handleFileClick}
           onFolderInsert={handleFolderInsert}
@@ -200,6 +203,7 @@ export default function FileExplorer({
         showHidden={showHidden}
         canGoBack={canGoBack}
         onBack={handleBack}
+        onRefresh={() => fetchFiles(currentPath)}
         onToggleView={() => setViewMode((v) => (v === "grid" ? "list" : "grid"))}
         onToggleHidden={() => setShowHidden((h) => !h)}
         onClose={onClose}
@@ -209,6 +213,8 @@ export default function FileExplorer({
         viewMode={viewMode}
         loading={loading}
         error={error}
+        canGoBack={canGoBack}
+        onBack={handleBack}
         onNavigate={handleNavigate}
         onFileClick={handleFileClick}
         onFolderInsert={handleFolderInsert}
@@ -225,6 +231,7 @@ function ExplorerHeader({
   showHidden,
   canGoBack,
   onBack,
+  onRefresh,
   onToggleView,
   onToggleHidden,
   onClose,
@@ -234,6 +241,7 @@ function ExplorerHeader({
   showHidden: boolean;
   canGoBack: boolean;
   onBack: () => void;
+  onRefresh: () => void;
   onToggleView: () => void;
   onToggleHidden: () => void;
   onClose: () => void;
@@ -289,6 +297,27 @@ function ExplorerHeader({
       >
         {displayPath}
       </span>
+
+      {/* Refresh */}
+      <button
+        onClick={onRefresh}
+        title="Refresh"
+        style={{
+          background: "none",
+          border: "none",
+          color: "#6c7086",
+          cursor: "pointer",
+          padding: "2px 4px",
+          display: "flex",
+          alignItems: "center",
+          borderRadius: 3,
+          flexShrink: 0,
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+      >
+        <RefreshIcon />
+      </button>
 
       {/* Hidden toggle */}
       <button
@@ -360,6 +389,8 @@ function ExplorerBody({
   viewMode,
   loading,
   error,
+  canGoBack,
+  onBack,
   onNavigate,
   onFileClick,
   onFolderInsert,
@@ -368,6 +399,8 @@ function ExplorerBody({
   viewMode: ViewMode;
   loading: boolean;
   error: string | null;
+  canGoBack: boolean;
+  onBack: () => void;
   onNavigate: (name: string) => void;
   onFileClick: (entry: FileEntry) => void;
   onFolderInsert: (entry: FileEntry) => void;
@@ -383,14 +416,6 @@ function ExplorerBody({
   if (error) {
     return (
       <div style={{ padding: 12, color: "#f38ba8", fontSize: 12 }}>{error}</div>
-    );
-  }
-
-  if (entries.length === 0) {
-    return (
-      <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: 12 }}>
-        Empty folder
-      </div>
     );
   }
 
@@ -410,6 +435,7 @@ function ExplorerBody({
             gap: 2,
           }}
         >
+          {canGoBack && <ParentGridItem onBack={onBack} />}
           {entries.map((entry) => (
             <GridItem
               key={entry.name}
@@ -427,6 +453,7 @@ function ExplorerBody({
   // List view
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "2px 4px" }}>
+      {canGoBack && <ParentListItem onBack={onBack} />}
       {entries.map((entry) => (
         <ListItem
           key={entry.name}
@@ -634,7 +661,96 @@ function ListItem({
   );
 }
 
+/* ---- Parent (..) Items ---- */
+
+function ParentGridItem({ onBack }: { onBack: () => void }) {
+  return (
+    <div
+      onClick={onBack}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        padding: "8px 4px 6px",
+        borderRadius: 6,
+        cursor: "pointer",
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLDivElement).style.background = "#313244";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLDivElement).style.background = "transparent";
+      }}
+    >
+      <ParentFolderIcon size={32} />
+      <span
+        style={{
+          marginTop: 4,
+          fontSize: 10,
+          color: "#a6adc8",
+          textAlign: "center",
+        }}
+      >
+        ..
+      </span>
+    </div>
+  );
+}
+
+function ParentListItem({ onBack }: { onBack: () => void }) {
+  return (
+    <div
+      onClick={onBack}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "5px 6px",
+        borderRadius: 4,
+        cursor: "pointer",
+        fontSize: 12,
+        color: "#a6adc8",
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLDivElement).style.background = "#313244";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLDivElement).style.background = "transparent";
+      }}
+    >
+      <ParentFolderIcon size={16} />
+      <span>..</span>
+    </div>
+  );
+}
+
 /* ---- Icons ---- */
+
+const ParentFolderIcon = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+    <path
+      d="M1 3.5C1 2.67 1.67 2 2.5 2H6l1.5 2H13.5C14.33 4 15 4.67 15 5.5V12.5C15 13.33 14.33 14 13.5 14H2.5C1.67 14 1 13.33 1 12.5V3.5Z"
+      fill="#6c7086"
+      opacity="0.6"
+    />
+    <path
+      d="M5 9.5L8 7L11 9.5"
+      stroke="#cdd6f4"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const RefreshIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1.5 6a4.5 4.5 0 0 1 7.65-3.2L10.5 4" />
+    <path d="M10.5 1.5V4H8" />
+    <path d="M10.5 6a4.5 4.5 0 0 1-7.65 3.2L1.5 8" />
+    <path d="M1.5 10.5V8H4" />
+  </svg>
+);
 
 const GridIcon = () => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2">
