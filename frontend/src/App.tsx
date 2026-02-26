@@ -54,6 +54,22 @@ export default function App() {
   sessionsRef.current = sessions;
   const settingsRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+
+  // Track visual viewport to handle mobile keyboard
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => {
+      // Only apply on mobile-sized screens
+      if (window.innerWidth > 768) { setViewportHeight(null); return; }
+      // If viewport is significantly smaller than window, keyboard is open
+      const diff = window.innerHeight - vv.height;
+      setViewportHeight(diff > 50 ? vv.height : null);
+    };
+    vv.addEventListener("resize", onResize);
+    return () => vv.removeEventListener("resize", onResize);
+  }, []);
 
   const handleSidebarDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -311,7 +327,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-container">
+    <div className="app-container" style={viewportHeight ? { height: viewportHeight } : undefined}>
       {/* Header */}
       <header className="app-header">
         <div className="header-left">
