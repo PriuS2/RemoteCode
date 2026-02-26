@@ -557,6 +557,7 @@ export default function FileExplorer({
       ref={fileInputRef}
       type="file"
       multiple
+      accept="*/*"
       style={{ display: "none" }}
       onChange={(e) => {
         if (e.target.files && e.target.files.length > 0) {
