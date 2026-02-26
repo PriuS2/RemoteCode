@@ -1162,12 +1162,6 @@ function ListItem({
           {formatSize(entry.size)}
         </span>
       )}
-      {/* Modified date */}
-      {!isMobile && entry.modified && (
-        <span style={{ fontSize: "0.85em", color: "#6c7086", flexShrink: 0, minWidth: 0 }}>
-          {formatDate(entry.modified)}
-        </span>
-      )}
       {/* @ insert button */}
       <button
         onClick={(e) => {
