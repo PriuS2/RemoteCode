@@ -1,3 +1,6 @@
+@keyframes ccr-spin { to { transform: rotate(360deg); } }
+@keyframes ccr-pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
 :root {
   --web-fs: 14px;
   --web-fs-sm: 13px;

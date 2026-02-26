@@ -55,7 +55,6 @@ const Spinner = () => (
       strokeDasharray="20 12"
       strokeLinecap="round"
     />
-    <style>{`@keyframes ccr-spin { to { transform: rotate(360deg); } }`}</style>
   </svg>
 );
 
@@ -71,7 +70,6 @@ const DoneBadge = () => (
       animation: "ccr-pulse 1.5s ease-in-out infinite",
     }}
   >
-    <style>{`@keyframes ccr-pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }`}</style>
   </span>
 );
 

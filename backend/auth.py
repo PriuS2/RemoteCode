@@ -1,3 +1,4 @@
+import hmac
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -16,7 +17,7 @@ ALGORITHM = "HS256"
 
 
 def verify_password(plain_password: str) -> bool:
-    return plain_password == settings.password
+    return hmac.compare_digest(plain_password, settings.password)
 
 
 def create_access_token(expires_delta: Optional[timedelta] = None) -> str:

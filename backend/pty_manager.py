@@ -126,7 +126,7 @@ class PtyManager:
 
     async def async_read(self, instance: PtyInstance) -> Optional[str]:
         """Returns data string or None if PTY is dead."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(_executor, instance.read)
         if data is None:
             return None
@@ -146,7 +146,7 @@ class PtyManager:
         cols: int = 120,
         rows: int = 30,
     ) -> PtyInstance:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             _executor,
             lambda: self.spawn(session_id, work_path, command, args, cols, rows),

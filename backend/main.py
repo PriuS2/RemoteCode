@@ -1,6 +1,10 @@
 import asyncio
 import logging
 import os
+import platform
+import string
+import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 
 from contextlib import asynccontextmanager
@@ -149,7 +153,6 @@ async def browse_directory(
     # Windows 드라이브 목록
     drives = []
     if os.name == "nt":
-        import string
         for letter in string.ascii_uppercase:
             drive = f"{letter}:\\"
             if os.path.exists(drive):
@@ -215,7 +218,6 @@ async def list_files(
     # Windows drive list
     drives = []
     if os.name == "nt":
-        import string
         for letter in string.ascii_uppercase:
             drive = f"{letter}:\\"
             if os.path.exists(drive):
@@ -232,8 +234,6 @@ async def list_files(
     files: list[FileEntry] = []
 
     try:
-        from datetime import datetime, timezone
-
         for entry in sorted(os.scandir(path), key=lambda e: e.name.lower()):
             try:
                 entry.name.encode("utf-8")
@@ -288,11 +288,9 @@ class OpenExplorerRequest(BaseModel):
 async def open_in_explorer(
     req: OpenExplorerRequest, _user: str = Depends(get_current_user)
 ):
-    import subprocess, platform
-
     path = os.path.abspath(req.path)
-    if not os.path.exists(path):
-        raise HTTPException(status_code=400, detail=f"Path not found: {path}")
+    if not os.path.isdir(path):
+        raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
 
     try:
         system = platform.system()
@@ -304,7 +302,8 @@ async def open_in_explorer(
             subprocess.Popen(["xdg-open", path])
         return {"success": True}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"open_in_explorer error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to open explorer")
 
 
 @app.get("/api/file-content")
@@ -329,7 +328,8 @@ async def read_file_content(
     except PermissionError:
         raise HTTPException(status_code=403, detail=f"Access denied: {path}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"read_file_content error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to read file")
 
 
 @app.get("/api/file-raw")
@@ -362,7 +362,19 @@ async def make_directory(
         raise HTTPException(status_code=400, detail=f"Parent not found: {parent}")
 
     name = req.name.strip()
-    if not name or "/" in name or "\\" in name:
+    _INVALID_CHARS = set('/<>:"\\|?*\0')
+    _RESERVED_NAMES = {
+        "CON", "PRN", "AUX", "NUL",
+        *(f"COM{i}" for i in range(1, 10)),
+        *(f"LPT{i}" for i in range(1, 10)),
+    }
+    if (
+        not name
+        or name in (".", "..")
+        or any(c in _INVALID_CHARS for c in name)
+        or name.upper().split(".")[0] in _RESERVED_NAMES
+        or name.endswith((" ", "."))
+    ):
         raise HTTPException(status_code=400, detail="Invalid folder name")
 
     target = os.path.join(parent, name)
@@ -374,7 +386,8 @@ async def make_directory(
     except PermissionError:
         raise HTTPException(status_code=403, detail=f"Access denied: {parent}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"make_directory error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create directory")
 
     return {"path": target}
 
@@ -418,7 +431,8 @@ async def upload_files(
         except PermissionError:
             raise HTTPException(status_code=403, detail=f"Access denied: {target_dir}")
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            logger.error(f"upload_files error: {e}")
+            raise HTTPException(status_code=500, detail="Failed to upload file")
 
     return {"uploaded": uploaded, "count": len(uploaded)}
 
@@ -446,7 +460,7 @@ async def create_session(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"create_session unexpected error: {type(e).__name__}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to create session")
 
 
 @app.post("/api/sessions/{session_id}/suspend", response_model=SessionResponse)
@@ -479,11 +493,12 @@ async def rename_session(
     if not name:
         raise HTTPException(status_code=400, detail="Name cannot be empty")
     try:
-        from .database import update_session as db_update_session
+        from .database import update_session as db_update_session  # noqa: avoid circular import
         await db_update_session(session_id, name=name)
         return {"detail": "Session renamed", "name": name}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"rename_session error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to rename session")
 
 
 @app.delete("/api/sessions/{session_id}")
