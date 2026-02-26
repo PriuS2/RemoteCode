@@ -1,16 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { ActivityState } from "./Terminal";
-
-interface Session {
-  id: string;
-  name: string;
-  work_path: string;
-  status: string;
-  created_at: string;
-  last_accessed_at: string;
-  claude_session_id: string | null;
-}
+import type { Session } from "../types/session";
 
 interface SessionListProps {
   sessions: Session[];

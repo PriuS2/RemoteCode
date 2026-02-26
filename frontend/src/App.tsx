@@ -9,17 +9,8 @@ import {
   requestNotificationPermission,
   sendBrowserNotification,
 } from "./utils/notify";
+import type { Session } from "./types/session";
 import "./App.css";
-
-interface Session {
-  id: string;
-  name: string;
-  work_path: string;
-  status: string;
-  created_at: string;
-  last_accessed_at: string;
-  claude_session_id: string | null;
-}
 
 function getStoredToken(): string | null {
   return localStorage.getItem("token");
@@ -299,68 +290,88 @@ export default function App() {
   };
 
   const handleSuspend = async (id: string) => {
-    await fetch(`/api/sessions/${id}/suspend`, {
-      method: "POST",
-      headers: authHeaders(),
-    });
-    removeFromActiveSessions(id);
-    setMountedSessions((prev) => prev.filter((sid) => sid !== id));
-    setSessionActivity((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    fetchSessions();
+    try {
+      await fetch(`/api/sessions/${id}/suspend`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      removeFromActiveSessions(id);
+      setMountedSessions((prev) => prev.filter((sid) => sid !== id));
+      setSessionActivity((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      fetchSessions();
+    } catch (e) {
+      console.error("Failed to suspend session:", e);
+    }
   };
 
   const handleResume = async (id: string) => {
-    const res = await fetch(`/api/sessions/${id}/resume`, {
-      method: "POST",
-      headers: authHeaders(),
-    });
-    if (res.ok) {
-      selectSession(id);
+    try {
+      const res = await fetch(`/api/sessions/${id}/resume`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      if (res.ok) {
+        selectSession(id);
+      }
+      fetchSessions();
+    } catch (e) {
+      console.error("Failed to resume session:", e);
     }
-    fetchSessions();
   };
 
   const handleTerminate = async (id: string) => {
-    await fetch(`/api/sessions/${id}`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
-    removeFromActiveSessions(id);
-    setMountedSessions((prev) => prev.filter((sid) => sid !== id));
-    setSessionActivity((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    fetchSessions();
+    try {
+      await fetch(`/api/sessions/${id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      removeFromActiveSessions(id);
+      setMountedSessions((prev) => prev.filter((sid) => sid !== id));
+      setSessionActivity((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      fetchSessions();
+    } catch (e) {
+      console.error("Failed to terminate session:", e);
+    }
   };
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/sessions/${id}?permanent=true`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
-    removeFromActiveSessions(id);
-    setMountedSessions((prev) => prev.filter((sid) => sid !== id));
-    setSessionActivity((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    fetchSessions();
+    try {
+      await fetch(`/api/sessions/${id}?permanent=true`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      removeFromActiveSessions(id);
+      setMountedSessions((prev) => prev.filter((sid) => sid !== id));
+      setSessionActivity((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      fetchSessions();
+    } catch (e) {
+      console.error("Failed to delete session:", e);
+    }
   };
 
   const handleRename = async (id: string, newName: string) => {
-    await fetch(`/api/sessions/${id}/rename`, {
-      method: "PATCH",
-      headers: authHeaders(),
-      body: JSON.stringify({ name: newName }),
-    });
-    fetchSessions();
+    try {
+      await fetch(`/api/sessions/${id}/rename`, {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify({ name: newName }),
+      });
+      fetchSessions();
+    } catch (e) {
+      console.error("Failed to rename session:", e);
+    }
   };
 
   if (!token) {

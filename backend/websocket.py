@@ -40,14 +40,27 @@ async def ws_to_pty(ws: WebSocket, instance: PtyInstance) -> None:
     try:
         while True:
             raw = await ws.receive_text()
-            msg = json.loads(raw)
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                logger.warning(f"ws_to_pty: invalid JSON from {instance.session_id}")
+                continue
 
-            if msg["type"] == "input":
-                instance.write(msg["data"])
-            elif msg["type"] == "resize":
-                cols = msg["data"]["cols"]
-                rows = msg["data"]["rows"]
-                instance.resize(cols, rows)
+            msg_type = msg.get("type")
+            msg_data = msg.get("data")
+
+            if msg_type == "input":
+                if isinstance(msg_data, str):
+                    instance.write(msg_data)
+            elif msg_type == "resize":
+                if isinstance(msg_data, dict):
+                    cols = msg_data.get("cols")
+                    rows = msg_data.get("rows")
+                    if (
+                        isinstance(cols, int) and isinstance(rows, int)
+                        and 1 <= cols <= 500 and 1 <= rows <= 200
+                    ):
+                        instance.resize(cols, rows)
     except WebSocketDisconnect:
         # WS 끊겨도 PTY는 유지 (세션 전환 지원)
         logger.info(f"WebSocket disconnected (ws_to_pty) for session {instance.session_id}")

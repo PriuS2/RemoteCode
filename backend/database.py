@@ -81,11 +81,16 @@ async def list_sessions() -> list[dict]:
     return [dict(row) for row in rows]
 
 
+_ALLOWED_COLUMNS = {"claude_session_id", "name", "work_path", "last_accessed_at", "status"}
+
+
 async def update_session(session_id: str, **kwargs) -> None:
     db = await get_db()
     sets = []
     values = []
     for key, value in kwargs.items():
+        if key not in _ALLOWED_COLUMNS:
+            raise ValueError(f"Invalid column: {key}")
         sets.append(f"{key} = ?")
         values.append(value)
     values.append(session_id)

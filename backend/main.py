@@ -4,6 +4,7 @@ import os
 import platform
 import string
 import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -32,6 +33,28 @@ from .websocket import handle_terminal_ws
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Drive list cache (Windows only, TTL 30s)
+_drive_cache: list[str] = []
+_drive_cache_time: float = 0
+_DRIVE_CACHE_TTL = 30.0
+
+
+def _get_drives() -> list[str]:
+    global _drive_cache, _drive_cache_time
+    if os.name != "nt":
+        return []
+    now = time.monotonic()
+    if _drive_cache and (now - _drive_cache_time) < _DRIVE_CACHE_TTL:
+        return _drive_cache
+    drives = []
+    for letter in string.ascii_uppercase:
+        drive = f"{letter}:\\"
+        if os.path.exists(drive):
+            drives.append(drive)
+    _drive_cache = drives
+    _drive_cache_time = now
+    return drives
 
 
 def get_real_ip(request: Request) -> str:
@@ -150,13 +173,7 @@ async def browse_directory(
 
     path = os.path.abspath(path)
 
-    # Windows 드라이브 목록
-    drives = []
-    if os.name == "nt":
-        for letter in string.ascii_uppercase:
-            drive = f"{letter}:\\"
-            if os.path.exists(drive):
-                drives.append(drive)
+    drives = _get_drives()
 
     if not os.path.isdir(path):
         raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
@@ -215,13 +232,7 @@ async def list_files(
 
     path = os.path.abspath(path)
 
-    # Windows drive list
-    drives = []
-    if os.name == "nt":
-        for letter in string.ascii_uppercase:
-            drive = f"{letter}:\\"
-            if os.path.exists(drive):
-                drives.append(drive)
+    drives = _get_drives()
 
     if not os.path.isdir(path):
         raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
