@@ -368,24 +368,6 @@ export default function App() {
                   </button>
                 </div>
               </div>
-              <div className="settings-section">
-                <label className="settings-label">Terminal Font Size</label>
-                <div className="settings-control">
-                  <button
-                    className="size-btn"
-                    onClick={() => setTerminalFontSize((s) => Math.max(8, s - 1))}
-                  >
-                    −
-                  </button>
-                  <span className="size-value">{terminalFontSize}px</span>
-                  <button
-                    className="size-btn"
-                    onClick={() => setTerminalFontSize((s) => Math.min(28, s + 1))}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
               <div className="settings-divider" />
               <button className="settings-logout" onClick={handleLogout}>
                 Logout
@@ -447,6 +429,7 @@ export default function App() {
                 token={token}
                 visible={isVisible}
                 fontSize={terminalFontSize}
+                onFontSizeChange={(d) => setTerminalFontSize((s) => Math.max(8, Math.min(28, s + d)))}
                 onActivityChange={handleActivityChange}
                 panelIndex={panelIndex}
                 splitMode={splitMode}

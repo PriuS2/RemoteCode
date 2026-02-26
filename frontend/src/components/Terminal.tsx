@@ -14,6 +14,7 @@ interface TerminalProps {
   token: string;
   visible?: boolean;
   fontSize?: number;
+  onFontSizeChange?: (delta: number) => void;
   onActivityChange?: (sessionId: string, state: ActivityState) => void;
   panelIndex: number;
   splitMode: boolean;
@@ -43,6 +44,7 @@ export default function Terminal({
   token,
   visible = true,
   fontSize = 14,
+  onFontSizeChange,
   onActivityChange,
   panelIndex,
   splitMode,
@@ -168,6 +170,7 @@ export default function Terminal({
       if (fitAddonRef.current) {
         try {
           fitAddonRef.current.fit();
+          termRef.current?.scrollToBottom();
         } catch {
           // ignore
         }
@@ -281,6 +284,7 @@ export default function Terminal({
       termRef.current.options.fontSize = fontSize;
       try {
         fitAddonRef.current.fit();
+        termRef.current.scrollToBottom();
       } catch {
         // ignore
       }
@@ -299,6 +303,7 @@ export default function Terminal({
           try {
             fitAddonRef.current?.fit();
             termRef.current?.refresh(0, termRef.current.rows - 1);
+            termRef.current?.scrollToBottom();
           } catch {
             // ignore
           }
@@ -417,6 +422,8 @@ export default function Terminal({
         bottom: 0,
       };
 
+  const iconSize = Math.round(fontSize * 0.86);
+
   return (
     <div
       style={{
@@ -429,12 +436,12 @@ export default function Terminal({
       {/* Terminal title bar */}
       <div
         style={{
-          height: 28,
+          height: fontSize * 2,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "0 10px",
-          fontSize: 11,
+          padding: `0 ${Math.round(fontSize * 0.7)}px`,
+          fontSize: Math.round(fontSize * 0.8),
           fontWeight: 600,
           color: "#cdd6f4",
           background: splitMode
@@ -458,49 +465,64 @@ export default function Terminal({
         >
           {sessionName}
         </span>
-        <div style={{ display: "flex", gap: 2, marginLeft: 8, flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: 2, marginLeft: 8, flexShrink: 0, alignItems: "center" }}>
+          {/* Font size controls */}
+          {onFontSizeChange && (
+            <>
+              <FontSizeBtn label="−" title="Font Size −" fontSize={fontSize} onClick={(e) => { e.stopPropagation(); onFontSizeChange(-1); }} />
+              <span style={{ fontSize: Math.round(fontSize * 0.7), color: "#a6adc8", minWidth: Math.round(fontSize * 1.4), textAlign: "center", lineHeight: 1 }}>{fontSize}</span>
+              <FontSizeBtn label="+" title="Font Size +" fontSize={fontSize} onClick={(e) => { e.stopPropagation(); onFontSizeChange(1); }} />
+              <div style={{ width: 1, height: fontSize, background: "#45475a", margin: `0 ${Math.round(fontSize * 0.3)}px` }} />
+            </>
+          )}
           {/* File Explorer toggle */}
           <TitleBarBtn
-            icon={<FolderIcon />}
+            icon={<FolderIcon size={iconSize} />}
             title="File Explorer"
             hoverColor="#a6e3a1"
             active={explorerOpen}
+            fontSize={fontSize}
             onClick={(e) => { e.stopPropagation(); setExplorerOpen((o) => !o); }}
           />
           {/* Refresh terminal */}
           <TitleBarBtn
-            icon={<RefreshIcon />}
+            icon={<RefreshIcon size={iconSize} />}
             title="Refresh"
             hoverColor="#94e2d5"
+            fontSize={fontSize}
             onClick={(e) => {
               e.stopPropagation();
               try {
                 fitAddonRef.current?.fit();
                 termRef.current?.refresh(0, (termRef.current?.rows ?? 1) - 1);
+                termRef.current?.scrollToBottom();
               } catch { /* ignore */ }
             }}
           />
           {/* Minimize = Suspend */}
           <TitleBarBtn
-            icon={<MinimizeIcon />}
+            icon={<MinimizeIcon size={iconSize} />}
             title="Suspend"
             hoverColor="#f9e2af"
+            fontSize={fontSize}
             onClick={(e) => { e.stopPropagation(); onSuspend(); }}
           />
           {/* Maximize = single mode (split only) */}
           {splitMode && (
             <TitleBarBtn
-              icon={<MaximizeIcon />}
+              icon={<MaximizeIcon size={iconSize} />}
               title="Maximize"
               hoverColor="#89b4fa"
+              fontSize={fontSize}
               onClick={(e) => { e.stopPropagation(); onMaximize(); }}
             />
           )}
           {/* Close = Kill */}
           <TitleBarBtn
-            icon={<CloseIcon />}
+            icon={<CloseIcon size={iconSize} />}
             title="Kill"
             hoverColor="#f38ba8"
+            fontSize={fontSize}
             onClick={(e) => { e.stopPropagation(); onTerminate(); }}
           />
         </div>
@@ -577,17 +599,54 @@ export default function Terminal({
 
 /* ---- Title bar helper components ---- */
 
+function FontSizeBtn({ label, title, fontSize = 14, onClick }: { label: string; title: string; fontSize?: number; onClick: (e: React.MouseEvent) => void }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        background: "none",
+        border: "none",
+        color: "#6c7086",
+        cursor: "pointer",
+        padding: `${Math.round(fontSize * 0.07)}px ${Math.round(fontSize * 0.2)}px`,
+        borderRadius: 3,
+        fontSize: Math.round(fontSize * 0.86),
+        fontWeight: 700,
+        lineHeight: 1,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+      onMouseEnter={(e) => {
+        const btn = e.currentTarget as HTMLButtonElement;
+        btn.style.color = "#cdd6f4";
+        btn.style.background = "#45475a";
+      }}
+      onMouseLeave={(e) => {
+        const btn = e.currentTarget as HTMLButtonElement;
+        btn.style.color = "#6c7086";
+        btn.style.background = "none";
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 function TitleBarBtn({
   icon,
   title,
   hoverColor,
   active,
+  fontSize = 14,
   onClick,
 }: {
   icon: React.ReactNode;
   title: string;
   hoverColor: string;
   active?: boolean;
+  fontSize?: number;
   onClick: (e: React.MouseEvent) => void;
 }) {
   return (
@@ -599,7 +658,7 @@ function TitleBarBtn({
         border: "none",
         color: active ? hoverColor : "#6c7086",
         cursor: "pointer",
-        padding: "2px 4px",
+        padding: `${Math.round(fontSize * 0.14)}px ${Math.round(fontSize * 0.29)}px`,
         borderRadius: 3,
         display: "flex",
         alignItems: "center",
@@ -622,34 +681,34 @@ function TitleBarBtn({
   );
 }
 
-const MinimizeIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+const MinimizeIcon = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
     <line x1="2" y1="9" x2="10" y2="9" />
   </svg>
 );
 
-const MaximizeIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+const MaximizeIcon = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="2" width="8" height="8" />
   </svg>
 );
 
-const CloseIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+const CloseIcon = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
     <line x1="3" y1="3" x2="9" y2="9" />
     <line x1="9" y1="3" x2="3" y2="9" />
   </svg>
 );
 
-const RefreshIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+const RefreshIcon = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M1.5 2v3h3" />
     <path d="M2.1 7.5a4 4 0 1 0 .6-4.2L1.5 5" />
   </svg>
 );
 
-const FolderIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+const FolderIcon = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M1 3C1 2.45 1.45 2 2 2h2.5l1 1.5H10c.55 0 1 .45 1 1V9.5c0 .55-.45 1-1 1H2c-.55 0-1-.45-1-1V3z" />
   </svg>
 );

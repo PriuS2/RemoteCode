@@ -129,6 +129,14 @@ export default function FileExplorer({
     return (localStorage.getItem("fileExplorerView") as ViewMode) || "list";
   });
   const [showHidden, setShowHidden] = useState(false);
+  const [explorerFontSize, setExplorerFontSize] = useState(() => {
+    const v = localStorage.getItem("explorerFontSize");
+    return v ? Number(v) : 12;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("explorerFontSize", String(explorerFontSize));
+  }, [explorerFontSize]);
   const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
   const [previewContent, setPreviewContent] = useState<string>("");
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -504,6 +512,7 @@ export default function FileExplorer({
       onFileClick={handleFileClick}
       onInsertEntry={handleInsertEntry}
       onContextMenu={handleContextMenu}
+      isMobile={isMobile}
     />
   );
 
@@ -575,7 +584,8 @@ export default function FileExplorer({
           background: "#1e1e2e",
           display: "flex",
           flexDirection: "column",
-        }}
+          fontSize: explorerFontSize,
+        } as React.CSSProperties}
       >
         {hiddenInput}
         <ExplorerHeader
@@ -592,6 +602,8 @@ export default function FileExplorer({
           onUpload={() => fileInputRef.current?.click()}
           onClose={onClose}
           isPreview={!!previewFile}
+          explorerFontSize={explorerFontSize}
+          onFontSizeChange={setExplorerFontSize}
         />
         {bodyOrPreview}
         {uploadStatus}
@@ -617,7 +629,8 @@ export default function FileExplorer({
         background: "#181825",
         borderRight: "1px solid #313244",
         position: "relative",
-      }}
+        fontSize: explorerFontSize,
+      } as React.CSSProperties}
     >
       {hiddenInput}
       <ExplorerHeader
@@ -634,6 +647,8 @@ export default function FileExplorer({
         onUpload={() => fileInputRef.current?.click()}
         onClose={onClose}
         isPreview={!!previewFile}
+        explorerFontSize={explorerFontSize}
+        onFontSizeChange={setExplorerFontSize}
       />
       {bodyOrPreview}
       {uploadStatus}
@@ -661,6 +676,8 @@ function ExplorerHeader({
   onUpload,
   onClose,
   isPreview,
+  explorerFontSize,
+  onFontSizeChange,
 }: {
   displayPath: string;
   viewMode: ViewMode;
@@ -675,18 +692,20 @@ function ExplorerHeader({
   onUpload: () => void;
   onClose: () => void;
   isPreview?: boolean;
+  explorerFontSize: number;
+  onFontSizeChange: (fn: (s: number) => number) => void;
 }) {
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 4,
-        padding: "0 6px",
-        height: 28,
+        gap: "0.3em",
+        padding: "0.2em 0.5em",
         borderBottom: "1px solid #313244",
         flexShrink: 0,
         background: "#181825",
+        fontSize: explorerFontSize,
       }}
     >
       {/* Back button */}
@@ -699,14 +718,14 @@ function ExplorerHeader({
           border: "none",
           color: canGoBack ? "#cdd6f4" : "#45475a",
           cursor: canGoBack ? "pointer" : "default",
-          padding: "2px 4px",
+          padding: "0.15em 0.3em",
           display: "flex",
           alignItems: "center",
           borderRadius: 3,
           flexShrink: 0,
         }}
       >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="1em" height="1em" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M8 2L4 6l4 4" />
         </svg>
       </button>
@@ -720,7 +739,7 @@ function ExplorerHeader({
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
-          fontSize: 11,
+          fontSize: "0.95em",
           color: "#89b4fa",
           fontFamily: "'Cascadia Code', 'Consolas', monospace",
         }}
@@ -739,7 +758,7 @@ function ExplorerHeader({
               border: "none",
               color: "#6c7086",
               cursor: "pointer",
-              padding: "2px 4px",
+              padding: "0.15em 0.3em",
               display: "flex",
               alignItems: "center",
               borderRadius: 3,
@@ -761,7 +780,7 @@ function ExplorerHeader({
                 border: "none",
                 color: "#6c7086",
                 cursor: "pointer",
-                padding: "2px 4px",
+                padding: "0.15em 0.3em",
                 display: "flex",
                 alignItems: "center",
                 borderRadius: 3,
@@ -783,8 +802,8 @@ function ExplorerHeader({
               border: "none",
               color: showHidden ? "#a6e3a1" : "#6c7086",
               cursor: "pointer",
-              padding: "2px 4px",
-              fontSize: 10,
+              padding: "0.15em 0.3em",
+              fontSize: "0.85em",
               fontWeight: 700,
               borderRadius: 3,
               flexShrink: 0,
@@ -802,7 +821,7 @@ function ExplorerHeader({
               border: "none",
               color: "#6c7086",
               cursor: "pointer",
-              padding: "2px 4px",
+              padding: "0.15em 0.3em",
               display: "flex",
               alignItems: "center",
               borderRadius: 3,
@@ -821,7 +840,7 @@ function ExplorerHeader({
               border: "none",
               color: "#6c7086",
               cursor: "pointer",
-              padding: "2px 4px",
+              padding: "0.15em 0.3em",
               display: "flex",
               alignItems: "center",
               borderRadius: 3,
@@ -835,6 +854,35 @@ function ExplorerHeader({
         </>
       )}
 
+      {/* Font size */}
+      {!isPreview && (
+        <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
+          <button
+            onClick={() => onFontSizeChange((s) => Math.max(8, s - 1))}
+            title="Decrease font size"
+            style={{
+              background: "none", border: "none", color: "#6c7086", cursor: "pointer",
+              fontSize: "1em", fontWeight: 700, padding: "0 0.2em", lineHeight: 1, borderRadius: 3,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+          >-</button>
+          <span style={{ fontSize: "0.75em", color: "#6c7086", minWidth: "1.2em", textAlign: "center" }}>
+            {explorerFontSize}
+          </span>
+          <button
+            onClick={() => onFontSizeChange((s) => Math.min(20, s + 1))}
+            title="Increase font size"
+            style={{
+              background: "none", border: "none", color: "#6c7086", cursor: "pointer",
+              fontSize: "1em", fontWeight: 700, padding: "0 0.2em", lineHeight: 1, borderRadius: 3,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+          >+</button>
+        </div>
+      )}
+
       {/* Close */}
       <button
         onClick={onClose}
@@ -844,14 +892,14 @@ function ExplorerHeader({
           border: "none",
           color: "#6c7086",
           cursor: "pointer",
-          padding: "2px 4px",
+          padding: "0.15em 0.3em",
           display: "flex",
           alignItems: "center",
           borderRadius: 3,
           flexShrink: 0,
         }}
       >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <svg width="1em" height="1em" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
           <line x1="3" y1="3" x2="9" y2="9" />
           <line x1="9" y1="3" x2="3" y2="9" />
         </svg>
@@ -873,6 +921,7 @@ function ExplorerBody({
   onFileClick,
   onInsertEntry,
   onContextMenu,
+  isMobile,
 }: {
   entries: FileEntry[];
   viewMode: ViewMode;
@@ -884,10 +933,11 @@ function ExplorerBody({
   onFileClick: (entry: FileEntry) => void;
   onInsertEntry: (entry: FileEntry) => void;
   onContextMenu: (e: React.MouseEvent, entry: FileEntry) => void;
+  isMobile: boolean;
 }) {
   if (loading) {
     return (
-      <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: 12 }}>
+      <div style={{ padding: 20, textAlign: "center", color: "#6c7086" }}>
         Loading...
       </div>
     );
@@ -895,7 +945,7 @@ function ExplorerBody({
 
   if (error) {
     return (
-      <div style={{ padding: 12, color: "#f38ba8", fontSize: 12 }}>{error}</div>
+      <div style={{ padding: 12, color: "#f38ba8" }}>{error}</div>
     );
   }
 
@@ -943,6 +993,7 @@ function ExplorerBody({
           onFileClick={onFileClick}
           onInsertEntry={onInsertEntry}
           onContextMenu={onContextMenu}
+          isMobile={isMobile}
         />
       ))}
     </div>
@@ -997,13 +1048,16 @@ function GridItem({
       <span
         style={{
           marginTop: 4,
-          fontSize: 10,
+          fontSize: "0.85em",
           color: "#cdd6f4",
           textAlign: "center",
           width: "100%",
           overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
+          wordBreak: "break-all",
+          lineHeight: 1.3,
         }}
         title={entry.name}
       >
@@ -1051,12 +1105,14 @@ function ListItem({
   onFileClick,
   onInsertEntry,
   onContextMenu,
+  isMobile,
 }: {
   entry: FileEntry;
   onNavigate: (name: string) => void;
   onFileClick: (entry: FileEntry) => void;
   onInsertEntry: (entry: FileEntry) => void;
   onContextMenu: (e: React.MouseEvent, entry: FileEntry) => void;
+  isMobile: boolean;
 }) {
   const isFolder = entry.type === "folder";
 
@@ -1074,7 +1130,6 @@ function ListItem({
         padding: "5px 6px",
         borderRadius: 4,
         cursor: "pointer",
-        fontSize: 12,
         color: "#cdd6f4",
       }}
       onMouseEnter={(e) => {
@@ -1103,13 +1158,13 @@ function ListItem({
       </span>
       {/* Size (files only) */}
       {!isFolder && entry.size != null && (
-        <span style={{ fontSize: 10, color: "#6c7086", flexShrink: 0 }}>
+        <span style={{ fontSize: "0.85em", color: "#6c7086", flexShrink: 0 }}>
           {formatSize(entry.size)}
         </span>
       )}
       {/* Modified date */}
-      {entry.modified && (
-        <span style={{ fontSize: 10, color: "#6c7086", flexShrink: 0, minWidth: 0 }}>
+      {!isMobile && entry.modified && (
+        <span style={{ fontSize: "0.85em", color: "#6c7086", flexShrink: 0, minWidth: 0 }}>
           {formatDate(entry.modified)}
         </span>
       )}
@@ -2381,7 +2436,7 @@ const ParentFolderIcon = ({ size = 16 }: { size?: number }) => (
 );
 
 const RefreshIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="1em" height="1em" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
     <path d="M1.5 6a4.5 4.5 0 0 1 7.65-3.2L10.5 4" />
     <path d="M10.5 1.5V4H8" />
     <path d="M10.5 6a4.5 4.5 0 0 1-7.65 3.2L1.5 8" />
@@ -2390,7 +2445,7 @@ const RefreshIcon = () => (
 );
 
 const OpenExternalIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="1em" height="1em" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
     <path d="M9 6.5v3a1 1 0 0 1-1 1H2.5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1H5" />
     <path d="M7.5 1.5H10.5V4.5" />
     <path d="M5.5 6.5L10.5 1.5" />
@@ -2398,7 +2453,7 @@ const OpenExternalIcon = () => (
 );
 
 const GridIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2">
+  <svg width="1em" height="1em" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2">
     <rect x="1" y="1" width="4" height="4" rx="0.5" />
     <rect x="7" y="1" width="4" height="4" rx="0.5" />
     <rect x="1" y="7" width="4" height="4" rx="0.5" />
@@ -2407,14 +2462,14 @@ const GridIcon = () => (
 );
 
 const ListIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
+  <svg width="1em" height="1em" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
     <line x1="1" y1="3" x2="11" y2="3" />
     <line x1="1" y1="6" x2="11" y2="6" />
     <line x1="1" y1="9" x2="11" y2="9" />
   </svg>
 );
 
-const UploadIcon = ({ size = 12 }: { size?: number }) => (
+const UploadIcon = ({ size = "1em" }: { size?: number | string }) => (
   <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
     <path d="M6 8V2" />
     <path d="M3.5 4.5L6 2l2.5 2.5" />

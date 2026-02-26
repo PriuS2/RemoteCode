@@ -39,9 +39,21 @@ const EXT_MAP: Record<string, { color: string; label: string }> = {
   ".gz":    { color: "#fab387", label: "GZ" },
   ".tar":   { color: "#fab387", label: "TR" },
   ".wasm":  { color: "#cba6f7", label: "WA" },
+  ".cs":    { color: "#a6e3a1", label: "C#" },
+  ".mp3":   { color: "#f5c2e7", label: "♪" },
+  ".wav":   { color: "#f5c2e7", label: "♪" },
+  ".flac":  { color: "#f5c2e7", label: "♪" },
+  ".ogg":   { color: "#f5c2e7", label: "♪" },
+  ".aac":   { color: "#f5c2e7", label: "♪" },
+  ".m4a":   { color: "#f5c2e7", label: "♪" },
+  ".wma":   { color: "#f5c2e7", label: "♪" },
+  ".opus":  { color: "#f5c2e7", label: "♪" },
 };
 
 const DEFAULT_FILE = { color: "#6c7086", label: "" };
+
+const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".bmp", ".svg"]);
+const AUDIO_EXTS = new Set([".mp3", ".wav", ".flac", ".ogg", ".aac", ".m4a", ".wma", ".opus"]);
 
 function getExtInfo(ext: string | null | undefined) {
   if (!ext) return DEFAULT_FILE;
@@ -58,8 +70,34 @@ export const IconFolder = ({ size = 16 }: { size?: number }) => (
   </svg>
 );
 
+function ImageIcon({ size, color }: { size: number; color: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+      <rect x="1.5" y="2" width="13" height="12" rx="1.5" fill={color} opacity="0.15" stroke={color} strokeWidth="0.8" opacity="0.6" />
+      <circle cx="5.5" cy="6" r="1.5" fill={color} opacity="0.6" />
+      <path d="M1.5 11l3-3 2 2 3-4 5 5" stroke={color} strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+    </svg>
+  );
+}
+
+function AudioIcon({ size, color }: { size: number; color: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+      <rect x="2" y="1.5" width="12" height="13" rx="1.5" fill={color} opacity="0.15" stroke={color} strokeWidth="0.8" opacity="0.6" />
+      <path d="M6 5v5.5" stroke={color} strokeWidth="1.2" strokeLinecap="round" opacity="0.7" />
+      <path d="M8 3.5v8" stroke={color} strokeWidth="1.2" strokeLinecap="round" opacity="0.7" />
+      <path d="M10 5.5v4" stroke={color} strokeWidth="1.2" strokeLinecap="round" opacity="0.7" />
+    </svg>
+  );
+}
+
 export function FileIcon({ extension, size = 16 }: { extension?: string | null; size?: number }) {
   const { color, label } = getExtInfo(extension);
+  const ext = extension?.toLowerCase() ?? "";
+
+  if (IMAGE_EXTS.has(ext)) return <ImageIcon size={size} color={color} />;
+  if (AUDIO_EXTS.has(ext)) return <AudioIcon size={size} color={color} />;
+
   const isSmall = size <= 16;
   const fontSize = isSmall ? 5.5 : 9;
   const labelY = isSmall ? 12.5 : 12;
