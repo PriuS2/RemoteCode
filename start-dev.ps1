@@ -19,6 +19,7 @@ CCR_PASSWORD=changeme
 CCR_JWT_SECRET=change-this-secret-key
 CCR_JWT_EXPIRE_HOURS=72
 CCR_DB_PATH=sessions.db
+# CCR_ALLOWED_ORIGINS=https://ccr.yourdomain.com,http://localhost:8080
 "@ | Set-Content ".\.env" -Encoding UTF8
     Write-Host "[OK] .env created with defaults" -ForegroundColor Yellow
 }

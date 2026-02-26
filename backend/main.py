@@ -4,11 +4,15 @@ import os
 from pathlib import Path
 
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from starlette.responses import JSONResponse
 
 from .auth import (
     create_access_token,
@@ -16,6 +20,7 @@ from .auth import (
     verify_password,
     verify_ws_token,
 )
+from .config import settings
 from .database import close_db, init_db, mark_all_active_as_suspended
 from .pty_manager import pty_manager
 from .session_manager import session_manager
@@ -23,6 +28,18 @@ from .websocket import handle_terminal_ws
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def get_real_ip(request: Request) -> str:
+    """Cloudflare 프록시 뒤의 실제 클라이언트 IP"""
+    return (
+        request.headers.get("CF-Connecting-IP")
+        or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        or (request.client.host if request.client else "127.0.0.1")
+    )
+
+
+limiter = Limiter(key_func=get_real_ip)
 
 
 @asynccontextmanager
@@ -37,14 +54,24 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Claude Code Remote", lifespan=lifespan)
+app.state.limiter = limiter
 
+_origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Too many login attempts. Please try again later."},
+    )
 
 
 # --- Request/Response Models ---
@@ -77,7 +104,8 @@ class SessionResponse(BaseModel):
 # --- Auth API (인증 불필요) ---
 
 @app.post("/api/auth/login", response_model=TokenResponse)
-async def login(req: LoginRequest):
+@limiter.limit("5/minute")
+async def login(request: Request, req: LoginRequest):
     if not verify_password(req.password):
         raise HTTPException(status_code=401, detail="Invalid password")
     token = create_access_token()
@@ -345,6 +373,50 @@ async def make_directory(
         raise HTTPException(status_code=500, detail=str(e))
 
     return {"path": target}
+
+
+@app.post("/api/upload")
+async def upload_files(
+    path: str = Query(...),
+    files: list[UploadFile] = File(...),
+    _user: str = Depends(get_current_user),
+):
+    target_dir = os.path.abspath(path)
+    if not os.path.isdir(target_dir):
+        raise HTTPException(status_code=400, detail=f"Not a directory: {target_dir}")
+
+    MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB per file
+    uploaded = []
+    for f in files:
+        if not f.filename:
+            continue
+        # Sanitize: use only the filename part (no path traversal)
+        name = os.path.basename(f.filename)
+        if not name:
+            continue
+        dest = os.path.join(target_dir, name)
+        try:
+            size = 0
+            with open(dest, "wb") as out:
+                while chunk := await f.read(64 * 1024):
+                    size += len(chunk)
+                    if size > MAX_FILE_SIZE:
+                        out.close()
+                        os.remove(dest)
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"File too large: {name} (max 100MB)",
+                        )
+                    out.write(chunk)
+            uploaded.append({"name": name, "size": size})
+        except HTTPException:
+            raise
+        except PermissionError:
+            raise HTTPException(status_code=403, detail=f"Access denied: {target_dir}")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    return {"uploaded": uploaded, "count": len(uploaded)}
 
 
 # --- Session API (인증 필요) ---

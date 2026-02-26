@@ -138,6 +138,10 @@ export default function FileExplorer({
   const [contextMenu, setContextMenu] = useState<{
     x: number; y: number; entry: FileEntry;
   } | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const imageUrlRef = useRef<string | null>(null);
 
   const setImageUrl = useCallback((url: string | null) => {
@@ -374,6 +378,57 @@ export default function FileExplorer({
     return items;
   }, [contextMenu, currentPath, isLocal, handleOpenNative, downloadFile, closeContextMenu, canPreview]);
 
+  const uploadFiles = useCallback(async (fileList: FileList | File[]) => {
+    const files = Array.from(fileList);
+    if (files.length === 0) return;
+    setUploading(true);
+    setUploadProgress(`Uploading ${files.length} file(s)...`);
+    try {
+      const formData = new FormData();
+      for (const f of files) formData.append("files", f);
+      const res = await fetch(
+        `/api/upload?path=${encodeURIComponent(currentPath)}`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        },
+      );
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.detail || "Upload failed");
+      }
+      const data = await res.json();
+      setUploadProgress(`${data.count} file(s) uploaded`);
+      fetchFiles(currentPath);
+      setTimeout(() => setUploadProgress(""), 2000);
+    } catch (e: unknown) {
+      setUploadProgress(e instanceof Error ? e.message : "Upload failed");
+      setTimeout(() => setUploadProgress(""), 3000);
+    } finally {
+      setUploading(false);
+    }
+  }, [currentPath, token, fetchFiles]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (previewFile) return;
+    const files = e.dataTransfer.files;
+    if (files.length > 0) uploadFiles(files);
+  }, [uploadFiles, previewFile]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    if (!previewFile) setDragOver(true);
+  }, [previewFile]);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    // Only close if leaving the container (not entering a child)
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setDragOver(false);
+  }, []);
+
   const canGoBack = (() => {
     const normCur = currentPath.replace(/\\/g, "/").replace(/\/$/, "").toLowerCase();
     const normRoot = rootPath.replace(/\\/g, "/").replace(/\/$/, "").toLowerCase();
@@ -452,10 +507,64 @@ export default function FileExplorer({
     />
   );
 
+  const uploadOverlay = dragOver && !previewFile && (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 50,
+        background: "rgba(166,227,161,0.08)",
+        border: "2px dashed #a6e3a1",
+        borderRadius: 6,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        pointerEvents: "none",
+      }}
+    >
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+        <UploadIcon size={32} />
+        <span style={{ color: "#a6e3a1", fontSize: 13, fontWeight: 600 }}>Drop files to upload</span>
+      </div>
+    </div>
+  );
+
+  const uploadStatus = uploadProgress && (
+    <div style={{
+      padding: "4px 8px",
+      fontSize: 11,
+      color: uploading ? "#89b4fa" : uploadProgress.includes("failed") || uploadProgress.includes("denied") || uploadProgress.includes("large") ? "#f38ba8" : "#a6e3a1",
+      background: "#181825",
+      borderTop: "1px solid #313244",
+      textAlign: "center",
+      flexShrink: 0,
+    }}>
+      {uploading && "⏳ "}{uploadProgress}
+    </div>
+  );
+
+  const hiddenInput = (
+    <input
+      ref={fileInputRef}
+      type="file"
+      multiple
+      style={{ display: "none" }}
+      onChange={(e) => {
+        if (e.target.files && e.target.files.length > 0) {
+          uploadFiles(e.target.files);
+        }
+        e.target.value = "";
+      }}
+    />
+  );
+
   // Mobile: full-screen overlay
   if (isMobile) {
     return (
       <div
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
         style={{
           position: "fixed",
           top: 44,
@@ -468,6 +577,7 @@ export default function FileExplorer({
           flexDirection: "column",
         }}
       >
+        {hiddenInput}
         <ExplorerHeader
           displayPath={displayPath}
           viewMode={viewMode}
@@ -476,13 +586,16 @@ export default function FileExplorer({
           onBack={handleBack}
           onRefresh={() => fetchFiles(currentPath)}
           isLocal={isLocal}
-          onOpenNative={handleOpenNative}
+          onOpenNative={() => handleOpenNative()}
           onToggleView={() => setViewMode((v) => (v === "grid" ? "list" : "grid"))}
           onToggleHidden={() => setShowHidden((h) => !h)}
+          onUpload={() => fileInputRef.current?.click()}
           onClose={onClose}
           isPreview={!!previewFile}
         />
         {bodyOrPreview}
+        {uploadStatus}
+        {uploadOverlay}
         {contextMenu && (
           <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenuItems} onClose={closeContextMenu} />
         )}
@@ -493,6 +606,9 @@ export default function FileExplorer({
   // Desktop: inline panel
   return (
     <div
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -500,8 +616,10 @@ export default function FileExplorer({
         height: "100%",
         background: "#181825",
         borderRight: "1px solid #313244",
+        position: "relative",
       }}
     >
+      {hiddenInput}
       <ExplorerHeader
         displayPath={displayPath}
         viewMode={viewMode}
@@ -510,13 +628,16 @@ export default function FileExplorer({
         onBack={handleBack}
         onRefresh={() => fetchFiles(currentPath)}
         isLocal={isLocal}
-        onOpenNative={handleOpenNative}
+        onOpenNative={() => handleOpenNative()}
         onToggleView={() => setViewMode((v) => (v === "grid" ? "list" : "grid"))}
         onToggleHidden={() => setShowHidden((h) => !h)}
+        onUpload={() => fileInputRef.current?.click()}
         onClose={onClose}
         isPreview={!!previewFile}
       />
       {bodyOrPreview}
+      {uploadStatus}
+      {uploadOverlay}
       {contextMenu && (
         <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenuItems} onClose={closeContextMenu} />
       )}
@@ -537,6 +658,7 @@ function ExplorerHeader({
   onOpenNative,
   onToggleView,
   onToggleHidden,
+  onUpload,
   onClose,
   isPreview,
 }: {
@@ -550,6 +672,7 @@ function ExplorerHeader({
   onOpenNative: () => void;
   onToggleView: () => void;
   onToggleHidden: () => void;
+  onUpload: () => void;
   onClose: () => void;
   isPreview?: boolean;
 }) {
@@ -687,6 +810,27 @@ function ExplorerHeader({
             }}
           >
             {viewMode === "grid" ? <ListIcon /> : <GridIcon />}
+          </button>
+
+          {/* Upload */}
+          <button
+            onClick={onUpload}
+            title="Upload files"
+            style={{
+              background: "none",
+              border: "none",
+              color: "#6c7086",
+              cursor: "pointer",
+              padding: "2px 4px",
+              display: "flex",
+              alignItems: "center",
+              borderRadius: 3,
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#a6e3a1"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+          >
+            <UploadIcon />
           </button>
         </>
       )}
@@ -1217,9 +1361,18 @@ function FilePreview({
     document.body.style.userSelect = "none";
   };
 
-  // Finalize drag on mouseup anywhere
+  const handleGutterTouchStart = (lineNum: number, e: React.TouchEvent) => {
+    e.preventDefault();
+    setSelStart(lineNum);
+    setSelEnd(null);
+    setHoverLine(null);
+    dragEndRef.current = lineNum;
+    isDraggingRef.current = true;
+  };
+
+  // Finalize drag on mouseup/touchend anywhere
   useEffect(() => {
-    const handleMouseUp = () => {
+    const finalizeDrag = () => {
       if (isDraggingRef.current) {
         isDraggingRef.current = false;
         document.body.style.userSelect = "";
@@ -1230,8 +1383,28 @@ function FilePreview({
         }
       }
     };
-    document.addEventListener("mouseup", handleMouseUp);
-    return () => document.removeEventListener("mouseup", handleMouseUp);
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isDraggingRef.current) return;
+      const touch = e.touches[0];
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (el) {
+        const lineAttr = (el as HTMLElement).getAttribute("data-line")
+          || (el.parentElement as HTMLElement | null)?.getAttribute("data-line");
+        if (lineAttr) {
+          const ln = Number(lineAttr);
+          dragEndRef.current = ln;
+          setHoverLine(ln);
+        }
+      }
+    };
+    document.addEventListener("mouseup", finalizeDrag);
+    document.addEventListener("touchend", finalizeDrag);
+    document.addEventListener("touchmove", handleTouchMove, { passive: true });
+    return () => {
+      document.removeEventListener("mouseup", finalizeDrag);
+      document.removeEventListener("touchend", finalizeDrag);
+      document.removeEventListener("touchmove", handleTouchMove);
+    };
   }, []);
 
   // The effective visual range (accounting for hover preview)
@@ -1512,7 +1685,9 @@ function FilePreview({
                 return (
                   <tr key={i}>
                     <td
+                      data-line={lineNum}
                       onMouseDown={() => handleGutterMouseDown(lineNum)}
+                      onTouchStart={(e) => handleGutterTouchStart(lineNum, e)}
                       onMouseEnter={() => {
                         if (isDraggingRef.current) {
                           setHoverLine(lineNum);
@@ -1594,7 +1769,185 @@ function ImagePreview({
   onClose: () => void;
   onInsertPath: () => void;
 }) {
-  const [fitMode, setFitMode] = useState<"fit" | "full">("fit");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [view, setView] = useState({ scale: 1, x: 0, y: 0 });
+  const [isFit, setIsFit] = useState(true);
+
+  const gestureRef = useRef<{
+    type: "drag" | "pinch" | null;
+    lastX: number; lastY: number;
+    pinchDist: number;
+  }>({ type: null, lastX: 0, lastY: 0, pinchDist: 0 });
+
+  const getFitView = useCallback(() => {
+    const c = containerRef.current;
+    const img = imgRef.current;
+    if (!c || !img || !img.naturalWidth) return { scale: 1, x: 0, y: 0 };
+    const sw = c.clientWidth / img.naturalWidth;
+    const sh = c.clientHeight / img.naturalHeight;
+    const s = Math.min(sw, sh, 1);
+    return {
+      scale: s,
+      x: (c.clientWidth - img.naturalWidth * s) / 2,
+      y: (c.clientHeight - img.naturalHeight * s) / 2,
+    };
+  }, []);
+
+  const fitToView = useCallback(() => {
+    setView(getFitView());
+    setIsFit(true);
+  }, [getFitView]);
+
+  const handleImgLoad = useCallback(() => {
+    requestAnimationFrame(fitToView);
+  }, [fitToView]);
+
+  // Reset when image changes
+  useEffect(() => {
+    setView({ scale: 1, x: 0, y: 0 });
+    setIsFit(true);
+  }, [imageUrl]);
+
+  // Zoom at a container-local point
+  const zoomAtPoint = useCallback((factor: number, px: number, py: number) => {
+    setView(prev => {
+      const ns = Math.min(Math.max(prev.scale * factor, 0.02), 30);
+      return {
+        scale: ns,
+        x: px - (px - prev.x) * (ns / prev.scale),
+        y: py - (py - prev.y) * (ns / prev.scale),
+      };
+    });
+    setIsFit(false);
+  }, []);
+
+  // PC: mouse wheel zoom (needs passive: false for preventDefault)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      zoomAtPoint(
+        e.deltaY < 0 ? 1.15 : 1 / 1.15,
+        e.clientX - rect.left,
+        e.clientY - rect.top,
+      );
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [zoomAtPoint, imageUrl, loading]);
+
+  // PC: mouse drag to pan
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    gestureRef.current = { type: "drag", lastX: e.clientX, lastY: e.clientY, pinchDist: 0 };
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const g = gestureRef.current;
+      if (g.type !== "drag") return;
+      const dx = e.clientX - g.lastX;
+      const dy = e.clientY - g.lastY;
+      g.lastX = e.clientX;
+      g.lastY = e.clientY;
+      setView(prev => ({ ...prev, x: prev.x + dx, y: prev.y + dy }));
+    };
+    const onUp = () => { gestureRef.current.type = null; };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    return () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+  }, []);
+
+  // Mobile: touch pinch-to-zoom + pan
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const t1 = e.touches[0], t2 = e.touches[1];
+      gestureRef.current = {
+        type: "pinch",
+        lastX: (t1.clientX + t2.clientX) / 2,
+        lastY: (t1.clientY + t2.clientY) / 2,
+        pinchDist: Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY),
+      };
+    } else if (e.touches.length === 1) {
+      gestureRef.current = {
+        type: "drag",
+        lastX: e.touches[0].clientX,
+        lastY: e.touches[0].clientY,
+        pinchDist: 0,
+      };
+    }
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    const g = gestureRef.current;
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    if (g.type === "pinch" && e.touches.length === 2) {
+      const t1 = e.touches[0], t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const midX = (t1.clientX + t2.clientX) / 2;
+      const midY = (t1.clientY + t2.clientY) / 2;
+
+      if (g.pinchDist > 0) {
+        zoomAtPoint(dist / g.pinchDist, midX - rect.left, midY - rect.top);
+      }
+      const dx = midX - g.lastX;
+      const dy = midY - g.lastY;
+      if (dx || dy) {
+        setView(prev => ({ ...prev, x: prev.x + dx, y: prev.y + dy }));
+      }
+
+      g.pinchDist = dist;
+      g.lastX = midX;
+      g.lastY = midY;
+    } else if (g.type === "drag" && e.touches.length === 1) {
+      const dx = e.touches[0].clientX - g.lastX;
+      const dy = e.touches[0].clientY - g.lastY;
+      g.lastX = e.touches[0].clientX;
+      g.lastY = e.touches[0].clientY;
+      setView(prev => ({ ...prev, x: prev.x + dx, y: prev.y + dy }));
+    }
+  }, [zoomAtPoint]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 0) {
+      gestureRef.current.type = null;
+    } else if (e.touches.length === 1) {
+      gestureRef.current = {
+        type: "drag",
+        lastX: e.touches[0].clientX,
+        lastY: e.touches[0].clientY,
+        pinchDist: 0,
+      };
+    }
+  }, []);
+
+  // Double click/tap: toggle fit ↔ 100%
+  const handleDoubleClick = useCallback(() => {
+    if (isFit) {
+      const c = containerRef.current;
+      const img = imgRef.current;
+      if (!c || !img) return;
+      setView({
+        scale: 1,
+        x: (c.clientWidth - img.naturalWidth) / 2,
+        y: (c.clientHeight - img.naturalHeight) / 2,
+      });
+      setIsFit(false);
+    } else {
+      fitToView();
+    }
+  }, [isFit, fitToView]);
+
+  const zoomPercent = Math.round(view.scale * 100);
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
@@ -1631,10 +1984,46 @@ function ImagePreview({
             {formatSize(size)}
           </span>
         )}
-        {/* Zoom toggle */}
+        {/* Zoom controls */}
+        <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+          <button
+            onClick={() => {
+              const c = containerRef.current;
+              if (c) zoomAtPoint(1 / 1.3, c.clientWidth / 2, c.clientHeight / 2);
+            }}
+            title="Zoom out"
+            style={{
+              background: "none", border: "none", color: "#6c7086", cursor: "pointer",
+              fontSize: 12, fontWeight: 700, padding: "0 3px", lineHeight: 1, borderRadius: 3,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+          >
+            -
+          </button>
+          <span style={{ fontSize: 9, color: "#6c7086", minWidth: 28, textAlign: "center" }}>
+            {zoomPercent}%
+          </span>
+          <button
+            onClick={() => {
+              const c = containerRef.current;
+              if (c) zoomAtPoint(1.3, c.clientWidth / 2, c.clientHeight / 2);
+            }}
+            title="Zoom in"
+            style={{
+              background: "none", border: "none", color: "#6c7086", cursor: "pointer",
+              fontSize: 12, fontWeight: 700, padding: "0 3px", lineHeight: 1, borderRadius: 3,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+          >
+            +
+          </button>
+        </div>
+        {/* Fit */}
         <button
-          onClick={() => setFitMode((m) => (m === "fit" ? "full" : "fit"))}
-          title={fitMode === "fit" ? "Show at 100%" : "Fit to view"}
+          onClick={fitToView}
+          title="Fit to view"
           style={{
             background: "none",
             border: "1px solid #45475a",
@@ -1654,7 +2043,7 @@ function ImagePreview({
             (e.currentTarget as HTMLButtonElement).style.background = "none";
           }}
         >
-          {fitMode === "fit" ? "Fit" : "100%"}
+          Fit
         </button>
         {/* Insert @path */}
         <button
@@ -1717,14 +2106,19 @@ function ImagePreview({
         </div>
       ) : imageUrl ? (
         <div
+          ref={containerRef}
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onDoubleClick={handleDoubleClick}
           style={{
             flex: 1,
             minHeight: 0,
-            overflow: "auto",
-            display: fitMode === "fit" ? "flex" : "block",
-            alignItems: "center",
-            justifyContent: "center",
-            // Checkerboard background for transparency
+            overflow: "hidden",
+            position: "relative",
+            cursor: "grab",
+            touchAction: "none",
             backgroundImage:
               "linear-gradient(45deg, #1e1e2e 25%, transparent 25%), " +
               "linear-gradient(-45deg, #1e1e2e 25%, transparent 25%), " +
@@ -1736,21 +2130,19 @@ function ImagePreview({
           }}
         >
           <img
+            ref={imgRef}
             src={imageUrl}
             alt={file.name}
             draggable={false}
-            style={
-              fitMode === "fit"
-                ? {
-                    maxWidth: "100%",
-                    maxHeight: "100%",
-                    objectFit: "contain",
-                  }
-                : {
-                    display: "block",
-                    margin: "8px auto",
-                  }
-            }
+            onLoad={handleImgLoad}
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              transformOrigin: "0 0",
+              transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
+              userSelect: "none",
+            }}
           />
         </div>
       ) : null}
@@ -2019,5 +2411,13 @@ const ListIcon = () => (
     <line x1="1" y1="3" x2="11" y2="3" />
     <line x1="1" y1="6" x2="11" y2="6" />
     <line x1="1" y1="9" x2="11" y2="9" />
+  </svg>
+);
+
+const UploadIcon = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 8V2" />
+    <path d="M3.5 4.5L6 2l2.5 2.5" />
+    <path d="M2 9h8" />
   </svg>
 );

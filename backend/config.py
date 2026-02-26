@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-this-secret-key"
     jwt_expire_hours: int = 72
     db_path: str = "sessions.db"
+    allowed_origins: str = "*"
 
     model_config = {"env_prefix": "CCR_"}
 
