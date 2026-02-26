@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { IconFolder, FileIcon } from "../utils/fileIcons";
 import hljs from "highlight.js";
 
@@ -26,6 +27,13 @@ interface FileExplorerProps {
 }
 
 type ViewMode = "grid" | "list";
+
+interface ContextMenuItem {
+  label: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+}
+type ContextMenuEntry = ContextMenuItem | "separator";
 
 const TEXT_EXTENSIONS = new Set([
   ".txt", ".md", ".csv", ".tsv", ".log", ".json", ".jsonl",
@@ -127,6 +135,9 @@ export default function FileExplorer({
   const [previewTruncated, setPreviewTruncated] = useState(false);
   const [previewSize, setPreviewSize] = useState(0);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number; y: number; entry: FileEntry;
+  } | null>(null);
   const imageUrlRef = useRef<string | null>(null);
 
   const setImageUrl = useCallback((url: string | null) => {
@@ -151,7 +162,7 @@ export default function FileExplorer({
     );
   })();
 
-  const handleOpenNative = useCallback(async () => {
+  const handleOpenNative = useCallback(async (path?: string) => {
     try {
       await fetch("/api/open-explorer", {
         method: "POST",
@@ -159,7 +170,7 @@ export default function FileExplorer({
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ path: currentPath }),
+        body: JSON.stringify({ path: path ?? currentPath }),
       });
     } catch {
       // ignore
@@ -292,6 +303,77 @@ export default function FileExplorer({
     }
   };
 
+  const handleContextMenu = useCallback((e: React.MouseEvent, entry: FileEntry) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, entry });
+  }, []);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const downloadFile = useCallback(async (fullPath: string, fileName: string) => {
+    try {
+      const res = await fetch(
+        `/api/file-raw?path=${encodeURIComponent(fullPath)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      // ignore
+    }
+  }, [token]);
+
+  const canPreview = useCallback((entry: FileEntry) => {
+    return isTextFile(entry.extension, entry.name) || isImageFile(entry.extension) || isAudioFile(entry.extension);
+  }, []);
+
+  const contextMenuItems = useMemo((): ContextMenuEntry[] => {
+    if (!contextMenu) return [];
+    const entry = contextMenu.entry;
+    const sep = currentPath.endsWith("\\") || currentPath.endsWith("/") ? "" : "/";
+    const fullPath = currentPath + sep + entry.name;
+
+    if (entry.type === "folder") {
+      const items: ContextMenuEntry[] = [
+        { label: "열기", icon: <CtxFolderOpenIcon />, onClick: () => { handleNavigate(entry.name); closeContextMenu(); } },
+      ];
+      if (isLocal) {
+        items.push({ label: "탐색기에서 열기", icon: <CtxOpenExternalIcon />, onClick: () => { handleOpenNative(fullPath); closeContextMenu(); } });
+      }
+      items.push("separator");
+      items.push({ label: "경로 삽입 (@)", icon: <CtxAtIcon />, onClick: () => { handleInsertEntry(entry); closeContextMenu(); } });
+      items.push({ label: "이름 복사", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(entry.name); closeContextMenu(); } });
+      items.push({ label: "전체 경로 복사", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(fullPath); closeContextMenu(); } });
+      return items;
+    }
+
+    // File menu
+    const items: ContextMenuEntry[] = [];
+    if (canPreview(entry)) {
+      items.push({ label: "열기 (프리뷰)", icon: <CtxPreviewIcon />, onClick: () => { handleFileClick(entry); closeContextMenu(); } });
+    }
+    if (isLocal) {
+      items.push({ label: "열기 (파일)", icon: <CtxOpenFileIcon />, onClick: () => { handleOpenNative(fullPath); closeContextMenu(); } });
+      items.push({ label: "경로 열기", icon: <CtxOpenExternalIcon />, onClick: () => { handleOpenNative(currentPath); closeContextMenu(); } });
+    }
+    items.push({ label: "다운로드", icon: <CtxDownloadIcon />, onClick: () => { downloadFile(fullPath, entry.name); closeContextMenu(); } });
+    items.push("separator");
+    items.push({ label: "경로 삽입 (@)", icon: <CtxAtIcon />, onClick: () => { handleInsertEntry(entry); closeContextMenu(); } });
+    items.push({ label: "이름 복사", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(entry.name); closeContextMenu(); } });
+    items.push({ label: "전체 경로 복사", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(fullPath); closeContextMenu(); } });
+    return items;
+  }, [contextMenu, currentPath, isLocal, handleOpenNative, downloadFile, closeContextMenu, canPreview]);
+
   const canGoBack = (() => {
     const normCur = currentPath.replace(/\\/g, "/").replace(/\/$/, "").toLowerCase();
     const normRoot = rootPath.replace(/\\/g, "/").replace(/\/$/, "").toLowerCase();
@@ -366,6 +448,7 @@ export default function FileExplorer({
       onNavigate={handleNavigate}
       onFileClick={handleFileClick}
       onInsertEntry={handleInsertEntry}
+      onContextMenu={handleContextMenu}
     />
   );
 
@@ -400,6 +483,9 @@ export default function FileExplorer({
           isPreview={!!previewFile}
         />
         {bodyOrPreview}
+        {contextMenu && (
+          <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenuItems} onClose={closeContextMenu} />
+        )}
       </div>
     );
   }
@@ -431,6 +517,9 @@ export default function FileExplorer({
         isPreview={!!previewFile}
       />
       {bodyOrPreview}
+      {contextMenu && (
+        <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenuItems} onClose={closeContextMenu} />
+      )}
     </div>
   );
 }
@@ -639,6 +728,7 @@ function ExplorerBody({
   onNavigate,
   onFileClick,
   onInsertEntry,
+  onContextMenu,
 }: {
   entries: FileEntry[];
   viewMode: ViewMode;
@@ -649,6 +739,7 @@ function ExplorerBody({
   onNavigate: (name: string) => void;
   onFileClick: (entry: FileEntry) => void;
   onInsertEntry: (entry: FileEntry) => void;
+  onContextMenu: (e: React.MouseEvent, entry: FileEntry) => void;
 }) {
   if (loading) {
     return (
@@ -688,6 +779,7 @@ function ExplorerBody({
               onNavigate={onNavigate}
               onFileClick={onFileClick}
               onInsertEntry={onInsertEntry}
+              onContextMenu={onContextMenu}
             />
           ))}
         </div>
@@ -706,6 +798,7 @@ function ExplorerBody({
           onNavigate={onNavigate}
           onFileClick={onFileClick}
           onInsertEntry={onInsertEntry}
+          onContextMenu={onContextMenu}
         />
       ))}
     </div>
@@ -719,11 +812,13 @@ function GridItem({
   onNavigate,
   onFileClick,
   onInsertEntry,
+  onContextMenu,
 }: {
   entry: FileEntry;
   onNavigate: (name: string) => void;
   onFileClick: (entry: FileEntry) => void;
   onInsertEntry: (entry: FileEntry) => void;
+  onContextMenu: (e: React.MouseEvent, entry: FileEntry) => void;
 }) {
   const isFolder = entry.type === "folder";
 
@@ -733,6 +828,7 @@ function GridItem({
         if (isFolder) onNavigate(entry.name);
         else onFileClick(entry);
       }}
+      onContextMenu={(e) => onContextMenu(e, entry)}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -810,11 +906,13 @@ function ListItem({
   onNavigate,
   onFileClick,
   onInsertEntry,
+  onContextMenu,
 }: {
   entry: FileEntry;
   onNavigate: (name: string) => void;
   onFileClick: (entry: FileEntry) => void;
   onInsertEntry: (entry: FileEntry) => void;
+  onContextMenu: (e: React.MouseEvent, entry: FileEntry) => void;
 }) {
   const isFolder = entry.type === "folder";
 
@@ -824,6 +922,7 @@ function ListItem({
         if (isFolder) onNavigate(entry.name);
         else onFileClick(entry);
       }}
+      onContextMenu={(e) => onContextMenu(e, entry)}
       style={{
         display: "flex",
         alignItems: "center",
@@ -901,6 +1000,156 @@ function ListItem({
     </div>
   );
 }
+
+/* ---- Context Menu ---- */
+
+function ContextMenu({
+  x,
+  y,
+  items,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  items: ContextMenuEntry[];
+  onClose: () => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ x, y });
+
+  // Adjust position to stay within viewport
+  useEffect(() => {
+    const el = menuRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    let nx = x, ny = y;
+    if (x + rect.width > window.innerWidth - 4) nx = window.innerWidth - rect.width - 4;
+    if (y + rect.height > window.innerHeight - 4) ny = window.innerHeight - rect.height - 4;
+    if (nx < 4) nx = 4;
+    if (ny < 4) ny = 4;
+    if (nx !== x || ny !== y) setPos({ x: nx, y: ny });
+  }, [x, y]);
+
+  // Close events: mousedown outside, Escape, scroll, resize, contextmenu elsewhere
+  useEffect(() => {
+    const handleMouseDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
+    };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const handleDismiss = () => onClose();
+
+    document.addEventListener("mousedown", handleMouseDown);
+    document.addEventListener("keydown", handleKey);
+    window.addEventListener("scroll", handleDismiss, true);
+    window.addEventListener("resize", handleDismiss);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("keydown", handleKey);
+      window.removeEventListener("scroll", handleDismiss, true);
+      window.removeEventListener("resize", handleDismiss);
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      style={{
+        position: "fixed",
+        left: pos.x,
+        top: pos.y,
+        zIndex: 9999,
+        background: "#1e1e2e",
+        border: "1px solid #45475a",
+        borderRadius: 6,
+        padding: "4px 0",
+        minWidth: 180,
+        boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+        fontFamily: "'Cascadia Code', 'Consolas', monospace",
+        fontSize: 12,
+      }}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {items.map((item, i) => {
+        if (item === "separator") {
+          return <div key={`sep-${i}`} style={{ height: 1, background: "#313244", margin: "4px 0" }} />;
+        }
+        return (
+          <div
+            key={item.label}
+            onClick={item.onClick}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "6px 12px",
+              cursor: "pointer",
+              color: "#cdd6f4",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = "#313244"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
+          >
+            <span style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>{item.icon}</span>
+            <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>
+          </div>
+        );
+      })}
+    </div>,
+    document.body,
+  );
+}
+
+/* ---- Context Menu Icons ---- */
+
+const CtxPreviewIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#89b4fa" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 7s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4z" />
+    <circle cx="7" cy="7" r="1.5" />
+  </svg>
+);
+
+const CtxOpenFileIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#a6e3a1" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M8 1H3.5A1.5 1.5 0 0 0 2 2.5v9A1.5 1.5 0 0 0 3.5 13h7a1.5 1.5 0 0 0 1.5-1.5V5L8 1z" />
+    <path d="M8 1v4h4" />
+  </svg>
+);
+
+const CtxFolderOpenIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#f9e2af" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1.5 3A1.5 1.5 0 0 1 3 1.5h2.5L7 3.5h4A1.5 1.5 0 0 1 12.5 5v1" />
+    <path d="M1 6.5h10.5a1 1 0 0 1 1 .8l-1.2 4.5a1 1 0 0 1-1 .7H2.5a1 1 0 0 1-1-.7L.3 7.3a1 1 0 0 1 1-.8z" />
+  </svg>
+);
+
+const CtxDownloadIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#89b4fa" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M7 1.5v8" />
+    <path d="M4 7l3 3 3-3" />
+    <path d="M2 12h10" />
+  </svg>
+);
+
+const CtxAtIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#a6e3a1" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="7" cy="7" r="2" />
+    <path d="M9 5.5v2a1.5 1.5 0 0 0 3 0V7a5 5 0 1 0-2 4" />
+  </svg>
+);
+
+const CtxCopyIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#cdd6f4" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="5" y="5" width="7" height="7" rx="1" />
+    <path d="M9 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h2" />
+  </svg>
+);
+
+const CtxOpenExternalIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#f9e2af" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.5 7.5v3.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1h3.5" />
+    <path d="M8.5 2H12v3.5" />
+    <path d="M6.5 7.5L12 2" />
+  </svg>
+);
 
 /* ---- File Preview ---- */
 
