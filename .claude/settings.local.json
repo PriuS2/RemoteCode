@@ -24,7 +24,8 @@
       "Bash(cd /c/Users/STOICPC_QQQ/Documents/ClaudeCodeRemote/frontend && npx tsc --noEmit 2>&1)",
       "Bash(cd C:\\\\Users\\\\STOICPC_QQQ\\\\Documents\\\\ClaudeCodeRemote\\\\frontend && npx tsc --noEmit 2>&1)",
       "Bash(ls:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npx vite:*)"
     ]
   }
 }

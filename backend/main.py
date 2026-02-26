@@ -300,6 +300,22 @@ async def read_file_content(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/file-raw")
+async def raw_file(
+    path: str, _user: str = Depends(get_current_user)
+):
+    path = os.path.abspath(path)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=400, detail=f"Not a file: {path}")
+    MAX_SIZE = 20 * 1024 * 1024  # 20MB
+    try:
+        if os.path.getsize(path) > MAX_SIZE:
+            raise HTTPException(status_code=400, detail="File too large (max 20MB)")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail=f"Access denied: {path}")
+    return FileResponse(path)
+
+
 class MkdirRequest(BaseModel):
     path: str
     name: str

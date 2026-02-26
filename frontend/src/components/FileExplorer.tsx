@@ -39,7 +39,7 @@ const TEXT_EXTENSIONS = new Set([
   ".sh", ".bash", ".zsh", ".fish", ".bat", ".ps1", ".cmd",
   ".dockerfile", ".gitignore", ".gitattributes", ".editorconfig",
   ".makefile", ".cmake",
-  ".lock", ".pid", ".svg",
+  ".lock", ".pid",
 ]);
 
 const TEXT_NAMES = new Set([
@@ -54,6 +54,22 @@ function isTextFile(ext: string | null, name?: string): boolean {
   if (ext && TEXT_EXTENSIONS.has(ext.toLowerCase())) return true;
   if (name && TEXT_NAMES.has(name.toLowerCase())) return true;
   return false;
+}
+
+const IMAGE_EXTENSIONS = new Set([
+  ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".ico", ".svg",
+]);
+
+function isImageFile(ext: string | null): boolean {
+  return ext !== null && IMAGE_EXTENSIONS.has(ext.toLowerCase());
+}
+
+const AUDIO_EXTENSIONS = new Set([
+  ".mp3", ".wav", ".ogg", ".m4a", ".aac", ".flac", ".wma", ".opus",
+]);
+
+function isAudioFile(ext: string | null): boolean {
+  return ext !== null && AUDIO_EXTENSIONS.has(ext.toLowerCase());
 }
 
 interface PreviewFile {
@@ -110,6 +126,18 @@ export default function FileExplorer({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewTruncated, setPreviewTruncated] = useState(false);
   const [previewSize, setPreviewSize] = useState(0);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const imageUrlRef = useRef<string | null>(null);
+
+  const setImageUrl = useCallback((url: string | null) => {
+    if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current);
+    imageUrlRef.current = url;
+    setPreviewImageUrl(url);
+  }, []);
+
+  useEffect(() => {
+    return () => { if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current); };
+  }, []);
 
   const isLocal = (() => {
     const h = window.location.hostname;
@@ -197,6 +225,10 @@ export default function FileExplorer({
 
     if (isTextFile(entry.extension, entry.name)) {
       openPreview({ name: entry.name, path: fullPath, extension: entry.extension });
+    } else if (isImageFile(entry.extension)) {
+      openImagePreview({ name: entry.name, path: fullPath, extension: entry.extension });
+    } else if (isAudioFile(entry.extension)) {
+      openImagePreview({ name: entry.name, path: fullPath, extension: entry.extension });
     } else {
       const rel = getRelativePath(rootPath, fullPath);
       onInsertPath(rel);
@@ -227,6 +259,27 @@ export default function FileExplorer({
       setPreviewLoading(false);
     }
   }, [token]);
+
+  const openImagePreview = useCallback(async (file: PreviewFile) => {
+    setImageUrl(null);
+    setPreviewFile(file);
+    setPreviewLoading(true);
+    setPreviewContent("");
+    try {
+      const res = await fetch(
+        `/api/file-raw?path=${encodeURIComponent(file.path)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) throw new Error("Failed to load image");
+      const blob = await res.blob();
+      setImageUrl(URL.createObjectURL(blob));
+      setPreviewSize(blob.size);
+    } catch (e: unknown) {
+      setPreviewContent(e instanceof Error ? `Error: ${e.message}` : "Failed to load image");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [token, setImageUrl]);
 
   const handleInsertEntry = (entry: FileEntry) => {
     const sep = currentPath.endsWith("\\") || currentPath.endsWith("/") ? "" : "/";
@@ -260,17 +313,48 @@ export default function FileExplorer({
     onInsertPath(`${rel}\n${lineRange}\n${text}`);
   };
 
+  const closePreview = useCallback(() => {
+    setImageUrl(null);
+    setPreviewFile(null);
+    setPreviewContent("");
+  }, [setImageUrl]);
+
+  const isImagePreview = previewFile !== null && isImageFile(previewFile.extension);
+  const isAudioPreview = previewFile !== null && isAudioFile(previewFile.extension);
+
   const bodyOrPreview = previewFile ? (
-    <FilePreview
-      file={previewFile}
-      content={previewContent}
-      loading={previewLoading}
-      truncated={previewTruncated}
-      size={previewSize}
-      onClose={() => setPreviewFile(null)}
-      onInsertPath={handleInsertPreviewPath}
-      onInsertSelection={handleInsertSelection}
-    />
+    isImagePreview ? (
+      <ImagePreview
+        file={previewFile}
+        imageUrl={previewImageUrl}
+        loading={previewLoading}
+        size={previewSize}
+        errorMessage={previewContent || null}
+        onClose={closePreview}
+        onInsertPath={handleInsertPreviewPath}
+      />
+    ) : isAudioPreview ? (
+      <AudioPreview
+        file={previewFile}
+        audioUrl={previewImageUrl}
+        loading={previewLoading}
+        size={previewSize}
+        errorMessage={previewContent || null}
+        onClose={closePreview}
+        onInsertPath={handleInsertPreviewPath}
+      />
+    ) : (
+      <FilePreview
+        file={previewFile}
+        content={previewContent}
+        loading={previewLoading}
+        truncated={previewTruncated}
+        size={previewSize}
+        onClose={closePreview}
+        onInsertPath={handleInsertPreviewPath}
+        onInsertSelection={handleInsertSelection}
+      />
+    )
   ) : (
     <ExplorerBody
       entries={visibleEntries}
@@ -828,7 +912,7 @@ const EXT_TO_LANG: Record<string, string> = {
   ".c": "c", ".cpp": "cpp", ".h": "c", ".hpp": "cpp", ".cs": "csharp",
   ".rb": "ruby", ".php": "php", ".swift": "swift", ".scala": "scala",
   ".lua": "lua", ".r": "r",
-  ".html": "xml", ".htm": "xml", ".xml": "xml", ".svg": "xml",
+  ".html": "xml", ".htm": "xml", ".xml": "xml",
   ".css": "css", ".scss": "scss", ".sass": "scss", ".less": "less",
   ".json": "json", ".jsonl": "json",
   ".yaml": "yaml", ".yml": "yaml", ".toml": "ini", ".ini": "ini",
@@ -1238,6 +1322,337 @@ function FilePreview({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ---- Image Preview ---- */
+
+function ImagePreview({
+  file,
+  imageUrl,
+  loading,
+  size,
+  errorMessage,
+  onClose,
+  onInsertPath,
+}: {
+  file: PreviewFile;
+  imageUrl: string | null;
+  loading: boolean;
+  size: number;
+  errorMessage: string | null;
+  onClose: () => void;
+  onInsertPath: () => void;
+}) {
+  const [fitMode, setFitMode] = useState<"fit" | "full">("fit");
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "4px 8px",
+          borderBottom: "1px solid #313244",
+          flexShrink: 0,
+          background: "#181825",
+        }}
+      >
+        <FileIcon extension={file.extension} size={16} />
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontSize: 11,
+            fontWeight: 600,
+            color: "#cdd6f4",
+          }}
+          title={file.name}
+        >
+          {file.name}
+        </span>
+        {size > 0 && (
+          <span style={{ fontSize: 10, color: "#6c7086", flexShrink: 0 }}>
+            {formatSize(size)}
+          </span>
+        )}
+        {/* Zoom toggle */}
+        <button
+          onClick={() => setFitMode((m) => (m === "fit" ? "full" : "fit"))}
+          title={fitMode === "fit" ? "Show at 100%" : "Fit to view"}
+          style={{
+            background: "none",
+            border: "1px solid #45475a",
+            color: "#89b4fa",
+            cursor: "pointer",
+            padding: "1px 6px",
+            fontSize: 10,
+            fontWeight: 600,
+            borderRadius: 3,
+            flexShrink: 0,
+            lineHeight: "16px",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "#89b4fa18";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "none";
+          }}
+        >
+          {fitMode === "fit" ? "Fit" : "100%"}
+        </button>
+        {/* Insert @path */}
+        <button
+          onClick={onInsertPath}
+          title="Insert @path"
+          style={{
+            background: "none",
+            border: "1px solid #45475a",
+            color: "#a6e3a1",
+            cursor: "pointer",
+            padding: "1px 6px",
+            fontSize: 10,
+            fontWeight: 700,
+            borderRadius: 3,
+            flexShrink: 0,
+            lineHeight: "16px",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "#a6e3a118";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "none";
+          }}
+        >
+          @
+        </button>
+        {/* Close */}
+        <button
+          onClick={onClose}
+          title="Close preview"
+          style={{
+            background: "none",
+            border: "none",
+            color: "#6c7086",
+            cursor: "pointer",
+            padding: "2px 4px",
+            display: "flex",
+            alignItems: "center",
+            borderRadius: 3,
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <line x1="3" y1="3" x2="9" y2="9" />
+            <line x1="9" y1="3" x2="3" y2="9" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Body */}
+      {loading ? (
+        <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: 12 }}>
+          Loading...
+        </div>
+      ) : errorMessage ? (
+        <div style={{ padding: 20, textAlign: "center", color: "#f38ba8", fontSize: 12 }}>
+          {errorMessage}
+        </div>
+      ) : imageUrl ? (
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflow: "auto",
+            display: fitMode === "fit" ? "flex" : "block",
+            alignItems: "center",
+            justifyContent: "center",
+            // Checkerboard background for transparency
+            backgroundImage:
+              "linear-gradient(45deg, #1e1e2e 25%, transparent 25%), " +
+              "linear-gradient(-45deg, #1e1e2e 25%, transparent 25%), " +
+              "linear-gradient(45deg, transparent 75%, #1e1e2e 75%), " +
+              "linear-gradient(-45deg, transparent 75%, #1e1e2e 75%)",
+            backgroundSize: "16px 16px",
+            backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
+            backgroundColor: "#11111b",
+          }}
+        >
+          <img
+            src={imageUrl}
+            alt={file.name}
+            draggable={false}
+            style={
+              fitMode === "fit"
+                ? {
+                    maxWidth: "100%",
+                    maxHeight: "100%",
+                    objectFit: "contain",
+                  }
+                : {
+                    display: "block",
+                    margin: "8px auto",
+                  }
+            }
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* ---- Audio Preview ---- */
+
+function AudioPreview({
+  file,
+  audioUrl,
+  loading,
+  size,
+  errorMessage,
+  onClose,
+  onInsertPath,
+}: {
+  file: PreviewFile;
+  audioUrl: string | null;
+  loading: boolean;
+  size: number;
+  errorMessage: string | null;
+  onClose: () => void;
+  onInsertPath: () => void;
+}) {
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "4px 8px",
+          borderBottom: "1px solid #313244",
+          flexShrink: 0,
+          background: "#181825",
+        }}
+      >
+        <FileIcon extension={file.extension} size={16} />
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontSize: 11,
+            fontWeight: 600,
+            color: "#cdd6f4",
+          }}
+          title={file.name}
+        >
+          {file.name}
+        </span>
+        {size > 0 && (
+          <span style={{ fontSize: 10, color: "#6c7086", flexShrink: 0 }}>
+            {formatSize(size)}
+          </span>
+        )}
+        {/* Insert @path */}
+        <button
+          onClick={onInsertPath}
+          title="Insert @path"
+          style={{
+            background: "none",
+            border: "1px solid #45475a",
+            color: "#a6e3a1",
+            cursor: "pointer",
+            padding: "1px 6px",
+            fontSize: 10,
+            fontWeight: 700,
+            borderRadius: 3,
+            flexShrink: 0,
+            lineHeight: "16px",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "#a6e3a118";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "none";
+          }}
+        >
+          @
+        </button>
+        {/* Close */}
+        <button
+          onClick={onClose}
+          title="Close preview"
+          style={{
+            background: "none",
+            border: "none",
+            color: "#6c7086",
+            cursor: "pointer",
+            padding: "2px 4px",
+            display: "flex",
+            alignItems: "center",
+            borderRadius: 3,
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <line x1="3" y1="3" x2="9" y2="9" />
+            <line x1="9" y1="3" x2="3" y2="9" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Body */}
+      {loading ? (
+        <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: 12 }}>
+          Loading...
+        </div>
+      ) : errorMessage ? (
+        <div style={{ padding: 20, textAlign: "center", color: "#f38ba8", fontSize: 12 }}>
+          {errorMessage}
+        </div>
+      ) : audioUrl ? (
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 16,
+            backgroundColor: "#11111b",
+            padding: 24,
+          }}
+        >
+          {/* Large audio icon */}
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#89b4fa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 18V5l12-2v13" />
+            <circle cx="6" cy="18" r="3" />
+            <circle cx="18" cy="16" r="3" />
+          </svg>
+          <span style={{ color: "#cdd6f4", fontSize: 13, fontWeight: 500, textAlign: "center", wordBreak: "break-all" }}>
+            {file.name}
+          </span>
+          {/* Native audio player */}
+          <audio
+            controls
+            src={audioUrl}
+            style={{ width: "100%", maxWidth: 400 }}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
