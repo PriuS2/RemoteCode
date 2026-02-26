@@ -70,6 +70,33 @@ export default function FileExplorer({
   });
   const [showHidden, setShowHidden] = useState(false);
 
+  const isLocal = (() => {
+    const h = window.location.hostname;
+    return (
+      h === "localhost" ||
+      h === "127.0.0.1" ||
+      h === "::1" ||
+      h.startsWith("192.168.") ||
+      h.startsWith("10.") ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(h)
+    );
+  })();
+
+  const handleOpenNative = useCallback(async () => {
+    try {
+      await fetch("/api/open-explorer", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ path: currentPath }),
+      });
+    } catch {
+      // ignore
+    }
+  }, [token, currentPath]);
+
   const fetchFiles = useCallback(async (path: string) => {
     setLoading(true);
     setError(null);
@@ -166,6 +193,8 @@ export default function FileExplorer({
           canGoBack={canGoBack}
           onBack={handleBack}
           onRefresh={() => fetchFiles(currentPath)}
+          isLocal={isLocal}
+          onOpenNative={handleOpenNative}
           onToggleView={() => setViewMode((v) => (v === "grid" ? "list" : "grid"))}
           onToggleHidden={() => setShowHidden((h) => !h)}
           onClose={onClose}
@@ -204,6 +233,8 @@ export default function FileExplorer({
         canGoBack={canGoBack}
         onBack={handleBack}
         onRefresh={() => fetchFiles(currentPath)}
+        isLocal={isLocal}
+        onOpenNative={handleOpenNative}
         onToggleView={() => setViewMode((v) => (v === "grid" ? "list" : "grid"))}
         onToggleHidden={() => setShowHidden((h) => !h)}
         onClose={onClose}
@@ -232,6 +263,8 @@ function ExplorerHeader({
   canGoBack,
   onBack,
   onRefresh,
+  isLocal,
+  onOpenNative,
   onToggleView,
   onToggleHidden,
   onClose,
@@ -242,6 +275,8 @@ function ExplorerHeader({
   canGoBack: boolean;
   onBack: () => void;
   onRefresh: () => void;
+  isLocal: boolean;
+  onOpenNative: () => void;
   onToggleView: () => void;
   onToggleHidden: () => void;
   onClose: () => void;
@@ -318,6 +353,29 @@ function ExplorerHeader({
       >
         <RefreshIcon />
       </button>
+
+      {/* Open in system explorer (local network only) */}
+      {isLocal && (
+        <button
+          onClick={onOpenNative}
+          title="Open in system explorer"
+          style={{
+            background: "none",
+            border: "none",
+            color: "#6c7086",
+            cursor: "pointer",
+            padding: "2px 4px",
+            display: "flex",
+            alignItems: "center",
+            borderRadius: 3,
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#f9e2af"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+        >
+          <OpenExternalIcon />
+        </button>
+      )}
 
       {/* Hidden toggle */}
       <button
@@ -749,6 +807,14 @@ const RefreshIcon = () => (
     <path d="M10.5 1.5V4H8" />
     <path d="M10.5 6a4.5 4.5 0 0 1-7.65 3.2L1.5 8" />
     <path d="M1.5 10.5V8H4" />
+  </svg>
+);
+
+const OpenExternalIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 6.5v3a1 1 0 0 1-1 1H2.5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1H5" />
+    <path d="M7.5 1.5H10.5V4.5" />
+    <path d="M5.5 6.5L10.5 1.5" />
   </svg>
 );
 

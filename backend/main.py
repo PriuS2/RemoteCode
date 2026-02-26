@@ -248,6 +248,33 @@ async def list_files(
     )
 
 
+class OpenExplorerRequest(BaseModel):
+    path: str
+
+
+@app.post("/api/open-explorer")
+async def open_in_explorer(
+    req: OpenExplorerRequest, _user: str = Depends(get_current_user)
+):
+    import subprocess, platform
+
+    path = os.path.abspath(req.path)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=400, detail=f"Path not found: {path}")
+
+    try:
+        system = platform.system()
+        if system == "Windows":
+            os.startfile(path)
+        elif system == "Darwin":
+            subprocess.Popen(["open", path])
+        else:
+            subprocess.Popen(["xdg-open", path])
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class MkdirRequest(BaseModel):
     path: str
     name: str
