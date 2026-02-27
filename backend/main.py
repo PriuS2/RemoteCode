@@ -373,20 +373,8 @@ async def raw_file(
     return FileResponse(path)
 
 
-class MkdirRequest(BaseModel):
-    path: str
-    name: str
-
-
-@app.post("/api/mkdir")
-async def make_directory(
-    req: MkdirRequest, _user: str = Depends(get_current_user)
-):
-    parent = os.path.abspath(req.path)
-    if not os.path.isdir(parent):
-        raise HTTPException(status_code=400, detail=f"Parent not found: {parent}")
-
-    name = req.name.strip()
+def _validate_name(name: str) -> None:
+    """Validate a file/folder name. Raises HTTPException on invalid input."""
     if sys.platform == "win32":
         _INVALID_CHARS = set('/<>:"\\|?*\0')
         _RESERVED_NAMES = {
@@ -404,7 +392,24 @@ async def make_directory(
         or (sys.platform == "win32" and name.upper().split(".")[0] in _RESERVED_NAMES)
         or (sys.platform == "win32" and name.endswith((" ", ".")))
     ):
-        raise HTTPException(status_code=400, detail="Invalid folder name")
+        raise HTTPException(status_code=400, detail="Invalid name")
+
+
+class MkdirRequest(BaseModel):
+    path: str
+    name: str
+
+
+@app.post("/api/mkdir")
+async def make_directory(
+    req: MkdirRequest, _user: str = Depends(get_current_user)
+):
+    parent = os.path.abspath(req.path)
+    if not os.path.isdir(parent):
+        raise HTTPException(status_code=400, detail=f"Parent not found: {parent}")
+
+    name = req.name.strip()
+    _validate_name(name)
 
     target = os.path.join(parent, name)
     if os.path.exists(target):
@@ -419,6 +424,79 @@ async def make_directory(
         raise HTTPException(status_code=500, detail="Failed to create directory")
 
     return {"path": target}
+
+
+class RenameRequest(BaseModel):
+    path: str
+    oldName: str
+    newName: str
+
+
+@app.post("/api/rename")
+async def rename_entry(
+    req: RenameRequest, _user: str = Depends(get_current_user)
+):
+    parent = os.path.abspath(req.path)
+    if not os.path.isdir(parent):
+        raise HTTPException(status_code=400, detail=f"Parent not found: {parent}")
+
+    new_name = req.newName.strip()
+    _validate_name(new_name)
+
+    old_path = os.path.join(parent, req.oldName)
+    if not os.path.exists(old_path):
+        raise HTTPException(status_code=400, detail=f"Not found: {req.oldName}")
+
+    new_path = os.path.join(parent, new_name)
+    if os.path.exists(new_path):
+        raise HTTPException(status_code=400, detail=f"Already exists: {new_name}")
+
+    try:
+        os.rename(old_path, new_path)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail=f"Access denied: {parent}")
+    except Exception as e:
+        logger.error(f"rename_entry error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to rename")
+
+    return {"path": new_path}
+
+
+class DeleteRequest(BaseModel):
+    path: str
+    name: str
+
+
+@app.post("/api/delete")
+async def delete_entry(
+    req: DeleteRequest, _user: str = Depends(get_current_user)
+):
+    import shutil
+
+    parent = os.path.abspath(req.path)
+    if not os.path.isdir(parent):
+        raise HTTPException(status_code=400, detail=f"Parent not found: {parent}")
+
+    target = os.path.join(parent, req.name)
+    if not os.path.exists(target):
+        raise HTTPException(status_code=400, detail=f"Not found: {req.name}")
+
+    # Prevent deleting the parent directory itself
+    if os.path.abspath(target) == parent:
+        raise HTTPException(status_code=400, detail="Cannot delete current directory")
+
+    try:
+        if os.path.isdir(target):
+            shutil.rmtree(target)
+        else:
+            os.remove(target)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail=f"Access denied: {target}")
+    except Exception as e:
+        logger.error(f"delete_entry error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete")
+
+    return {"deleted": req.name}
 
 
 @app.post("/api/upload")

@@ -147,6 +147,11 @@ export default function FileExplorer({
   const [contextMenu, setContextMenu] = useState<{
     x: number; y: number; entry: FileEntry;
   } | null>(null);
+  const [renamingEntry, setRenamingEntry] = useState<FileEntry | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<FileEntry | null>(null);
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
@@ -347,6 +352,75 @@ export default function FileExplorer({
     return isTextFile(entry.extension, entry.name) || isImageFile(entry.extension) || isAudioFile(entry.extension);
   }, []);
 
+  const startRename = useCallback((entry: FileEntry) => {
+    setRenamingEntry(entry);
+    setRenameValue(entry.name);
+  }, []);
+
+  const cancelRename = useCallback(() => {
+    setRenamingEntry(null);
+    setRenameValue("");
+  }, []);
+
+  const handleRename = useCallback(async () => {
+    if (!renamingEntry) return;
+    const newName = renameValue.trim();
+    if (!newName || newName === renamingEntry.name) { cancelRename(); return; }
+    try {
+      const res = await fetch("/api/rename", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ path: currentPath, oldName: renamingEntry.name, newName }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.detail || "Rename failed");
+      }
+      cancelRename();
+      fetchFiles(currentPath);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Rename failed");
+    }
+  }, [renamingEntry, renameValue, currentPath, token, fetchFiles, cancelRename]);
+
+  const handleCreateFolder = useCallback(async () => {
+    const name = newFolderName.trim();
+    if (!name) { setCreatingFolder(false); setNewFolderName(""); return; }
+    try {
+      const res = await fetch("/api/mkdir", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ path: currentPath, name }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.detail || "Failed to create folder");
+      }
+      setCreatingFolder(false);
+      setNewFolderName("");
+      fetchFiles(currentPath);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Failed to create folder");
+    }
+  }, [newFolderName, currentPath, token, fetchFiles]);
+
+  const handleDelete = useCallback(async (entry: FileEntry) => {
+    try {
+      const res = await fetch("/api/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ path: currentPath, name: entry.name }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.detail || "Delete failed");
+      }
+      fetchFiles(currentPath);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Delete failed");
+    }
+  }, [currentPath, token, fetchFiles]);
+
   const contextMenuItems = useMemo((): ContextMenuEntry[] => {
     if (!contextMenu) return [];
     const entry = contextMenu.entry;
@@ -359,10 +433,13 @@ export default function FileExplorer({
       if (isLocal) {
         items.push({ label: "Open in Explorer", icon: <CtxOpenExternalIcon />, onClick: () => { handleOpenNative(fullPath); closeContextMenu(); } });
       }
+      items.push({ label: "Rename", icon: <CtxRenameIcon />, onClick: () => { startRename(entry); closeContextMenu(); } });
       items.push("separator");
       items.push({ label: "Insert Path (@)", icon: <CtxAtIcon />, onClick: () => { handleInsertEntry(entry); closeContextMenu(); } });
       items.push({ label: "Copy Name", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(entry.name); closeContextMenu(); } });
       items.push({ label: "Copy Full Path", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(fullPath); closeContextMenu(); } });
+      items.push("separator");
+      items.push({ label: "Delete", icon: <CtxDeleteIcon />, onClick: () => { setDeleteConfirm(entry); closeContextMenu(); } });
       return items;
     }
 
@@ -376,12 +453,15 @@ export default function FileExplorer({
       items.push({ label: "Open Path", icon: <CtxOpenExternalIcon />, onClick: () => { handleOpenNative(currentPath); closeContextMenu(); } });
     }
     items.push({ label: "Download", icon: <CtxDownloadIcon />, onClick: () => { downloadFile(fullPath, entry.name); closeContextMenu(); } });
+    items.push({ label: "Rename", icon: <CtxRenameIcon />, onClick: () => { startRename(entry); closeContextMenu(); } });
     items.push("separator");
     items.push({ label: "Insert Path (@)", icon: <CtxAtIcon />, onClick: () => { handleInsertEntry(entry); closeContextMenu(); } });
     items.push({ label: "Copy Name", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(entry.name); closeContextMenu(); } });
     items.push({ label: "Copy Full Path", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(fullPath); closeContextMenu(); } });
+    items.push("separator");
+    items.push({ label: "Delete", icon: <CtxDeleteIcon />, onClick: () => { setDeleteConfirm(entry); closeContextMenu(); } });
     return items;
-  }, [contextMenu, currentPath, isLocal, handleOpenNative, downloadFile, closeContextMenu, canPreview]);
+  }, [contextMenu, currentPath, isLocal, handleOpenNative, downloadFile, closeContextMenu, canPreview, startRename]);
 
   const uploadFiles = useCallback(async (fileList: FileList | File[]) => {
     const files = Array.from(fileList);
@@ -510,6 +590,16 @@ export default function FileExplorer({
       onInsertEntry={handleInsertEntry}
       onContextMenu={handleContextMenu}
       isMobile={isMobile}
+      renamingEntry={renamingEntry}
+      renameValue={renameValue}
+      onRenameValueChange={setRenameValue}
+      onRenameSubmit={handleRename}
+      onRenameCancel={cancelRename}
+      creatingFolder={creatingFolder}
+      newFolderName={newFolderName}
+      onNewFolderNameChange={setNewFolderName}
+      onNewFolderSubmit={handleCreateFolder}
+      onNewFolderCancel={() => { setCreatingFolder(false); setNewFolderName(""); }}
     />
   );
 
@@ -598,6 +688,7 @@ export default function FileExplorer({
           onToggleView={() => setViewMode((v) => (v === "grid" ? "list" : "grid"))}
           onToggleHidden={() => setShowHidden((h) => !h)}
           onUpload={() => fileInputRef.current?.click()}
+          onNewFolder={() => { setCreatingFolder(true); setNewFolderName(""); }}
           onClose={onClose}
           isPreview={!!previewFile}
           explorerFontSize={explorerFontSize}
@@ -608,6 +699,13 @@ export default function FileExplorer({
         {uploadOverlay}
         {contextMenu && (
           <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenuItems} onClose={closeContextMenu} />
+        )}
+        {deleteConfirm && (
+          <DeleteConfirmDialog
+            entry={deleteConfirm}
+            onConfirm={() => { handleDelete(deleteConfirm); setDeleteConfirm(null); }}
+            onCancel={() => setDeleteConfirm(null)}
+          />
         )}
       </div>
     );
@@ -643,6 +741,7 @@ export default function FileExplorer({
         onToggleView={() => setViewMode((v) => (v === "grid" ? "list" : "grid"))}
         onToggleHidden={() => setShowHidden((h) => !h)}
         onUpload={() => fileInputRef.current?.click()}
+        onNewFolder={() => { setCreatingFolder(true); setNewFolderName(""); }}
         onClose={onClose}
         isPreview={!!previewFile}
         explorerFontSize={explorerFontSize}
@@ -653,6 +752,13 @@ export default function FileExplorer({
       {uploadOverlay}
       {contextMenu && (
         <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenuItems} onClose={closeContextMenu} />
+      )}
+      {deleteConfirm && (
+        <DeleteConfirmDialog
+          entry={deleteConfirm}
+          onConfirm={() => { handleDelete(deleteConfirm); setDeleteConfirm(null); }}
+          onCancel={() => setDeleteConfirm(null)}
+        />
       )}
     </div>
   );
@@ -672,6 +778,7 @@ function ExplorerHeader({
   onToggleView,
   onToggleHidden,
   onUpload,
+  onNewFolder,
   onClose,
   isPreview,
   explorerFontSize,
@@ -688,6 +795,7 @@ function ExplorerHeader({
   onToggleView: () => void;
   onToggleHidden: () => void;
   onUpload: () => void;
+  onNewFolder: () => void;
   onClose: () => void;
   isPreview?: boolean;
   explorerFontSize: number;
@@ -849,6 +957,27 @@ function ExplorerHeader({
           >
             <UploadIcon />
           </button>
+
+          {/* New Folder */}
+          <button
+            onClick={onNewFolder}
+            title="New folder"
+            style={{
+              background: "none",
+              border: "none",
+              color: "#6c7086",
+              cursor: "pointer",
+              padding: "0.15em 0.3em",
+              display: "flex",
+              alignItems: "center",
+              borderRadius: 3,
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#f9e2af"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+          >
+            <NewFolderIcon />
+          </button>
         </>
       )}
 
@@ -920,6 +1049,16 @@ function ExplorerBody({
   onInsertEntry,
   onContextMenu,
   isMobile,
+  renamingEntry,
+  renameValue,
+  onRenameValueChange,
+  onRenameSubmit,
+  onRenameCancel,
+  creatingFolder,
+  newFolderName,
+  onNewFolderNameChange,
+  onNewFolderSubmit,
+  onNewFolderCancel,
 }: {
   entries: FileEntry[];
   viewMode: ViewMode;
@@ -932,6 +1071,16 @@ function ExplorerBody({
   onInsertEntry: (entry: FileEntry) => void;
   onContextMenu: (e: React.MouseEvent, entry: FileEntry) => void;
   isMobile: boolean;
+  renamingEntry: FileEntry | null;
+  renameValue: string;
+  onRenameValueChange: (v: string) => void;
+  onRenameSubmit: () => void;
+  onRenameCancel: () => void;
+  creatingFolder: boolean;
+  newFolderName: string;
+  onNewFolderNameChange: (v: string) => void;
+  onNewFolderSubmit: () => void;
+  onNewFolderCancel: () => void;
 }) {
   if (loading) {
     return (
@@ -964,6 +1113,14 @@ function ExplorerBody({
           }}
         >
           {canGoBack && <ParentGridItem onBack={onBack} />}
+          {creatingFolder && (
+            <NewFolderInlineGrid
+              value={newFolderName}
+              onChange={onNewFolderNameChange}
+              onSubmit={onNewFolderSubmit}
+              onCancel={onNewFolderCancel}
+            />
+          )}
           {entries.map((entry) => (
             <GridItem
               key={entry.name}
@@ -972,6 +1129,11 @@ function ExplorerBody({
               onFileClick={onFileClick}
               onInsertEntry={onInsertEntry}
               onContextMenu={onContextMenu}
+              isRenaming={renamingEntry?.name === entry.name}
+              renameValue={renameValue}
+              onRenameValueChange={onRenameValueChange}
+              onRenameSubmit={onRenameSubmit}
+              onRenameCancel={onRenameCancel}
             />
           ))}
         </div>
@@ -983,6 +1145,14 @@ function ExplorerBody({
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "2px 4px" }}>
       {canGoBack && <ParentListItem onBack={onBack} />}
+      {creatingFolder && (
+        <NewFolderInlineList
+          value={newFolderName}
+          onChange={onNewFolderNameChange}
+          onSubmit={onNewFolderSubmit}
+          onCancel={onNewFolderCancel}
+        />
+      )}
       {entries.map((entry) => (
         <ListItem
           key={entry.name}
@@ -992,6 +1162,11 @@ function ExplorerBody({
           onInsertEntry={onInsertEntry}
           onContextMenu={onContextMenu}
           isMobile={isMobile}
+          isRenaming={renamingEntry?.name === entry.name}
+          renameValue={renameValue}
+          onRenameValueChange={onRenameValueChange}
+          onRenameSubmit={onRenameSubmit}
+          onRenameCancel={onRenameCancel}
         />
       ))}
     </div>
@@ -1006,29 +1181,54 @@ function GridItem({
   onFileClick,
   onInsertEntry,
   onContextMenu,
+  isRenaming,
+  renameValue,
+  onRenameValueChange,
+  onRenameSubmit,
+  onRenameCancel,
 }: {
   entry: FileEntry;
   onNavigate: (name: string) => void;
   onFileClick: (entry: FileEntry) => void;
   onInsertEntry: (entry: FileEntry) => void;
   onContextMenu: (e: React.MouseEvent, entry: FileEntry) => void;
+  isRenaming: boolean;
+  renameValue: string;
+  onRenameValueChange: (v: string) => void;
+  onRenameSubmit: () => void;
+  onRenameCancel: () => void;
 }) {
   const isFolder = entry.type === "folder";
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isRenaming && renameInputRef.current) {
+      renameInputRef.current.focus();
+      // Select name without extension for files
+      if (entry.type === "file" && entry.extension) {
+        const nameWithoutExt = entry.name.length - entry.extension.length;
+        renameInputRef.current.setSelectionRange(0, nameWithoutExt);
+      } else {
+        renameInputRef.current.select();
+      }
+    }
+  }, [isRenaming, entry.name, entry.type, entry.extension]);
 
   return (
     <div
       onClick={() => {
+        if (isRenaming) return;
         if (isFolder) onNavigate(entry.name);
         else onFileClick(entry);
       }}
-      onContextMenu={(e) => onContextMenu(e, entry)}
+      onContextMenu={(e) => { if (!isRenaming) onContextMenu(e, entry); }}
       style={{
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         padding: "8px 4px 6px",
         borderRadius: 6,
-        cursor: "pointer",
+        cursor: isRenaming ? "default" : "pointer",
         position: "relative",
       }}
       onMouseEnter={(e) => {
@@ -1043,54 +1243,83 @@ function GridItem({
       ) : (
         <FileIcon extension={entry.extension} size={32} />
       )}
-      <span
-        style={{
-          marginTop: 4,
-          fontSize: "0.85em",
-          color: "#cdd6f4",
-          textAlign: "center",
-          width: "100%",
-          overflow: "hidden",
-          display: "-webkit-box",
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: "vertical",
-          wordBreak: "break-all",
-          lineHeight: 1.3,
-        }}
-        title={entry.name}
-      >
-        {entry.name}
-      </span>
+      {isRenaming ? (
+        <input
+          ref={renameInputRef}
+          value={renameValue}
+          onChange={(e) => onRenameValueChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { e.preventDefault(); onRenameSubmit(); }
+            if (e.key === "Escape") onRenameCancel();
+          }}
+          onBlur={onRenameCancel}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            marginTop: 4,
+            fontSize: "0.85em",
+            color: "#cdd6f4",
+            background: "#1e1e2e",
+            border: "1px solid #89b4fa",
+            borderRadius: 3,
+            padding: "1px 4px",
+            width: "100%",
+            textAlign: "center",
+            outline: "none",
+            fontFamily: "inherit",
+          }}
+        />
+      ) : (
+        <span
+          style={{
+            marginTop: 4,
+            fontSize: "0.85em",
+            color: "#cdd6f4",
+            textAlign: "center",
+            width: "100%",
+            overflow: "hidden",
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            wordBreak: "break-all",
+            lineHeight: 1.3,
+          }}
+          title={entry.name}
+        >
+          {entry.name}
+        </span>
+      )}
       {/* @ insert button */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onInsertEntry(entry);
-        }}
-        title="Insert path"
-        style={{
-          position: "absolute",
-          top: 2,
-          right: 2,
-          background: "none",
-          border: "1px solid #45475a",
-          color: "#6c7086",
-          cursor: "pointer",
-          fontSize: 12,
-          fontWeight: 700,
-          borderRadius: 4,
-          padding: "2px 5px",
-          lineHeight: 1,
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.color = "#a6e3a1";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.color = "#6c7086";
-        }}
-      >
-        @
-      </button>
+      {!isRenaming && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onInsertEntry(entry);
+          }}
+          title="Insert path"
+          style={{
+            position: "absolute",
+            top: 2,
+            right: 2,
+            background: "none",
+            border: "1px solid #45475a",
+            color: "#6c7086",
+            cursor: "pointer",
+            fontSize: 12,
+            fontWeight: 700,
+            borderRadius: 4,
+            padding: "2px 5px",
+            lineHeight: 1,
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.color = "#a6e3a1";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.color = "#6c7086";
+          }}
+        >
+          @
+        </button>
+      )}
     </div>
   );
 }
@@ -1104,6 +1333,11 @@ function ListItem({
   onInsertEntry,
   onContextMenu,
   isMobile,
+  isRenaming,
+  renameValue,
+  onRenameValueChange,
+  onRenameSubmit,
+  onRenameCancel,
 }: {
   entry: FileEntry;
   onNavigate: (name: string) => void;
@@ -1111,23 +1345,42 @@ function ListItem({
   onInsertEntry: (entry: FileEntry) => void;
   onContextMenu: (e: React.MouseEvent, entry: FileEntry) => void;
   isMobile: boolean;
+  isRenaming: boolean;
+  renameValue: string;
+  onRenameValueChange: (v: string) => void;
+  onRenameSubmit: () => void;
+  onRenameCancel: () => void;
 }) {
   const isFolder = entry.type === "folder";
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isRenaming && renameInputRef.current) {
+      renameInputRef.current.focus();
+      if (entry.type === "file" && entry.extension) {
+        const nameWithoutExt = entry.name.length - entry.extension.length;
+        renameInputRef.current.setSelectionRange(0, nameWithoutExt);
+      } else {
+        renameInputRef.current.select();
+      }
+    }
+  }, [isRenaming, entry.name, entry.type, entry.extension]);
 
   return (
     <div
       onClick={() => {
+        if (isRenaming) return;
         if (isFolder) onNavigate(entry.name);
         else onFileClick(entry);
       }}
-      onContextMenu={(e) => onContextMenu(e, entry)}
+      onContextMenu={(e) => { if (!isRenaming) onContextMenu(e, entry); }}
       style={{
         display: "flex",
         alignItems: "center",
         gap: 6,
         padding: "5px 6px",
         borderRadius: 4,
-        cursor: "pointer",
+        cursor: isRenaming ? "default" : "pointer",
         color: "#cdd6f4",
       }}
       onMouseEnter={(e) => {
@@ -1142,52 +1395,80 @@ function ListItem({
       ) : (
         <FileIcon extension={entry.extension} size={16} />
       )}
-      <span
-        style={{
-          flex: 1,
-          minWidth: 0,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-        title={entry.name}
-      >
-        {entry.name}
-      </span>
+      {isRenaming ? (
+        <input
+          ref={renameInputRef}
+          value={renameValue}
+          onChange={(e) => onRenameValueChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { e.preventDefault(); onRenameSubmit(); }
+            if (e.key === "Escape") onRenameCancel();
+          }}
+          onBlur={onRenameCancel}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            color: "#cdd6f4",
+            background: "#1e1e2e",
+            border: "1px solid #89b4fa",
+            borderRadius: 3,
+            padding: "1px 4px",
+            outline: "none",
+            fontFamily: "inherit",
+            fontSize: "inherit",
+          }}
+        />
+      ) : (
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+          title={entry.name}
+        >
+          {entry.name}
+        </span>
+      )}
       {/* Size (files only) */}
-      {!isFolder && entry.size != null && (
+      {!isRenaming && !isFolder && entry.size != null && (
         <span style={{ fontSize: "0.85em", color: "#6c7086", flexShrink: 0 }}>
           {formatSize(entry.size)}
         </span>
       )}
       {/* @ insert button */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onInsertEntry(entry);
-        }}
-        title="Insert path"
-        style={{
-          background: "none",
-          border: "1px solid #45475a",
-          color: "#6c7086",
-          cursor: "pointer",
-          fontSize: 12,
-          fontWeight: 700,
-          borderRadius: 4,
-          padding: "2px 6px",
-          flexShrink: 0,
-          lineHeight: 1,
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.color = "#a6e3a1";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.color = "#6c7086";
-        }}
-      >
-        @
-      </button>
+      {!isRenaming && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onInsertEntry(entry);
+          }}
+          title="Insert path"
+          style={{
+            background: "none",
+            border: "1px solid #45475a",
+            color: "#6c7086",
+            cursor: "pointer",
+            fontSize: 12,
+            fontWeight: 700,
+            borderRadius: 4,
+            padding: "2px 6px",
+            flexShrink: 0,
+            lineHeight: 1,
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.color = "#a6e3a1";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.color = "#6c7086";
+          }}
+        >
+          @
+        </button>
+      )}
     </div>
   );
 }
@@ -1341,6 +1622,124 @@ const CtxOpenExternalIcon = () => (
     <path d="M6.5 7.5L12 2" />
   </svg>
 );
+
+const CtxRenameIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#cba6f7" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.5 1.5l2 2-7.5 7.5H3v-2l7.5-7.5z" />
+    <path d="M8.5 3.5l2 2" />
+  </svg>
+);
+
+const CtxDeleteIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#f38ba8" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2.5 4h9" />
+    <path d="M5 4V2.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V4" />
+    <path d="M3.5 4l.5 8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l.5-8" />
+    <path d="M5.5 6.5v3" />
+    <path d="M8.5 6.5v3" />
+  </svg>
+);
+
+/* ---- Delete Confirm Dialog ---- */
+
+function DeleteConfirmDialog({
+  entry,
+  onConfirm,
+  onCancel,
+}: {
+  entry: FileEntry;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+      if (e.key === "Enter") onConfirm();
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onConfirm, onCancel]);
+
+  return createPortal(
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 10000,
+        background: "rgba(0,0,0,0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+      onClick={onCancel}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#1e1e2e",
+          border: "1px solid #45475a",
+          borderRadius: 8,
+          padding: "20px 24px",
+          minWidth: 300,
+          maxWidth: 400,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+          fontFamily: "'Cascadia Code', 'Consolas', monospace",
+        }}
+      >
+        <div style={{ fontSize: 14, color: "#cdd6f4", marginBottom: 12, fontWeight: 600 }}>
+          Delete {entry.type === "folder" ? "Folder" : "File"}
+        </div>
+        <div style={{ fontSize: 12, color: "#a6adc8", marginBottom: 20, lineHeight: 1.5 }}>
+          Are you sure you want to delete{" "}
+          <span style={{ color: "#f38ba8", fontWeight: 600 }}>"{entry.name}"</span>?
+          {entry.type === "folder" && (
+            <span style={{ display: "block", marginTop: 6, color: "#f38ba8", fontSize: 11 }}>
+              This will delete the folder and all its contents.
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button
+            onClick={onCancel}
+            style={{
+              background: "#313244",
+              border: "1px solid #45475a",
+              color: "#cdd6f4",
+              borderRadius: 4,
+              padding: "6px 16px",
+              fontSize: 12,
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#45475a"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#313244"; }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{
+              background: "#f38ba8",
+              border: "none",
+              color: "#1e1e2e",
+              borderRadius: 4,
+              padding: "6px 16px",
+              fontSize: 12,
+              cursor: "pointer",
+              fontWeight: 600,
+              fontFamily: "inherit",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#eba0ac"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#f38ba8"; }}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 /* ---- File Preview ---- */
 
@@ -2468,3 +2867,109 @@ const UploadIcon = ({ size = "1em" }: { size?: number | string }) => (
     <path d="M2 9h8" />
   </svg>
 );
+
+const NewFolderIcon = () => (
+  <svg width="1em" height="1em" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 3C1 2.45 1.45 2 2 2h2.5l1 1.5H10c.55 0 1 .45 1 1V9c0 .55-.45 1-1 1H2c-.55 0-1-.45-1-1V3z" />
+    <path d="M5.5 5.5v3" />
+    <path d="M4 7h3" />
+  </svg>
+);
+
+/* ---- New Folder Inline Input Components ---- */
+
+function NewFolderInlineGrid({
+  value, onChange, onSubmit, onCancel,
+}: {
+  value: string; onChange: (v: string) => void; onSubmit: () => void; onCancel: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        padding: "8px 4px 6px",
+        borderRadius: 6,
+        background: "#313244",
+      }}
+    >
+      <IconFolder size={32} />
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.preventDefault(); onSubmit(); }
+          if (e.key === "Escape") onCancel();
+        }}
+        onBlur={onCancel}
+        placeholder="New folder"
+        style={{
+          marginTop: 4,
+          fontSize: "0.85em",
+          color: "#cdd6f4",
+          background: "#1e1e2e",
+          border: "1px solid #a6e3a1",
+          borderRadius: 3,
+          padding: "1px 4px",
+          width: "100%",
+          textAlign: "center",
+          outline: "none",
+          fontFamily: "inherit",
+        }}
+      />
+    </div>
+  );
+}
+
+function NewFolderInlineList({
+  value, onChange, onSubmit, onCancel,
+}: {
+  value: string; onChange: (v: string) => void; onSubmit: () => void; onCancel: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "5px 6px",
+        borderRadius: 4,
+        background: "#313244",
+        color: "#cdd6f4",
+      }}
+    >
+      <IconFolder size={16} />
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.preventDefault(); onSubmit(); }
+          if (e.key === "Escape") onCancel();
+        }}
+        onBlur={onCancel}
+        placeholder="New folder"
+        style={{
+          flex: 1,
+          minWidth: 0,
+          color: "#cdd6f4",
+          background: "#1e1e2e",
+          border: "1px solid #a6e3a1",
+          borderRadius: 3,
+          padding: "1px 4px",
+          outline: "none",
+          fontFamily: "inherit",
+          fontSize: "inherit",
+        }}
+      />
+    </div>
+  );
+}
