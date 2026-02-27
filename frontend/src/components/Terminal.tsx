@@ -6,6 +6,7 @@ import "@xterm/xterm/css/xterm.css";
 import { useWebSocket, getWsUrl } from "../hooks/useWebSocket";
 import MobileKeyBar from "./MobileKeyBar";
 import FileExplorer from "./FileExplorer";
+import GitPanel, { GitIcon } from "./GitPanel";
 
 export type ActivityState = "idle" | "processing" | "done";
 
@@ -69,11 +70,17 @@ export default function Terminal({
   onActivityChangeRef.current = onActivityChange;
 
   const [explorerOpen, setExplorerOpen] = useState(false);
+  const [gitPanelOpen, setGitPanelOpen] = useState(false);
   const [explorerWidth, setExplorerWidth] = useState(() => {
     const stored = localStorage.getItem("explorerWidth");
     return stored ? Number(stored) : 240;
   });
+  const [gitPanelWidth, setGitPanelWidth] = useState(() => {
+    const stored = localStorage.getItem("gitPanelWidth");
+    return stored ? Number(stored) : 300;
+  });
   const explorerDragRef = useRef(false);
+  const gitPanelDragRef = useRef(false);
   const isMobileDevice = () => window.innerWidth <= 768;
   const isMobile = isMobileDevice;
   const [scrollThumb, setScrollThumb] = useState<{ top: number; height: number } | null>(null);
@@ -313,7 +320,7 @@ export default function Terminal({
       });
       return () => { cancelled = true; };
     }
-  }, [visible, splitMode, splitRatio, panelIndex, explorerOpen, explorerWidth]);
+  }, [visible, splitMode, splitRatio, panelIndex, explorerOpen, explorerWidth, gitPanelOpen, gitPanelWidth]);
 
   // Mobile custom scrollbar — track viewport scroll position
   useEffect(() => {
@@ -404,6 +411,37 @@ export default function Terminal({
     document.addEventListener("mouseup", onUp);
   }, [explorerWidth]);
 
+  const handleGitPanelResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    gitPanelDragRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const startX = e.clientX;
+    const startWidth = gitPanelWidth;
+
+    const onMove = (ev: MouseEvent) => {
+      if (!gitPanelDragRef.current) return;
+      const delta = ev.clientX - startX;
+      const maxWidth = Math.floor(window.innerWidth * 0.7);
+      const newWidth = Math.max(220, Math.min(startWidth + delta, maxWidth));
+      setGitPanelWidth(newWidth);
+    };
+    const onUp = () => {
+      gitPanelDragRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      setGitPanelWidth((w) => {
+        localStorage.setItem("gitPanelWidth", String(w));
+        return w;
+      });
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [gitPanelWidth]);
+
   const showBanner = status !== "connected";
 
   // Compute position style
@@ -484,7 +522,16 @@ export default function Terminal({
             hoverColor="#a6e3a1"
             active={explorerOpen}
             fontSize={fontSize}
-            onClick={(e) => { e.stopPropagation(); setExplorerOpen((o) => !o); }}
+            onClick={(e) => { e.stopPropagation(); setExplorerOpen((o) => { if (!o) setGitPanelOpen(false); return !o; }); }}
+          />
+          {/* Git Panel toggle */}
+          <TitleBarBtn
+            icon={<GitIcon size={iconSize} />}
+            title="Git"
+            hoverColor="#fab387"
+            active={gitPanelOpen}
+            fontSize={fontSize}
+            onClick={(e) => { e.stopPropagation(); setGitPanelOpen((o) => { if (!o) setExplorerOpen(false); return !o; }); }}
           />
           {/* Refresh terminal */}
           <TitleBarBtn
@@ -560,6 +607,22 @@ export default function Terminal({
           <div
             className="file-explorer-resize"
             onMouseDown={handleExplorerResizeStart}
+          />
+        )}
+        {gitPanelOpen && (
+          <div style={{ width: isMobile() ? undefined : gitPanelWidth, flexShrink: 0 }}>
+            <GitPanel
+              token={token}
+              workPath={workPath}
+              onClose={() => setGitPanelOpen(false)}
+              isMobile={isMobile()}
+            />
+          </div>
+        )}
+        {gitPanelOpen && !isMobile() && (
+          <div
+            className="file-explorer-resize"
+            onMouseDown={handleGitPanelResizeStart}
           />
         )}
         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
