@@ -1,0 +1,383 @@
+@keyframes ccr-spin { to { transform: rotate(360deg); } }
+@keyframes ccr-pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
+:root {
+  --web-fs: 14px;
+  --web-fs-sm: 13px;
+  --web-fs-xs: 11px;
+  --web-fs-xxs: 10px;
+}
+
+/* highlight.js — Catppuccin Mocha */
+.hljs { color: #cdd6f4; }
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in,
+.hljs-type { color: #cba6f7; }
+.hljs-string,
+.hljs-template-variable,
+.hljs-addition { color: #a6e3a1; }
+.hljs-comment,
+.hljs-quote { color: #6c7086; font-style: italic; }
+.hljs-number,
+.hljs-literal,
+.hljs-regexp { color: #fab387; }
+.hljs-title,
+.hljs-title\.function_,
+.hljs-section { color: #89b4fa; }
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-tag { color: #f9e2af; }
+.hljs-tag { color: #f38ba8; }
+.hljs-name { color: #89b4fa; }
+.hljs-selector-id,
+.hljs-selector-class { color: #94e2d5; }
+.hljs-symbol,
+.hljs-bullet { color: #f5c2e7; }
+.hljs-meta { color: #fab387; }
+.hljs-params { color: #cdd6f4; }
+.hljs-property { color: #89dceb; }
+.hljs-punctuation { color: #9399b2; }
+.hljs-operator { color: #94e2d5; }
+.hljs-deletion { color: #f38ba8; background: rgba(243,139,168,0.1); }
+.hljs-addition { background: rgba(166,227,161,0.1); }
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  overflow: hidden;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100dvh;
+}
+
+/* Header */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  height: 44px;
+  background: #181825;
+  border-bottom: 1px solid #313244;
+  flex-shrink: 0;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sidebar-toggle {
+  background: none;
+  border: none;
+  color: #a6adc8;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.sidebar-toggle:hover {
+  background: #313244;
+  color: #cdd6f4;
+}
+
+.app-title {
+  font-size: var(--web-fs);
+  font-weight: 600;
+  color: #89b4fa;
+}
+
+.header-right {
+  position: relative;
+}
+
+.settings-btn {
+  background: none;
+  border: 1px solid #45475a;
+  color: #a6adc8;
+  padding: 4px 10px;
+  font-size: 18px;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.settings-btn:hover {
+  background: #313244;
+  color: #cdd6f4;
+}
+
+.settings-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 220px;
+  background: #181825;
+  border: 1px solid #45475a;
+  border-radius: 8px;
+  padding: 12px;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.settings-section {
+  margin-bottom: 12px;
+}
+
+.settings-label {
+  display: block;
+  font-size: 11px;
+  color: #6c7086;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.settings-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.size-btn {
+  width: 28px;
+  height: 28px;
+  background: #313244;
+  border: 1px solid #45475a;
+  color: #cdd6f4;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.size-btn:hover {
+  background: #45475a;
+}
+
+.size-value {
+  font-size: 13px;
+  color: #cdd6f4;
+  min-width: 40px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-divider {
+  height: 1px;
+  background: #313244;
+  margin: 12px 0;
+}
+
+.settings-logout {
+  width: 100%;
+  background: none;
+  border: 1px solid #45475a;
+  color: #f38ba8;
+  padding: 6px 0;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.settings-logout:hover {
+  background: #313244;
+}
+
+/* Body layout */
+.app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* Sidebar - desktop */
+.sidebar {
+  background: #181825;
+  border-right: 1px solid #313244;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* Sidebar resize handle */
+.sidebar-resize {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  margin-left: -2px;
+}
+
+.sidebar-resize:hover,
+.sidebar-resize:active {
+  background: #89b4fa;
+}
+
+/* Sidebar backdrop - hidden on desktop */
+.sidebar-backdrop {
+  display: none;
+}
+
+/* Terminal area */
+.terminal-area {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  background: #1e1e2e;
+  overflow: hidden;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 16px;
+  color: #6c7086;
+}
+
+.create-btn {
+  padding: 10px 20px;
+  font-size: var(--web-fs);
+  font-weight: 600;
+  background: #89b4fa;
+  color: #1e1e2e;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.create-btn:hover {
+  background: #74c7ec;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #45475a;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #585b70;
+}
+
+/* File explorer resize handle */
+.file-explorer-resize {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.file-explorer-resize:hover,
+.file-explorer-resize:active {
+  background: #89b4fa;
+}
+
+/* Split view hint */
+.split-hint {
+  text-align: center;
+  font-size: var(--web-fs-xxs);
+  color: #6c7086;
+  margin-bottom: 8px;
+  padding: 4px 0;
+}
+
+/* Mobile key bar - hidden on desktop */
+.mobile-keybar {
+  display: none;
+}
+
+/* ===== Mobile (< 768px) ===== */
+@media (max-width: 768px) {
+  .app-container {
+    height: 100dvh;
+  }
+
+  /* Sidebar = full-screen overlay */
+  .sidebar {
+    position: fixed;
+    top: 44px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100% !important;
+    min-width: 0 !important;
+    z-index: 50;
+    border-right: none;
+  }
+
+  .sidebar-resize {
+    display: none;
+  }
+
+  .file-explorer-resize {
+    display: none;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 49;
+  }
+
+  /* Terminal takes full width */
+  .terminal-area {
+    width: 100%;
+  }
+
+  /* Mobile key bar */
+  .mobile-keybar {
+    display: block;
+    height: 118px;
+    flex-shrink: 0;
+    background: #181825;
+    border-top: 1px solid #313244;
+    overflow: visible;
+    position: relative;
+  }
+
+  /* Hide split hint on mobile */
+  .split-hint {
+    display: none;
+  }
+
+  /* Hide native xterm scrollbar on mobile — replaced by custom touch scrollbar */
+  .xterm .xterm-viewport::-webkit-scrollbar {
+    width: 0;
+    display: none;
+  }
+}

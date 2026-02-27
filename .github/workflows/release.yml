@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get tag name
+        id: tag
+        run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Build release package
+        run: |
+          STAGING="claude-code-remote-${{ steps.tag.outputs.TAG_NAME }}"
+          mkdir -p "$STAGING"
+
+          # backend (exclude __pycache__, static/)
+          rsync -a --exclude='__pycache__' --exclude='static/' backend/ "$STAGING/backend/"
+
+          # frontend (exclude node_modules/)
+          rsync -a --exclude='node_modules/' frontend/ "$STAGING/frontend/"
+
+          # Root scripts and docs
+          cp -f *.sh *.ps1 Makefile README.md tunnel-guide.md "$STAGING/" 2>/dev/null || true
+
+          # Create zip
+          zip -r "${STAGING}.zip" "$STAGING"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: claude-code-remote-${{ steps.tag.outputs.TAG_NAME }}.zip
