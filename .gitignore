@@ -32,3 +32,6 @@ Desktop.ini
 
 # Env
 .env
+
+# Workspace
+.WorkSpace/
