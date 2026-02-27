@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { IconFolder, FileIcon } from "../utils/fileIcons";
+import { joinPath } from "../utils/pathUtils";
 import hljs from "highlight.js";
 
 interface FileEntry {
@@ -226,8 +227,7 @@ export default function FileExplorer({
     : entries.filter((e) => !e.name.startsWith("."));
 
   const handleNavigate = (folderName: string) => {
-    const sep = currentPath.endsWith("\\") || currentPath.endsWith("/") ? "" : "\\";
-    fetchFiles(currentPath + sep + folderName);
+    fetchFiles(joinPath(currentPath, folderName));
   };
 
   const handleBack = () => {
@@ -243,8 +243,7 @@ export default function FileExplorer({
   };
 
   const handleFileClick = (entry: FileEntry) => {
-    const sep = currentPath.endsWith("\\") || currentPath.endsWith("/") ? "" : "/";
-    const fullPath = currentPath + sep + entry.name;
+    const fullPath = joinPath(currentPath, entry.name);
 
     if (isTextFile(entry.extension, entry.name)) {
       openPreview({ name: entry.name, path: fullPath, extension: entry.extension });
@@ -305,8 +304,7 @@ export default function FileExplorer({
   }, [token, setImageUrl]);
 
   const handleInsertEntry = (entry: FileEntry) => {
-    const sep = currentPath.endsWith("\\") || currentPath.endsWith("/") ? "" : "/";
-    const fullPath = currentPath + sep + entry.name;
+    const fullPath = joinPath(currentPath, entry.name);
     const rel = getRelativePath(rootPath, fullPath);
     if (entry.type === "folder") {
       onInsertPath(rel.endsWith("/") ? rel : rel + "/");
@@ -352,8 +350,7 @@ export default function FileExplorer({
   const contextMenuItems = useMemo((): ContextMenuEntry[] => {
     if (!contextMenu) return [];
     const entry = contextMenu.entry;
-    const sep = currentPath.endsWith("\\") || currentPath.endsWith("/") ? "" : "/";
-    const fullPath = currentPath + sep + entry.name;
+    const fullPath = joinPath(currentPath, entry.name);
 
     if (entry.type === "folder") {
       const items: ContextMenuEntry[] = [

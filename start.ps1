@@ -1,6 +1,6 @@
 # Claude Code Remote - Production Start Script
 
-Set-Location "C:\Users\STOICPC_QQQ\Documents\ClaudeCodeRemote"
+Set-Location $PSScriptRoot
 
 if (-not (Test-Path ".\.venv\Scripts\python.exe")) {
     Write-Host "[ERROR] venv not found. Run setup.bat first." -ForegroundColor Red

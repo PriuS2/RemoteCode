@@ -1,6 +1,7 @@
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
-pywinpty==2.0.14
+pywinpty==2.0.14; sys_platform == 'win32'
+pexpect>=4.9; sys_platform != 'win32'
 websockets==14.1
 pydantic-settings==2.7.1
 aiosqlite==0.20.0

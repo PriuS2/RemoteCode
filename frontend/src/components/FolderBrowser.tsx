@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { joinPath } from "../utils/pathUtils";
 
 interface FolderBrowserProps {
   token: string;
@@ -393,8 +394,7 @@ export default function FolderBrowser({
                   icon={<IconFolder />}
                   name={name}
                   onClick={() => {
-                    const sep = data.current.endsWith("\\") ? "" : "\\";
-                    browse(data.current + sep + name);
+                    browse(joinPath(data.current, name));
                   }}
                 />
               ))}

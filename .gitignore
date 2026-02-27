@@ -24,6 +24,8 @@ backend/static/
 # OS
 Thumbs.db
 Desktop.ini
+.DS_Store
+*~
 
 # Env
 .env

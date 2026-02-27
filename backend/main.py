@@ -4,6 +4,7 @@ import os
 import platform
 import string
 import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -386,18 +387,22 @@ async def make_directory(
         raise HTTPException(status_code=400, detail=f"Parent not found: {parent}")
 
     name = req.name.strip()
-    _INVALID_CHARS = set('/<>:"\\|?*\0')
-    _RESERVED_NAMES = {
-        "CON", "PRN", "AUX", "NUL",
-        *(f"COM{i}" for i in range(1, 10)),
-        *(f"LPT{i}" for i in range(1, 10)),
-    }
+    if sys.platform == "win32":
+        _INVALID_CHARS = set('/<>:"\\|?*\0')
+        _RESERVED_NAMES = {
+            "CON", "PRN", "AUX", "NUL",
+            *(f"COM{i}" for i in range(1, 10)),
+            *(f"LPT{i}" for i in range(1, 10)),
+        }
+    else:
+        _INVALID_CHARS = set('/\0')
+        _RESERVED_NAMES: set[str] = set()
     if (
         not name
         or name in (".", "..")
         or any(c in _INVALID_CHARS for c in name)
-        or name.upper().split(".")[0] in _RESERVED_NAMES
-        or name.endswith((" ", "."))
+        or (sys.platform == "win32" and name.upper().split(".")[0] in _RESERVED_NAMES)
+        or (sys.platform == "win32" and name.endswith((" ", ".")))
     ):
         raise HTTPException(status_code=400, detail="Invalid folder name")
 

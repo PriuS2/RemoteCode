@@ -1,10 +1,9 @@
 import asyncio
 import logging
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Optional
-
-from winpty import PtyProcess
 
 from .config import settings
 
@@ -12,11 +11,103 @@ logger = logging.getLogger(__name__)
 
 _executor = ThreadPoolExecutor(max_workers=20)
 
+# ---------------------------------------------------------------------------
+# Platform-specific PTY adapters
+# ---------------------------------------------------------------------------
+
+if sys.platform == "win32":
+    from winpty import PtyProcess as _WinPtyProcess
+
+    class _PtyAdapter:
+        """Adapter wrapping pywinpty.PtyProcess (Windows)."""
+
+        def __init__(self, process: _WinPtyProcess) -> None:
+            self._proc = process
+
+        def read(self, length: int = 4096) -> str:
+            return self._proc.read(length)
+
+        def write(self, data: str) -> None:
+            self._proc.write(data)
+
+        def setwinsize(self, rows: int, cols: int) -> None:
+            self._proc.setwinsize(rows, cols)
+
+        def isalive(self) -> bool:
+            return self._proc.isalive()
+
+        def terminate(self) -> None:
+            self._proc.terminate()
+
+    def _create_pty(
+        command: str,
+        args: list[str],
+        cwd: str,
+        rows: int,
+        cols: int,
+    ) -> _PtyAdapter:
+        full_args = [command] + args
+        cmd_line = " ".join(full_args)
+        proc = _WinPtyProcess.spawn(cmd_line, cwd=cwd, dimensions=(rows, cols))
+        return _PtyAdapter(proc)
+
+else:
+    import pexpect  # type: ignore[import-untyped]
+
+    class _PtyAdapter:  # type: ignore[no-redef]
+        """Adapter wrapping pexpect.spawn (Linux / macOS)."""
+
+        def __init__(self, process: pexpect.spawn) -> None:
+            self._proc = process
+
+        def read(self, length: int = 4096) -> str:
+            try:
+                data = self._proc.read_nonblocking(size=length, timeout=1)
+                if isinstance(data, bytes):
+                    return data.decode("utf-8", errors="replace")
+                return data
+            except pexpect.TIMEOUT:
+                return ""
+            except pexpect.EOF:
+                raise EOFError("PTY process exited")
+
+        def write(self, data: str) -> None:
+            self._proc.send(data)
+
+        def setwinsize(self, rows: int, cols: int) -> None:
+            self._proc.setwinsize(rows, cols)
+
+        def isalive(self) -> bool:
+            return self._proc.isalive()
+
+        def terminate(self) -> None:
+            self._proc.terminate(force=True)
+
+    def _create_pty(
+        command: str,
+        args: list[str],
+        cwd: str,
+        rows: int,
+        cols: int,
+    ) -> _PtyAdapter:
+        proc = pexpect.spawn(
+            command,
+            args=args,
+            cwd=cwd,
+            dimensions=(rows, cols),
+            encoding="utf-8",
+        )
+        return _PtyAdapter(proc)
+
+
+# ---------------------------------------------------------------------------
+# PTY instance & manager (platform-agnostic)
+# ---------------------------------------------------------------------------
 
 @dataclass
 class PtyInstance:
     session_id: str
-    process: PtyProcess
+    process: object  # _PtyAdapter (Windows or Unix)
     work_path: str
     _closed: bool = field(default=False, init=False)
     _output_buffer: str = field(default="", init=False)
@@ -93,15 +184,17 @@ class PtyManager:
 
         logger.info(f"[SPAWN] {session_id}: {cmd_line} in {work_path}")
 
-        process = PtyProcess.spawn(
-            cmd_line,
+        adapter = _create_pty(
+            command=cmd,
+            args=cmd_args,
             cwd=work_path,
-            dimensions=(rows, cols),
+            rows=rows,
+            cols=cols,
         )
 
         instance = PtyInstance(
             session_id=session_id,
-            process=process,
+            process=adapter,
             work_path=work_path,
         )
         self._instances[session_id] = instance

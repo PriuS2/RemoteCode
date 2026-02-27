@@ -1,6 +1,6 @@
 # Claude Code Remote - Cloudflare Quick Tunnel
 
-Set-Location "C:\Users\tjseh\Documents\ClaudeCodeRemote"
+Set-Location $PSScriptRoot
 
 # Install cloudflared if not found
 if (-not (Get-Command "cloudflared" -ErrorAction SilentlyContinue)) {
