@@ -48,7 +48,7 @@ export default function Login({ onLogin }: LoginProps) {
         color: "#cdd6f4",
       }}
     >
-      <h1 style={{ marginBottom: 32, fontSize: 28 }}>Claude Code Remote</h1>
+      <h1 style={{ marginBottom: 32, fontSize: 28 }}>Remote Code</h1>
       <form
         onSubmit={handleSubmit}
         style={{

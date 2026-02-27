@@ -1,4 +1,4 @@
-# Claude Code Remote - Development Start Script
+# Remote Code - Development Start Script
 
 #Set-Location "C:\Users\STOICPC_QQQ\Documents\ClaudeCodeRemote"
 
@@ -29,7 +29,7 @@ Get-Content ".\.env" | ForEach-Object {
 Write-Host "[OK] .env loaded" -ForegroundColor Green
 
 Write-Host ""
-Write-Host "Starting Claude Code Remote (DEV MODE)" -ForegroundColor Cyan
+Write-Host "Starting Remote Code (DEV MODE)" -ForegroundColor Cyan
 Write-Host "  Backend:  http://localhost:$($env:CCR_PORT)" -ForegroundColor Green
 Write-Host "  Frontend: http://localhost:$(if ($env:CCR_VITE_PORT) { $env:CCR_VITE_PORT } else { '5173' })" -ForegroundColor Green
 Write-Host ""

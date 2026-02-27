@@ -2,7 +2,7 @@
 
 ## 개요
 
-Claude Code Remote 프로젝트를 외부에서 접속할 수 있도록 Cloudflare Tunnel을 사용합니다.
+Remote Code 프로젝트를 외부에서 접속할 수 있도록 Cloudflare Tunnel을 사용합니다.
 두 가지 방식을 지원합니다.
 
 | 방식 | 스크립트 | URL | 용도 |

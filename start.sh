@@ -29,7 +29,7 @@ echo "[OK] .env loaded"
 
 echo ""
 echo "==============================="
-echo "  Claude Code Remote"
+echo "  Remote Code"
 echo "==============================="
 echo ""
 echo "  URL: http://localhost:${CCR_PORT:-8080}"

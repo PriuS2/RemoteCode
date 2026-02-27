@@ -1,4 +1,4 @@
-# Claude Code Remote - Production Start Script
+# Remote Code - Production Start Script
 
 Set-Location $PSScriptRoot
 
@@ -30,7 +30,7 @@ Write-Host "[OK] .env loaded" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "===============================" -ForegroundColor Cyan
-Write-Host "  Claude Code Remote" -ForegroundColor Cyan
+Write-Host "  Remote Code" -ForegroundColor Cyan
 Write-Host "===============================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  URL: http://localhost:$($env:CCR_PORT)" -ForegroundColor Green

@@ -86,7 +86,7 @@ async def lifespan(app: FastAPI):
     logger.info("Server stopped")
 
 
-app = FastAPI(title="Claude Code Remote", lifespan=lifespan)
+app = FastAPI(title="Remote Code", lifespan=lifespan)
 app.state.limiter = limiter
 
 _origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]

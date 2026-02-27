@@ -1,4 +1,4 @@
-# Claude Code Remote
+# Remote Code
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
@@ -13,30 +13,74 @@ Manage Claude Code processes on your server and connect from anywhere via a WebS
 ## Screenshots
 
 ### Login
-![Login](docs/screenshots/login.png)
+Password-based authentication with JWT token issuance.
 
-### Terminal & Session Management
-| Terminal | Split View |
-|:--------:|:----------:|
-| ![Terminal](docs/screenshots/terminal.png) | ![Split View](docs/screenshots/terninal_split.png) |
+<img src="docs/screenshots/login.png" width="480" />
 
-### Session Context Menu
-![Sessions](docs/screenshots/sessions.png)
+### Web Terminal
+Full-featured terminal powered by xterm.js — supports input, output, resize, and clipboard.
 
-### File Explorer & Preview
-| File List | Code Preview |
-|:---------:|:------------:|
-| ![File Explorer](docs/screenshots/file_explorer.png) | ![Code Preview](docs/screenshots/file_explorer_preview_code.png) |
+<img src="docs/screenshots/terminal.png" width="720" />
 
-| Image Preview | Audio Player |
-|:-------------:|:------------:|
-| ![Image Preview](docs/screenshots/file_explorer_preview_image.png) | ![Audio Player](docs/screenshots/file_explorer_preview_audio.png) |
+### Split View
+Open multiple sessions side-by-side with Shift+Click. Each session runs an independent Claude Code process.
+
+<img src="docs/screenshots/terninal_split.png" width="720" />
+
+### New Session
+Create a new Claude Code session by specifying a work path. Optionally browse folders or auto-create directories.
+
+<img src="docs/screenshots/new_session.png" width="720" />
+
+### Folder Browser
+Visual folder selection with drive shortcuts and preset folders (Desktop, Documents, Downloads).
+
+<img src="docs/screenshots/folder-browser.png" width="720" />
+
+### Session Management
+Right-click context menu for session control — Open, Rename, Suspend, Kill, and Delete.
+
+<img src="docs/screenshots/sessions.png" width="720" />
+
+### File Explorer
+Browse server filesystem and insert file paths directly into the terminal. Right-click for options — preview, open, download, copy path.
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/file_explorer.png" width="560" /></td>
+    <td><img src="docs/screenshots/file_explorer_rightClick_Options.png" width="200" /></td>
+  </tr>
+</table>
+
+### File Upload
+Drag & drop files onto the explorer panel to upload to the current directory.
+
+<img src="docs/screenshots/file_explorer_upload.png" width="720" />
+
+### File Preview
+Built-in previews for code (syntax highlighted), images, and audio files — no need to download.
+
+<table>
+  <tr>
+    <td align="center"><strong>Code</strong></td>
+    <td align="center"><strong>Image</strong></td>
+    <td align="center"><strong>Audio</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/file_explorer_preview_code.png" width="280" /></td>
+    <td><img src="docs/screenshots/file_explorer_preview_image.png" width="280" /></td>
+    <td><img src="docs/screenshots/file_explorer_preview_audio.png" width="280" /></td>
+  </tr>
+</table>
 
 ## Features
 
 - **Web Terminal** — Full terminal powered by xterm.js (input, output, resize)
 - **Multi Session** — Create, switch, suspend, and resume multiple Claude Code sessions
-- **File Explorer** — Browse server filesystem, preview text files, upload files, insert paths
+- **Split View** — Open two sessions side-by-side with Shift+Click
+- **File Explorer** — Browse server filesystem, preview code/images/audio, insert file paths into terminal
+- **File Upload** — Upload files via drag & drop or upload button to any directory on the server
+- **File Download** — Download any file from the server directly to your local machine
 - **Folder Browser** — Working directory selection UI (drives, preset folders)
 - **Session Persistence** — PTY processes survive WebSocket disconnects, reconnect anytime
 - **Authentication** — Password login + JWT-based API/WebSocket auth
@@ -249,7 +293,10 @@ MIT
 
 - **웹 터미널** — xterm.js 기반 풀 터미널 (입력, 출력, 리사이즈)
 - **멀티 세션** — 여러 Claude Code 세션을 동시에 생성·전환·일시정지·재개
-- **파일 탐색기** — 서버 파일시스템 브라우징, 텍스트 미리보기, 파일 업로드, 경로 삽입
+- **분할 뷰** — Shift+Click으로 두 세션을 나란히 표시
+- **파일 탐색기** — 서버 파일시스템 브라우징, 코드/이미지/오디오 미리보기, 경로 삽입
+- **파일 업로드** — 드래그 앤 드롭 또는 업로드 버튼으로 서버에 파일 업로드
+- **파일 다운로드** — 서버의 파일을 로컬로 직접 다운로드
 - **폴더 브라우저** — 작업 디렉토리 선택 UI (드라이브, 프리셋 폴더)
 - **세션 유지** — WebSocket 끊김 시에도 PTY 프로세스 유지, 재연결 가능
 - **인증** — 패스워드 로그인 + JWT 토큰 기반 API/WebSocket 인증

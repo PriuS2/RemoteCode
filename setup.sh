@@ -6,7 +6,7 @@ cd "$SCRIPT_DIR"
 
 echo ""
 echo "==============================="
-echo "  Claude Code Remote - Setup"
+echo "  Remote Code - Setup"
 echo "==============================="
 echo ""
 

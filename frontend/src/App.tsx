@@ -268,7 +268,7 @@ export default function App() {
         const session = sessionsRef.current.find((s) => s.id === sessionId);
         const name = session?.name || "Session";
         playNotificationSound();
-        sendBrowserNotification("Claude Code Remote", `${name} - Task completed`);
+        sendBrowserNotification("Remote Code", `${name} - Task completed`);
       }
     },
     []
@@ -390,7 +390,7 @@ export default function App() {
           >
             {"\u2630"}
           </button>
-          <span className="app-title">Claude Code Remote</span>
+          <span className="app-title">Remote Code</span>
         </div>
         <div className="header-right" ref={settingsRef}>
           <button

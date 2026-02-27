@@ -42,7 +42,7 @@ trap cleanup EXIT INT TERM
 VITE_PORT="${CCR_VITE_PORT:-5173}"
 
 echo ""
-echo "Starting Claude Code Remote (DEV MODE)"
+echo "Starting Remote Code (DEV MODE)"
 echo "  Backend:  http://localhost:${CCR_PORT:-8080}"
 echo "  Frontend: http://localhost:${VITE_PORT}"
 echo ""

@@ -1,10 +1,10 @@
-# Claude Code Remote - Setup Script
+# Remote Code - Setup Script
 
 #Set-Location "C:\Users\STOICPC_QQQ\Documents\ClaudeCodeRemote"
 
 Write-Host ""
 Write-Host "===============================" -ForegroundColor Cyan
-Write-Host "  Claude Code Remote - Setup" -ForegroundColor Cyan
+Write-Host "  Remote Code - Setup" -ForegroundColor Cyan
 Write-Host "===============================" -ForegroundColor Cyan
 Write-Host ""
 

@@ -1,4 +1,4 @@
-# Claude Code Remote - Cloudflare Quick Tunnel
+# Remote Code - Cloudflare Quick Tunnel
 
 Set-Location $PSScriptRoot
 
