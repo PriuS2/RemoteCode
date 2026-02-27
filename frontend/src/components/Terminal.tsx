@@ -179,7 +179,7 @@ export default function Terminal({
       if (fitAddonRef.current) {
         try {
           fitAddonRef.current.fit();
-          termRef.current?.scrollToBottom();
+          // termRef.current?.scrollToBottom();
         } catch {
           // ignore
         }
@@ -293,7 +293,7 @@ export default function Terminal({
       termRef.current.options.fontSize = fontSize;
       try {
         fitAddonRef.current.fit();
-        termRef.current.scrollToBottom();
+        // termRef.current.scrollToBottom();
       } catch {
         // ignore
       }
@@ -312,7 +312,7 @@ export default function Terminal({
           try {
             fitAddonRef.current?.fit();
             termRef.current?.refresh(0, termRef.current.rows - 1);
-            termRef.current?.scrollToBottom();
+            // termRef.current?.scrollToBottom();
           } catch {
             // ignore
           }
@@ -544,7 +544,7 @@ export default function Terminal({
               try {
                 fitAddonRef.current?.fit();
                 termRef.current?.refresh(0, (termRef.current?.rows ?? 1) - 1);
-                termRef.current?.scrollToBottom();
+                // termRef.current?.scrollToBottom();
               } catch { /* ignore */ }
             }}
           />
