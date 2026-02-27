@@ -25,7 +25,7 @@ from .auth import (
     verify_password,
     verify_ws_token,
 )
-from .config import settings
+from .config import _INSECURE_JWT_SECRET, settings
 from .database import close_db, init_db, mark_all_active_as_suspended
 from .pty_manager import pty_manager
 from .session_manager import session_manager
@@ -71,6 +71,11 @@ limiter = Limiter(key_func=get_real_ip)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if settings.jwt_secret == _INSECURE_JWT_SECRET:
+        raise RuntimeError(
+            "JWT secret is still the default value. "
+            "Set CCR_JWT_SECRET environment variable to a secure random string."
+        )
     await init_db()
     await mark_all_active_as_suspended()
     logger.info("Server started")
@@ -84,10 +89,18 @@ app = FastAPI(title="Claude Code Remote", lifespan=lifespan)
 app.state.limiter = limiter
 
 _origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
+_allow_credentials = True
+if "*" in _origins:
+    logger.warning(
+        "CORS allowed_origins is set to '*'. "
+        "Disabling allow_credentials for security. "
+        "Set CCR_ALLOWED_ORIGINS to specific origins to enable credentials."
+    )
+    _allow_credentials = False
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
-    allow_credentials=True,
+    allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )

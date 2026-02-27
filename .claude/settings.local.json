@@ -35,7 +35,9 @@
       "Bash(powershell.exe:*)",
       "Bash(\"$CLOUDFLARED\":*)",
       "Bash(\"$CLOUDFLARED\" tunnel:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

@@ -4,6 +4,6 @@ pywinpty==2.0.14
 websockets==14.1
 pydantic-settings==2.7.1
 aiosqlite==0.20.0
-python-jose[cryptography]==3.3.0
+PyJWT==2.10.1
 python-multipart==0.0.22
 slowapi==0.1.9

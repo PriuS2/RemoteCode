@@ -3,9 +3,10 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import jwt
 from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+from jwt.exceptions import InvalidTokenError
 
 from .config import settings
 
@@ -32,7 +33,7 @@ def verify_token(token: str) -> bool:
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
         return payload.get("sub") == "user"
-    except JWTError:
+    except InvalidTokenError:
         return False
 
 
