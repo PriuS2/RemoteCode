@@ -73,7 +73,7 @@ export function useWebSocket({
         setStatus("disconnected");
         onCloseRef.current?.();
 
-        // 4001 = 인증 실패, 재연결하지 않음
+        // 4001 = auth failed, do not reconnect
         if (autoReconnect && event.code !== 4001) {
           const delay = Math.min(
             BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttemptRef.current),

@@ -354,32 +354,32 @@ export default function FileExplorer({
 
     if (entry.type === "folder") {
       const items: ContextMenuEntry[] = [
-        { label: "열기", icon: <CtxFolderOpenIcon />, onClick: () => { handleNavigate(entry.name); closeContextMenu(); } },
+        { label: "Open", icon: <CtxFolderOpenIcon />, onClick: () => { handleNavigate(entry.name); closeContextMenu(); } },
       ];
       if (isLocal) {
-        items.push({ label: "탐색기에서 열기", icon: <CtxOpenExternalIcon />, onClick: () => { handleOpenNative(fullPath); closeContextMenu(); } });
+        items.push({ label: "Open in Explorer", icon: <CtxOpenExternalIcon />, onClick: () => { handleOpenNative(fullPath); closeContextMenu(); } });
       }
       items.push("separator");
-      items.push({ label: "경로 삽입 (@)", icon: <CtxAtIcon />, onClick: () => { handleInsertEntry(entry); closeContextMenu(); } });
-      items.push({ label: "이름 복사", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(entry.name); closeContextMenu(); } });
-      items.push({ label: "전체 경로 복사", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(fullPath); closeContextMenu(); } });
+      items.push({ label: "Insert Path (@)", icon: <CtxAtIcon />, onClick: () => { handleInsertEntry(entry); closeContextMenu(); } });
+      items.push({ label: "Copy Name", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(entry.name); closeContextMenu(); } });
+      items.push({ label: "Copy Full Path", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(fullPath); closeContextMenu(); } });
       return items;
     }
 
     // File menu
     const items: ContextMenuEntry[] = [];
     if (canPreview(entry)) {
-      items.push({ label: "열기 (프리뷰)", icon: <CtxPreviewIcon />, onClick: () => { handleFileClick(entry); closeContextMenu(); } });
+      items.push({ label: "Open (Preview)", icon: <CtxPreviewIcon />, onClick: () => { handleFileClick(entry); closeContextMenu(); } });
     }
     if (isLocal) {
-      items.push({ label: "열기 (파일)", icon: <CtxOpenFileIcon />, onClick: () => { handleOpenNative(fullPath); closeContextMenu(); } });
-      items.push({ label: "경로 열기", icon: <CtxOpenExternalIcon />, onClick: () => { handleOpenNative(currentPath); closeContextMenu(); } });
+      items.push({ label: "Open (File)", icon: <CtxOpenFileIcon />, onClick: () => { handleOpenNative(fullPath); closeContextMenu(); } });
+      items.push({ label: "Open Path", icon: <CtxOpenExternalIcon />, onClick: () => { handleOpenNative(currentPath); closeContextMenu(); } });
     }
-    items.push({ label: "다운로드", icon: <CtxDownloadIcon />, onClick: () => { downloadFile(fullPath, entry.name); closeContextMenu(); } });
+    items.push({ label: "Download", icon: <CtxDownloadIcon />, onClick: () => { downloadFile(fullPath, entry.name); closeContextMenu(); } });
     items.push("separator");
-    items.push({ label: "경로 삽입 (@)", icon: <CtxAtIcon />, onClick: () => { handleInsertEntry(entry); closeContextMenu(); } });
-    items.push({ label: "이름 복사", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(entry.name); closeContextMenu(); } });
-    items.push({ label: "전체 경로 복사", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(fullPath); closeContextMenu(); } });
+    items.push({ label: "Insert Path (@)", icon: <CtxAtIcon />, onClick: () => { handleInsertEntry(entry); closeContextMenu(); } });
+    items.push({ label: "Copy Name", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(entry.name); closeContextMenu(); } });
+    items.push({ label: "Copy Full Path", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(fullPath); closeContextMenu(); } });
     return items;
   }, [contextMenu, currentPath, isLocal, handleOpenNative, downloadFile, closeContextMenu, canPreview]);
 
