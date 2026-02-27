@@ -634,7 +634,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
       )}
 
       {/* Tab content */}
-      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: activeTab === "log" ? "hidden" : "auto", minHeight: 0 }}>
         {activeTab === "status" && status && (
           <StatusTab
             status={status}
@@ -989,103 +989,107 @@ function LogTab({ commits, graphLayout, hasMore, onLoadMore, selectedCommit, onS
   const maxLane = graphLayout?.maxLane ?? 0;
   const graphW = (maxLane + 1) * LANE_W + 8;
 
+  const showDetail = !isMobile && commitDetail && selectedCommit;
+
   return (
-    <div>
-      {/* Commit list */}
-      {commits.map((c, i) => {
-        const node = graphLayout?.nodes[i];
-        const isSelected = selectedCommit === c.hash;
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Top: Commit list (scrollable) */}
+      <div style={{ flex: showDetail ? "0 0 50%" : 1, overflowY: "auto", minHeight: 0 }}>
+        {commits.map((c, i) => {
+          const node = graphLayout?.nodes[i];
+          const isSelected = selectedCommit === c.hash;
 
-        return (
-          <div
-            key={c.hash}
-            onClick={() => onSelectCommit(isSelected ? null : c.hash)}
-            style={{
-              display: "flex", alignItems: "center", height: ROW_H, cursor: "pointer",
-              background: isSelected ? "rgba(137,180,250,0.1)" : "transparent",
-              borderBottom: "1px solid #1e1e2e",
-            }}
-            onMouseEnter={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = "rgba(69,71,90,0.3)"; }}
-            onMouseLeave={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-          >
-            {/* Graph column */}
-            {!isMobile && (
-              <svg width={graphW} height={ROW_H} style={{ flexShrink: 0 }}>
-                {/* Lines from this row */}
-                {graphLayout?.lines.filter((l) => l.fromRow === i).map((l, li) => {
-                  const x1 = l.fromLane * LANE_W + LANE_W / 2 + 4;
-                  const x2 = l.toLane * LANE_W + LANE_W / 2 + 4;
-                  return (
-                    <line key={li} x1={x1} y1={ROW_H / 2} x2={x2} y2={ROW_H} stroke={l.color} strokeWidth={1.5} opacity={0.6} />
-                  );
-                })}
-                {/* Continuation lines into this row */}
-                {graphLayout?.lines.filter((l) => l.toRow === i && l.fromLane === l.toLane).map((l, li) => {
-                  const x = l.fromLane * LANE_W + LANE_W / 2 + 4;
-                  return (
-                    <line key={`cont-${li}`} x1={x} y1={0} x2={x} y2={ROW_H / 2} stroke={l.color} strokeWidth={1.5} opacity={0.6} />
-                  );
-                })}
-                {/* Node circle */}
-                {node && (
-                  <circle cx={node.lane * LANE_W + LANE_W / 2 + 4} cy={ROW_H / 2} r={NODE_R} fill={node.color} />
-                )}
-              </svg>
-            )}
-            {/* Mobile: color dot only */}
-            {isMobile && node && (
-              <div style={{ width: 16, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <div style={{ width: 8, height: 8, borderRadius: 4, background: node.color }} />
-              </div>
-            )}
-            {/* Commit info */}
-            <div style={{ flex: 1, minWidth: 0, padding: "0 6px", display: "flex", alignItems: "center", gap: 6 }}>
-              {/* Ref badges */}
-              {c.refs.length > 0 && c.refs.map((ref, ri) => (
-                <span key={ri} style={{
-                  fontSize: 9, padding: "1px 4px", borderRadius: 3,
-                  background: "rgba(137,180,250,0.2)", color: "#89b4fa",
-                  whiteSpace: "nowrap", flexShrink: 0,
+          return (
+            <div
+              key={c.hash}
+              onClick={() => onSelectCommit(isSelected ? null : c.hash)}
+              style={{
+                display: "flex", alignItems: "center", height: ROW_H, cursor: "pointer",
+                background: isSelected ? "rgba(137,180,250,0.1)" : "transparent",
+                borderBottom: "1px solid #1e1e2e",
+              }}
+              onMouseEnter={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = "rgba(69,71,90,0.3)"; }}
+              onMouseLeave={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+            >
+              {/* Graph column */}
+              {!isMobile && (
+                <svg width={graphW} height={ROW_H} style={{ flexShrink: 0 }}>
+                  {/* Lines from this row */}
+                  {graphLayout?.lines.filter((l) => l.fromRow === i).map((l, li) => {
+                    const x1 = l.fromLane * LANE_W + LANE_W / 2 + 4;
+                    const x2 = l.toLane * LANE_W + LANE_W / 2 + 4;
+                    return (
+                      <line key={li} x1={x1} y1={ROW_H / 2} x2={x2} y2={ROW_H} stroke={l.color} strokeWidth={1.5} opacity={0.6} />
+                    );
+                  })}
+                  {/* Incoming lines into this row (continuation + diagonal arrivals) */}
+                  {graphLayout?.lines.filter((l) => l.toRow === i).map((l, li) => {
+                    const x = l.toLane * LANE_W + LANE_W / 2 + 4;
+                    return (
+                      <line key={`cont-${li}`} x1={x} y1={0} x2={x} y2={ROW_H / 2} stroke={l.color} strokeWidth={1.5} opacity={0.6} />
+                    );
+                  })}
+                  {/* Node circle */}
+                  {node && (
+                    <circle cx={node.lane * LANE_W + LANE_W / 2 + 4} cy={ROW_H / 2} r={NODE_R} fill={node.color} />
+                  )}
+                </svg>
+              )}
+              {/* Mobile: color dot only */}
+              {isMobile && node && (
+                <div style={{ width: 16, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 4, background: node.color }} />
+                </div>
+              )}
+              {/* Commit info */}
+              <div style={{ flex: 1, minWidth: 0, padding: "0 6px", display: "flex", alignItems: "center", gap: 6 }}>
+                {/* Ref badges */}
+                {c.refs.length > 0 && c.refs.map((ref, ri) => (
+                  <span key={ri} style={{
+                    fontSize: 9, padding: "1px 4px", borderRadius: 3,
+                    background: "rgba(137,180,250,0.2)", color: "#89b4fa",
+                    whiteSpace: "nowrap", flexShrink: 0,
+                  }}>
+                    {ref.replace("HEAD -> ", "")}
+                  </span>
+                ))}
+                {/* Message */}
+                <span style={{
+                  fontSize: 11, color: "#cdd6f4", overflow: "hidden",
+                  textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0,
                 }}>
-                  {ref.replace("HEAD -> ", "")}
+                  {c.message}
                 </span>
-              ))}
-              {/* Message */}
-              <span style={{
-                fontSize: 11, color: "#cdd6f4", overflow: "hidden",
-                textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0,
-              }}>
-                {c.message}
-              </span>
-              {/* Author + date + hash */}
-              <span style={{ fontSize: 10, color: "#6c7086", whiteSpace: "nowrap", flexShrink: 0 }}>
-                {!isMobile && <>{c.author_name} &middot; </>}
-                {relativeTime(c.date)}
-                {!isMobile && <> &middot; <span style={{ color: "#585b70" }}>{c.short_hash}</span></>}
-              </span>
+                {/* Author + date + hash */}
+                <span style={{ fontSize: 10, color: "#6c7086", whiteSpace: "nowrap", flexShrink: 0 }}>
+                  {!isMobile && <>{c.author_name} &middot; </>}
+                  {relativeTime(c.date)}
+                  {!isMobile && <> &middot; <span style={{ color: "#585b70" }}>{c.short_hash}</span></>}
+                </span>
+              </div>
             </div>
+          );
+        })}
+
+        {/* Load more */}
+        {hasMore && (
+          <div style={{ padding: 8, textAlign: "center" }}>
+            <button
+              onClick={onLoadMore}
+              style={{
+                background: "#313244", border: "none", color: "#cdd6f4",
+                fontSize: 11, padding: "4px 12px", borderRadius: 4, cursor: "pointer",
+              }}
+            >
+              Load more...
+            </button>
           </div>
-        );
-      })}
+        )}
+      </div>
 
-      {/* Load more */}
-      {hasMore && (
-        <div style={{ padding: 8, textAlign: "center" }}>
-          <button
-            onClick={onLoadMore}
-            style={{
-              background: "#313244", border: "none", color: "#cdd6f4",
-              fontSize: 11, padding: "4px 12px", borderRadius: 4, cursor: "pointer",
-            }}
-          >
-            Load more...
-          </button>
-        </div>
-      )}
-
-      {/* Commit detail (desktop) */}
-      {!isMobile && commitDetail && selectedCommit && (
-        <div style={{ borderTop: "1px solid #45475a" }}>
+      {/* Bottom: Commit detail (scrollable, fixed to bottom half) */}
+      {showDetail && (
+        <div style={{ flex: "0 0 50%", borderTop: "2px solid #45475a", overflowY: "auto", minHeight: 0 }}>
           <CommitDetailView detail={commitDetail} commitDiffFile={commitDiffFile} commitDiff={commitDiff} onSelectFile={onSelectCommitDiffFile} />
         </div>
       )}

@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +14,22 @@ class GitError(Exception):
     def __init__(self, message: str, returncode: int = 1):
         super().__init__(message)
         self.returncode = returncode
+
+
+def _run_git_sync(cmd: list[str], work_path: str, env: dict, timeout: int) -> tuple[bytes, bytes, int]:
+    """Run git command synchronously (called via asyncio.to_thread)."""
+    try:
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=work_path,
+            env=env,
+            timeout=timeout,
+        )
+        return proc.stdout, proc.stderr, proc.returncode
+    except subprocess.TimeoutExpired:
+        raise TimeoutError()
 
 
 async def run_git(work_path: str, args: list[str], timeout: int = 30) -> str:
@@ -38,28 +55,17 @@ async def run_git(work_path: str, args: list[str], timeout: int = 30) -> str:
     cmd = ["git"] + args
 
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=work_path,
-            env=env,
+        stdout, stderr, returncode = await asyncio.to_thread(
+            _run_git_sync, cmd, work_path, env, timeout
         )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=timeout
-        )
-    except asyncio.TimeoutError:
-        try:
-            proc.kill()
-        except ProcessLookupError:
-            pass
+    except TimeoutError:
         raise GitError(f"Git command timed out after {timeout}s: git {' '.join(args)}")
     except FileNotFoundError:
         raise GitError("Git is not installed or not found in PATH")
 
-    if proc.returncode != 0:
+    if returncode != 0:
         err_msg = stderr.decode("utf-8", errors="replace").strip()
-        raise GitError(err_msg or f"git {args[0]} failed", proc.returncode)
+        raise GitError(err_msg or f"git {args[0]} failed", returncode)
 
     return stdout.decode("utf-8", errors="replace")
 
