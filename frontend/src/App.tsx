@@ -89,6 +89,7 @@ export default function App() {
         localStorage.setItem("sidebarWidth", String(w));
         return w;
       });
+      window.dispatchEvent(new Event("panel-resize-end"));
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
@@ -153,6 +154,7 @@ export default function App() {
       document.body.style.userSelect = "";
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      window.dispatchEvent(new Event("panel-resize-end"));
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);

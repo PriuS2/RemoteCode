@@ -352,6 +352,23 @@ export default function Terminal({
     };
   }, [visible]);
 
+  // Refit terminal when any panel resize drag ends
+  useEffect(() => {
+    const handleResizeEnd = () => {
+      if (!visible || !termRef.current || !fitAddonRef.current) return;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          try {
+            fitAddonRef.current?.fit();
+            termRef.current?.refresh(0, (termRef.current?.rows ?? 1) - 1);
+          } catch { /* ignore */ }
+        });
+      });
+    };
+    window.addEventListener("panel-resize-end", handleResizeEnd);
+    return () => window.removeEventListener("panel-resize-end", handleResizeEnd);
+  }, [visible]);
+
   // Focus management
   useEffect(() => {
     if (visible && isFocused && termRef.current) {
@@ -406,6 +423,7 @@ export default function Terminal({
         localStorage.setItem("explorerWidth", String(w));
         return w;
       });
+      window.dispatchEvent(new Event("panel-resize-end"));
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
@@ -437,6 +455,7 @@ export default function Terminal({
         localStorage.setItem("gitPanelWidth", String(w));
         return w;
       });
+      window.dispatchEvent(new Event("panel-resize-end"));
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
