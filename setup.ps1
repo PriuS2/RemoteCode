@@ -8,10 +8,40 @@ Write-Host "  Claude Code Remote - Setup" -ForegroundColor Cyan
 Write-Host "===============================" -ForegroundColor Cyan
 Write-Host ""
 
+# 1. Create default .env if not exists
+if (Test-Path ".\.env") {
+    Write-Host "[OK] .env already exists" -ForegroundColor Green
+} else {
+    Write-Host "[1/4] Creating default .env..." -ForegroundColor Yellow
+    @"
+CCR_HOST=0.0.0.0
+CCR_PORT=8080
+CCR_CLAUDE_COMMAND=claude
+CCR_PASSWORD=changeme
+CCR_JWT_SECRET=change-this-secret-key
+CCR_JWT_EXPIRE_HOURS=72
+CCR_DB_PATH=sessions.db
+# CCR_ALLOWED_ORIGINS=https://ccr.yourdomain.com,http://localhost:8080
+
+# Cloudflare Tunnel (Named Tunnel)
+# CCR_VITE_PORT=5173
+# CCR_DOMAIN=example.com
+
+# Claude Code (Bedrock)
+# CLAUDE_CODE_USE_BEDROCK=1
+# AWS_REGION=us-west-2
+# AWS_ACCESS_KEY_ID=your-access-key
+# AWS_SECRET_ACCESS_KEY=your-secret-key
+# ANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-20250514-v1:0
+"@ | Set-Content ".\.env" -Encoding UTF8
+    Write-Host "[OK] .env created with defaults" -ForegroundColor Yellow
+}
+
+# 2. Python venv
 if (Test-Path ".\.venv\Scripts\python.exe") {
     Write-Host "[OK] Python venv already exists" -ForegroundColor Green
 } else {
-    Write-Host "[1/3] Creating Python virtual environment..." -ForegroundColor Yellow
+    Write-Host "[2/4] Creating Python virtual environment..." -ForegroundColor Yellow
     python -m venv ".\.venv"
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERROR] Failed to create venv. Is Python installed?" -ForegroundColor Red
@@ -24,8 +54,9 @@ if (Test-Path ".\.venv\Scripts\python.exe") {
 & ".\.venv\Scripts\Activate.ps1"
 Write-Host "[OK] venv activated" -ForegroundColor Green
 
+# 3. Backend dependencies
 Write-Host ""
-Write-Host "[2/3] Installing backend dependencies..." -ForegroundColor Yellow
+Write-Host "[3/4] Installing backend dependencies..." -ForegroundColor Yellow
 pip install -r ".\backend\requirements.txt"
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[ERROR] pip install failed" -ForegroundColor Red
@@ -34,8 +65,9 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "[OK] Backend dependencies installed" -ForegroundColor Green
 
+# 4. Frontend dependencies
 Write-Host ""
-Write-Host "[3/3] Installing frontend dependencies..." -ForegroundColor Yellow
+Write-Host "[4/4] Installing frontend dependencies..." -ForegroundColor Yellow
 Set-Location ".\frontend"
 npm install
 if ($LASTEXITCODE -ne 0) {

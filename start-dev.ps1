@@ -9,26 +9,11 @@ if (-not (Test-Path ".\.venv\Scripts\python.exe")) {
 }
 & ".\.venv\Scripts\Activate.ps1"
 
-# Create default .env if not exists
+# Check .env exists
 if (-not (Test-Path ".\.env")) {
-    @"
-CCR_HOST=0.0.0.0
-CCR_PORT=8080
-CCR_CLAUDE_COMMAND=claude
-CCR_PASSWORD=changeme
-CCR_JWT_SECRET=change-this-secret-key
-CCR_JWT_EXPIRE_HOURS=72
-CCR_DB_PATH=sessions.db
-# CCR_ALLOWED_ORIGINS=https://ccr.yourdomain.com,http://localhost:8080
-
-# Claude Code (Bedrock)
-# CLAUDE_CODE_USE_BEDROCK=1
-# AWS_REGION=us-west-2
-# AWS_ACCESS_KEY_ID=your-access-key
-# AWS_SECRET_ACCESS_KEY=your-secret-key
-# ANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-20250514-v1:0
-"@ | Set-Content ".\.env" -Encoding UTF8
-    Write-Host "[OK] .env created with defaults" -ForegroundColor Yellow
+    Write-Host "[ERROR] .env not found. Run setup.bat first." -ForegroundColor Red
+    Read-Host "Press Enter to exit"
+    exit 1
 }
 
 # Load .env
