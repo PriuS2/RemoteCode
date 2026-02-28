@@ -28,8 +28,7 @@ CCR_DB_PATH=sessions.db
 # CCR_DOMAIN=example.com
 
 # ============================================================
-# Claude Code Provider 설정
-# 아래 3가지 중 하나만 주석 해제하여 사용하세요.
+# Claude Code Provider
 # ============================================================
 
 # --- Option 1: AWS Bedrock ---
