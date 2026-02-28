@@ -4,88 +4,114 @@
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Node.js 18+](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
 
-> **[한국어](#한국어)** | English
 
 A self-hosted web application that lets you use [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI remotely from your browser.
 
 Manage Claude Code processes on your server and connect from anywhere via a WebSocket-based terminal. Optionally use Cloudflare Tunnel for secure external access.
 
-## Screenshots
 
-### Login
-Password-based authentication with JWT token issuance.
+  #### [Session management / switching]
+  ![Split View](docs/screenshots/terninal_split.png)
 
-<img src="docs/screenshots/login.png" width="480" />
 
-### Web Terminal
-Full-featured terminal powered by xterm.js — supports input, output, resize, and clipboard.
+  #### [File explorer]
+  | explorer | Code | Image | Audio |
+  |------|------|-------|-------|
+  | ![File Explorer](docs/screenshots/file_explorer.png) | ![Code](docs/screenshots/file_explorer_preview_code.png) | ![Image](docs/screenshots/file_explorer_preview_image.png) | ![Audio](docs/screenshots/file_explorer_preview_audio.png) |
+  
+  #### [Git support]
+  | Changes | History |
+  |------|-------|
+  | ![Changes](docs/screenshots/git_panel.png) | ![History](docs/screenshots/git_panel_history.png)
 
-<img src="docs/screenshots/terminal.png" width="720" />
 
-### Split View
-Open multiple sessions side-by-side with Shift+Click. Each session runs an independent Claude Code process.
-
-<img src="docs/screenshots/terninal_split.png" width="720" />
-
-### New Session
-Create a new Claude Code session by specifying a work path. Optionally browse folders or auto-create directories.
-
-<img src="docs/screenshots/new_session.png" width="720" />
-
-### Folder Browser
-Visual folder selection with drive shortcuts and preset folders (Desktop, Documents, Downloads).
-
-<img src="docs/screenshots/folder-browser.png" width="720" />
-
-### Session Management
-Right-click context menu for session control — Open, Rename, Suspend, Kill, and Delete.
-
-<img src="docs/screenshots/sessions.png" width="720" />
-
-### File Explorer
-Browse server filesystem and insert file paths directly into the terminal. Right-click for options — preview, open, download, copy path.
-
-<table>
-  <tr>
-    <td><img src="docs/screenshots/file_explorer.png" width="560" /></td>
-    <td><img src="docs/screenshots/file_explorer_rightClick_Options.png" width="200" /></td>
-  </tr>
-</table>
-
-### File Upload
-Drag & drop files onto the explorer panel to upload to the current directory.
-
-<img src="docs/screenshots/file_explorer_upload.png" width="720" />
-
-### File Preview
-Built-in previews for code (syntax highlighted), images, and audio files — no need to download.
-
-<table>
-  <tr>
-    <td align="center"><strong>Code</strong></td>
-    <td align="center"><strong>Image</strong></td>
-    <td align="center"><strong>Audio</strong></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/file_explorer_preview_code.png" width="280" /></td>
-    <td><img src="docs/screenshots/file_explorer_preview_image.png" width="280" /></td>
-    <td><img src="docs/screenshots/file_explorer_preview_audio.png" width="280" /></td>
-  </tr>
-</table>
 
 ## Features
 
-- **Web Terminal** — Full terminal powered by xterm.js (input, output, resize)
-- **Multi Session** — Create, switch, suspend, and resume multiple Claude Code sessions
-- **Split View** — Open two sessions side-by-side with Shift+Click
-- **File Explorer** — Browse server filesystem, preview code/images/audio, insert file paths into terminal
-- **File Upload** — Upload files via drag & drop or upload button to any directory on the server
-- **File Download** — Download any file from the server directly to your local machine
-- **Folder Browser** — Working directory selection UI (drives, preset folders)
-- **Session Persistence** — PTY processes survive WebSocket disconnects, reconnect anytime
-- **Authentication** — Password login + JWT-based API/WebSocket auth
-- **Rate Limiting** — Brute-force protection on login API
-- **Cross-Platform** — Windows, Linux, macOS support
+- **Web Terminal** — Full terminal powered by xterm.js (input, output, resize). Supports real-time interaction with Claude Code CLI processes.
+
+  <details>
+  <summary>Click to view screenshot</summary>
+
+  ![Web Terminal](docs/screenshots/terminal.png)
+
+  </details>
+
+- **Multi Session** — Create, switch, suspend, and resume multiple independent Claude Code sessions. Each session runs as a separate PTY process.
+
+- **Split View** — Open two sessions side-by-side using Shift+Click for parallel workflows or comparison tasks.
+
+  <details>
+  <summary>Click to view screenshot</summary>
+
+  ![Split View](docs/screenshots/terninal_split.png)
+
+  </details>
+
+- **File Explorer** — Browse server filesystem with full file operations: preview code (syntax highlighted), images, and audio files directly in browser; insert file paths into terminal; right-click context menu for preview, open, download, or copy path options.
+
+  <details>
+  <summary>Click to view screenshot</summary>
+
+  ![File Explorer](docs/screenshots/file_explorer.png)
+
+  | Code | Image | Audio |
+  |------|-------|-------|
+  | ![Code](docs/screenshots/file_explorer_preview_code.png) | ![Image](docs/screenshots/file_explorer_preview_image.png) | ![Audio](docs/screenshots/file_explorer_preview_audio.png) |
+  
+
+  </details>
+
+- **File Upload/Download** — Drag & drop files to upload to any directory on the server; download files from server directly to your local machine.
+
+  <details>
+  <summary>Click to view screenshot</summary>
+
+  ![File Upload](docs/screenshots/file_explorer_upload.png)
+
+  </details>
+
+- **Folder Browser** — Working directory selection with drive shortcuts and preset folders (Desktop, Documents, Downloads). Create new directories via UI.
+
+  <details>
+  <summary>Click to view screenshot</summary>
+
+  ![Folder Browser](docs/screenshots/folder-browser.png)
+
+  </details>
+
+- **Session Persistence** — PTY processes survive WebSocket disconnects and can be resumed anytime without losing state.
+
+- **Git Panel** — Visualize Git commit history with ASCII-style commit graph, branch/tag navigation, and commit details view. View file diffs directly in browser; interactively select branches to switch context for diff viewing.
+
+  <details>
+  <summary>Click to view screenshot</summary>
+
+  | Changes | History |
+  |------|-------|
+  | ![Changes](docs/screenshots/git_panel.png) | ![History](docs/screenshots/git_panel_history.png)
+
+  </details>
+
+- **Authentication & Security** — Password-based login with JWT token issuance; rate limiting on login API for brute-force protection.
+
+  <details>
+  <summary>Click to view screenshot</summary>
+
+  ![Login](docs/screenshots/login.png)
+
+  </details>
+
+- **Cross-Platform** — Works on Windows, Linux, and macOS with automatic PTY backend detection (pywinpty/pexpect).
+
+- **New Session** — Create a new Claude Code session by specifying a work path. Optionally browse folders or auto-create directories.
+
+  <details>
+  <summary>Click to view screenshot</summary>
+
+  ![New Session](docs/screenshots/new_session.png)
+
+  </details>
 
 ## Architecture
 
@@ -221,6 +247,7 @@ make tunnel
 │   ├── pty_manager.py        # Cross-platform PTY management
 │   ├── session_manager.py    # Session lifecycle
 │   ├── websocket.py          # WebSocket ↔ PTY relay
+│   ├── git_utils.py          # Git operations (log, branch, diff)
 │   ├── auth.py               # JWT authentication
 │   ├── config.py             # Environment variable config
 │   ├── database.py           # SQLite session store
@@ -232,13 +259,15 @@ make tunnel
 │   │   │   ├── Terminal.tsx       # xterm.js terminal
 │   │   │   ├── SessionList.tsx    # Session list sidebar
 │   │   │   ├── FileExplorer.tsx   # File explorer
+│   │   │   ├── GitPanel.tsx       # Git commit graph & history view
 │   │   │   ├── FolderBrowser.tsx  # Folder selection dialog
 │   │   │   ├── NewSession.tsx     # Session creation modal
 │   │   │   └── Login.tsx          # Login screen
 │   │   └── utils/
 │   │       ├── fileIcons.tsx      # File icons
 │   │       ├── pathUtils.ts       # Path utilities
-│   │       └── notify.ts          # Browser notifications
+│   │       ├── notify.ts          # Browser notifications
+│   │       └── gitGraph.ts        # Commit graph rendering utility
 │   ├── package.json
 │   └── vite.config.ts
 ├── setup.ps1 / setup.sh
@@ -281,33 +310,3 @@ make tunnel
 
 MIT
 
----
-
-# 한국어
-
-브라우저에서 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI를 원격으로 사용할 수 있는 셀프 호스팅 웹 애플리케이션입니다.
-
-서버에서 Claude Code 프로세스를 관리하고, WebSocket 기반 터미널을 통해 어디서든 접속할 수 있습니다. Cloudflare Tunnel을 연결하면 외부 네트워크에서도 안전하게 사용 가능합니다.
-
-## 주요 기능
-
-- **웹 터미널** — xterm.js 기반 풀 터미널 (입력, 출력, 리사이즈)
-- **멀티 세션** — 여러 Claude Code 세션을 동시에 생성·전환·일시정지·재개
-- **분할 뷰** — Shift+Click으로 두 세션을 나란히 표시
-- **파일 탐색기** — 서버 파일시스템 브라우징, 코드/이미지/오디오 미리보기, 경로 삽입
-- **파일 업로드** — 드래그 앤 드롭 또는 업로드 버튼으로 서버에 파일 업로드
-- **파일 다운로드** — 서버의 파일을 로컬로 직접 다운로드
-- **폴더 브라우저** — 작업 디렉토리 선택 UI (드라이브, 프리셋 폴더)
-- **세션 유지** — WebSocket 끊김 시에도 PTY 프로세스 유지, 재연결 가능
-- **인증** — 패스워드 로그인 + JWT 토큰 기반 API/WebSocket 인증
-- **Rate Limiting** — 로그인 API 브루트포스 방지
-- **크로스 플랫폼** — Windows, Linux, macOS 지원
-
-## 보안 참고사항
-
-- `CCR_JWT_SECRET`을 반드시 강력한 랜덤 문자열로 변경하세요
-- `CCR_PASSWORD`를 기본값에서 변경하세요
-- 프로덕션에서는 `CCR_ALLOWED_ORIGINS`를 실제 도메인으로 제한하세요
-- HTTPS 환경(Cloudflare Tunnel 등)에서 사용을 권장합니다
-
-> 설치 및 사용법은 위 영문 섹션을 참고하세요. (Setup and usage instructions are in the English section above.)
