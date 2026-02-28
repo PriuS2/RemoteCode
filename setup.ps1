@@ -27,12 +27,26 @@ CCR_DB_PATH=sessions.db
 # CCR_VITE_PORT=5173
 # CCR_DOMAIN=example.com
 
-# Claude Code (Bedrock)
+# ============================================================
+# Claude Code Provider 설정
+# 아래 3가지 중 하나만 주석 해제하여 사용하세요.
+# ============================================================
+
+# --- Option 1: AWS Bedrock ---
 # CLAUDE_CODE_USE_BEDROCK=1
 # AWS_REGION=us-west-2
 # AWS_ACCESS_KEY_ID=your-access-key
 # AWS_SECRET_ACCESS_KEY=your-secret-key
 # ANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-20250514-v1:0
+
+# --- Option 2: Anthropic API (Direct) ---
+# ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxxxxxx
+# ANTHROPIC_MODEL=claude-sonnet-4-20250514
+
+# --- Option 3: LM Studio / OpenAI-compatible API ---
+# ANTHROPIC_BASE_URL=http://localhost:1234/v1
+# ANTHROPIC_API_KEY=lm-studio
+# ANTHROPIC_MODEL=your-model-name
 "@ | Set-Content ".\.env" -Encoding UTF8
     Write-Host "[OK] .env created with defaults" -ForegroundColor Yellow
 }
