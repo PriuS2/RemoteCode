@@ -52,7 +52,7 @@ Authentication form.
 
 ### SessionList.tsx
 
-Session list with context menu support.
+Session list with context menu support and drag-and-drop reordering.
 
 **Props:**
 - `sessions: Session[]`
@@ -63,12 +63,18 @@ Session list with context menu support.
 - `onResume(id)`: Resume handler
 - `onNewSession()`: New session handler
 - `onDelete/ Rename/ Suspend/ Terminate`: Action handlers
+- `onReorder?(orderedIds: string[])`: Reorder handler (optional)
 
 **Features:**
 - Status colors (active: green, suspended: yellow, closed: gray)
 - Activity indicators (spinner for processing, pulse for done)
 - Context menu on right-click / long-press
 - Shift+Click hint for split view
+- **Drag-and-drop reordering**: Drag sessions to reorder them in the sidebar
+  - Draggable when `onReorder` prop is provided
+  - Visual feedback during drag (semi-transparent item)
+  - Drop target highlighted with blue border
+  - Order is persisted to database via API
 
 ### Terminal.tsx
 
@@ -256,6 +262,10 @@ export interface Session {
   created_at: string;
   last_accessed_at: string;
   status: "active" | "suspended" | "closed";
+  cli_type: "claude" | "opencode" | "terminal" | "custom";
+  custom_command: string | null;
+  custom_exit_command: string | null;
+  order_index: number;
 }
 
 export type ActivityState = "idle" | "processing" | "done";
