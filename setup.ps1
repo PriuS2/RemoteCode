@@ -46,6 +46,13 @@ CCR_DB_PATH=sessions.db
 # ANTHROPIC_BASE_URL=http://localhost:1234/v1
 # ANTHROPIC_API_KEY=lm-studio
 # ANTHROPIC_MODEL=your-model-name
+
+# --- Option 4: OpenRouter ---
+# ANTHROPIC_API_KEY=""
+# ANTHROPIC_BASE_URL=https://openrouter.ai/api
+# OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxx
+# ANTHROPIC_AUTH_TOKEN=sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxx
+# ANTHROPIC_MODEL=moonshotai/kimi-k2.5
 "@ | Set-Content ".\.env" -Encoding UTF8
     Write-Host "[OK] .env created with defaults" -ForegroundColor Yellow
 }
