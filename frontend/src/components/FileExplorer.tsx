@@ -95,7 +95,7 @@ function getRelativePath(rootPath: string, fullPath: string): string {
 
   if (full.toLowerCase().startsWith(root.toLowerCase())) {
     const rel = full.slice(root.length).replace(/^\//, "");
-    return rel ? `@./${rel}` : "@./";
+    return rel ? `@${rel}` : "@.";
   }
   // Outside root — use absolute (forward slashes)
   return `@${full}`;
