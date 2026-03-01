@@ -47,7 +47,7 @@ Verify token validity.
 ### Sessions
 
 #### GET `/api/sessions`
-List all sessions ordered by last accessed time.
+List all sessions ordered by `order_index` (custom user order), then by creation time.
 
 **Response:**
 ```json
@@ -59,10 +59,17 @@ List all sessions ordered by last accessed time.
     "work_path": "/path/to/project",
     "created_at": "2024-01-01T00:00:00+00:00",
     "last_accessed_at": "2024-01-01T00:00:00+00:00",
-    "status": "active"
+    "status": "active",
+    "cli_type": "claude",
+    "custom_command": null,
+    "custom_exit_command": null,
+    "order_index": 0
   }
 ]
 ```
+
+**Fields:**
+- `order_index`: User-defined display order (0 = first, ascending). Sessions can be reordered via drag-and-drop in the sidebar.
 
 #### POST `/api/sessions`
 Create a new session.
@@ -152,6 +159,28 @@ Terminate or delete a session.
 
 **Errors:**
 - `404 Not Found`: Session not found
+
+#### POST `/api/sessions/reorder`
+Update the order of sessions. Sessions are displayed in the sidebar according to this order.
+
+**Request:**
+```json
+{
+  "ordered_ids": ["session-id-1", "session-id-2", "session-id-3"]
+}
+```
+
+The array should contain all session IDs in the desired order.
+
+**Response:**
+```json
+{
+  "detail": "Session order updated"
+}
+```
+
+**Errors:**
+- `500 Internal Server Error`: Failed to update order
 
 ### Files
 

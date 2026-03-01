@@ -19,11 +19,21 @@ Main table storing session information.
 | `created_at` | TEXT | NOT NULL | ISO 8601 timestamp (UTC) |
 | `last_accessed_at` | TEXT | NOT NULL | ISO 8601 timestamp (UTC) |
 | `status` | TEXT | NOT NULL DEFAULT 'active' | Session status |
+| `cli_type` | TEXT | NOT NULL DEFAULT 'claude' | CLI type (claude, opencode, terminal, custom) |
+| `custom_command` | TEXT | NULLABLE | Custom command for custom CLI type |
+| `custom_exit_command` | TEXT | NULLABLE | Custom exit command for custom CLI type |
+| `order_index` | INTEGER | NOT NULL DEFAULT 0 | Display order in sidebar (ascending) |
 
 **Status Values:**
 - `active`: Session is running with PTY
 - `suspended`: Session was suspended (--resume ID captured)
 - `closed`: Session was terminated
+
+**CLI Types:**
+- `claude`: Claude Code CLI
+- `opencode`: OpenCode CLI
+- `terminal`: System terminal (PowerShell on Windows, bash on Linux/macOS)
+- `custom`: Custom user-defined command
 
 **Schema SQL:**
 ```sql
@@ -34,7 +44,11 @@ CREATE TABLE IF NOT EXISTS sessions (
     work_path TEXT NOT NULL,
     created_at TEXT NOT NULL,
     last_accessed_at TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active'
+    status TEXT NOT NULL DEFAULT 'active',
+    cli_type TEXT NOT NULL DEFAULT 'claude',
+    custom_command TEXT,
+    custom_exit_command TEXT,
+    order_index INTEGER NOT NULL DEFAULT 0
 );
 ```
 
@@ -76,7 +90,14 @@ async def get_session(session_id: str) -> dict | None:
 #### List Sessions
 ```python
 async def list_sessions() -> list[dict]:
-    # Returns all sessions ordered by last_accessed_at DESC
+    # Returns all sessions ordered by order_index ASC, created_at ASC
+```
+
+#### Update Session Order
+```python
+async def update_session_order(ordered_ids: list[str]) -> None:
+    # Updates order_index for multiple sessions based on list position
+    # Each session's index in the list becomes its order_index
 ```
 
 #### Update Session

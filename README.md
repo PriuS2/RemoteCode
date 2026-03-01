@@ -37,7 +37,9 @@ Manage Claude Code processes on your server and connect from anywhere via a WebS
 
   </details>
 
-- **Multi Session** — Create, switch, suspend, and resume multiple independent Claude Code sessions. Each session runs as a separate PTY process.
+- **Multi Session** — Create, switch, suspend, and resume multiple independent Claude Code sessions. Each session runs as a separate PTY process. Sessions are displayed in a fixed order and can be reordered via drag-and-drop.
+
+- **Session Reordering** — Drag and drop sessions in the sidebar to organize them in your preferred order. Session order is persisted across page reloads.
 
 - **Split View** — Open two sessions side-by-side using Shift+Click for parallel workflows or comparison tasks.
 
@@ -104,7 +106,9 @@ Manage Claude Code processes on your server and connect from anywhere via a WebS
 
 - **Cross-Platform** — Works on Windows, Linux, and macOS with automatic PTY backend detection (pywinpty/pexpect).
 
-- **New Session** — Create a new Claude Code session by specifying a work path. Optionally browse folders or auto-create directories.
+- **CLI Type Selection** — Create sessions with different CLI types: Claude Code, OpenCode, Terminal, or custom commands. Each type has its own color badge in the session list.
+
+- **New Session** — Create a new session by specifying a work path. Supports browsing folders, auto-creating directories, and selecting CLI type with optional custom commands.
 
   <details>
   <summary>Click to view screenshot</summary>
@@ -297,6 +301,7 @@ make tunnel
 | POST | `/api/sessions/:id/resume` | Resume session |
 | PATCH | `/api/sessions/:id/rename` | Rename session |
 | DELETE | `/api/sessions/:id` | Terminate/delete session |
+| POST | `/api/sessions/reorder` | Reorder sessions |
 | POST | `/api/open-explorer` | Open OS file explorer |
 | GET | `/api/files/download` | Download file |
 | POST | `/api/files/upload` | Upload file |
