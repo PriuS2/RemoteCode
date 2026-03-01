@@ -15,6 +15,7 @@ interface SessionListProps {
   onRename: (id: string, newName: string) => void;
   onSuspend: (id: string) => void;
   onTerminate: (id: string) => void;
+  onReorder?: (orderedIds: string[]) => void;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -231,12 +232,23 @@ export default function SessionList({
   onRename,
   onSuspend,
   onTerminate,
+  onReorder,
 }: SessionListProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; session: Session } | null>(null);
 
   // Mobile long-press refs
   const touchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchMovedRef = useRef(false);
+
+  // Drag and drop state
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [localSessions, setLocalSessions] = useState<Session[]>(sessions);
+
+  // Sync local sessions with props
+  useEffect(() => {
+    setLocalSessions(sessions);
+  }, [sessions]);
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
@@ -306,6 +318,66 @@ export default function SessionList({
     onDelete(session.id);
   }, [closeContextMenu, onDelete]);
 
+  // Drag and drop handlers
+  const handleDragStart = useCallback((e: React.DragEvent, sessionId: string) => {
+    if (!onReorder) return;
+    setDraggedId(sessionId);
+    e.dataTransfer.effectAllowed = "move";
+    // Set drag image transparency
+    const dragImage = e.currentTarget.cloneNode(true) as HTMLElement;
+    dragImage.style.opacity = "0.5";
+    dragImage.style.width = `${e.currentTarget.clientWidth}px`;
+    document.body.appendChild(dragImage);
+    e.dataTransfer.setDragImage(dragImage, 0, 0);
+    setTimeout(() => document.body.removeChild(dragImage), 0);
+  }, [onReorder]);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedId(null);
+    setDragOverId(null);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, sessionId: string) => {
+    e.preventDefault();
+    if (!onReorder || !draggedId || draggedId === sessionId) return;
+    setDragOverId(sessionId);
+  }, [onReorder, draggedId]);
+
+  const handleDragLeave = useCallback(() => {
+    setDragOverId(null);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!onReorder || !draggedId || draggedId === targetId) {
+      setDraggedId(null);
+      setDragOverId(null);
+      return;
+    }
+
+    // Reorder sessions
+    const newSessions = [...localSessions];
+    const draggedIndex = newSessions.findIndex(s => s.id === draggedId);
+    const targetIndex = newSessions.findIndex(s => s.id === targetId);
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      setDraggedId(null);
+      setDragOverId(null);
+      return;
+    }
+
+    // Remove dragged item and insert at target position
+    const [draggedItem] = newSessions.splice(draggedIndex, 1);
+    newSessions.splice(targetIndex, 0, draggedItem);
+
+    setLocalSessions(newSessions);
+    setDraggedId(null);
+    setDragOverId(null);
+
+    // Notify parent of new order
+    onReorder(newSessions.map(s => s.id));
+  }, [onReorder, localSessions, draggedId]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div
@@ -334,11 +406,13 @@ export default function SessionList({
           </div>
         )}
 
-        {sessions.map((session) => {
+        {localSessions.map((session) => {
           const isFocused = session.id === focusedSessionId;
           const isActiveNotFocused = !isFocused && activeSessions.includes(session.id);
           const isHighlighted = isFocused || isActiveNotFocused;
           const activity = sessionActivity[session.id];
+          const isDragged = draggedId === session.id;
+          const isDragOver = dragOverId === session.id;
 
           const borderColor = isFocused
             ? "#89b4fa"
@@ -354,12 +428,16 @@ export default function SessionList({
           return (
             <div
               key={session.id}
+              draggable={!!onReorder}
               style={{
                 padding: "10px 16px",
-                cursor: "pointer",
+                cursor: onReorder ? "grab" : "pointer",
                 background: bgColor,
                 borderLeft: `3px solid ${borderColor}`,
-                transition: "background 0.15s",
+                borderTop: isDragOver ? "2px solid #89b4fa" : "2px solid transparent",
+                borderBottom: isDragOver ? "2px solid #89b4fa" : "2px solid transparent",
+                opacity: isDragged ? 0.5 : 1,
+                transition: "background 0.15s, opacity 0.15s, border 0.1s",
               }}
               onClick={(e) => {
                 if (session.status === "active") onSelect(session.id, e.shiftKey);
@@ -380,6 +458,11 @@ export default function SessionList({
                   (e.currentTarget as HTMLDivElement).style.background =
                     bgColor === "transparent" ? "transparent" : bgColor;
               }}
+              onDragStart={(e) => handleDragStart(e, session.id)}
+              onDragEnd={handleDragEnd}
+              onDragOver={(e) => handleDragOver(e, session.id)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, session.id)}
             >
               <div
                 style={{
@@ -448,6 +531,39 @@ export default function SessionList({
                   }}
                 >
                   {STATUS_LABELS[session.status] || session.status}
+                </span>
+                <span
+                  style={{
+                    fontSize: "var(--web-fs-xxs)",
+                    padding: "2px 6px",
+                    borderRadius: 4,
+                    background:
+                      session.cli_type === "opencode"
+                        ? "#00d4ff"
+                        : session.cli_type === "custom"
+                          ? "#a6e3a1"
+                          : session.cli_type === "terminal"
+                            ? "#cba6f7"
+                            : "#ff9553",
+                    color: "#1e1e2e",
+                  }}
+                  title={
+                    session.cli_type === "opencode"
+                      ? "OpenCode CLI"
+                      : session.cli_type === "custom"
+                        ? "Custom CLI"
+                        : session.cli_type === "terminal"
+                          ? "Terminal"
+                          : "Claude Code CLI"
+                  }
+                >
+                  {session.cli_type === "opencode"
+                    ? "OpenCode"
+                    : session.cli_type === "custom"
+                      ? "Custom"
+                      : session.cli_type === "terminal"
+                        ? "Terminal"
+                        : "Claude"}
                 </span>
               </div>
             </div>

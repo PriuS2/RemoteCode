@@ -131,6 +131,9 @@ class CreateSessionRequest(BaseModel):
     work_path: str
     name: str | None = None
     create_folder: bool = False
+    cli_type: str = "claude"
+    custom_command: str | None = None
+    custom_exit_command: str | None = None
 
 
 class RenameSessionRequest(BaseModel):
@@ -140,11 +143,14 @@ class RenameSessionRequest(BaseModel):
 class SessionResponse(BaseModel):
     id: str
     claude_session_id: str | None = None
+    cli_type: str
     name: str
     work_path: str
     created_at: str
     last_accessed_at: str
     status: str
+    custom_command: str | None = None
+    custom_exit_command: str | None = None
 
 
 # --- Auth API (인증 불필요) ---
@@ -562,6 +568,9 @@ async def create_session(
             work_path=req.work_path,
             name=req.name,
             create_folder=req.create_folder,
+            cli_type=req.cli_type,
+            custom_command=req.custom_command,
+            custom_exit_command=req.custom_exit_command,
         )
         return session
     except ValueError as e:
@@ -624,6 +633,22 @@ async def terminate_or_delete_session(
             return session
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+class UpdateSessionOrderRequest(BaseModel):
+    ordered_ids: list[str]
+
+
+@app.post("/api/sessions/reorder")
+async def reorder_sessions(
+    req: UpdateSessionOrderRequest, _user: str = Depends(get_current_user)
+):
+    try:
+        await session_manager.update_session_order(req.ordered_ids)
+        return {"detail": "Session order updated"}
+    except Exception as e:
+        logger.error(f"reorder_sessions error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update session order")
 
 
 # --- WebSocket (토큰 쿼리 파라미터로 인증) ---
