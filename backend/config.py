@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8080
     claude_command: str = "claude"
+    opencode_command: str = "opencode"
     password: str = "changeme"
     jwt_secret: str = _INSECURE_JWT_SECRET
     jwt_expire_hours: int = 72

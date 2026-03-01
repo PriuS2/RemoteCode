@@ -11,6 +11,9 @@ export default function NewSession({ token, onCreated, onCancel }: NewSessionPro
   const [workPath, setWorkPath] = useState("");
   const [name, setName] = useState("");
   const [createFolder, setCreateFolder] = useState(false);
+  const [cliType, setCliType] = useState<"claude" | "opencode" | "terminal" | "custom">("claude");
+  const [customCommand, setCustomCommand] = useState("");
+  const [customExitCommand, setCustomExitCommand] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showBrowser, setShowBrowser] = useState(false);
@@ -33,6 +36,9 @@ export default function NewSession({ token, onCreated, onCancel }: NewSessionPro
           work_path: workPath.trim(),
           name: name.trim() || null,
           create_folder: createFolder,
+          cli_type: cliType,
+          custom_command: cliType === "custom" ? customCommand.trim() || null : null,
+          custom_exit_command: cliType === "custom" ? customExitCommand.trim() || null : null,
         }),
       });
 
@@ -184,6 +190,149 @@ export default function NewSession({ token, onCreated, onCancel }: NewSessionPro
               />
               Create folder if it doesn't exist
             </label>
+
+            <div style={{ marginTop: 4 }}>
+              <label
+                style={{ display: "block", fontSize: 12, color: "#a6adc8", marginBottom: 6 }}
+              >
+                CLI Type
+              </label>
+              <div style={{ display: "flex", gap: 16 }}>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 13,
+                    color: "#cdd6f4",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="cliType"
+                    value="claude"
+                    checked={cliType === "claude"}
+                    onChange={(e) => setCliType(e.target.value as "claude" | "opencode" | "terminal" | "custom")}
+                    style={{ accentColor: "#89b4fa" }}
+                  />
+                  Claude Code
+                </label>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 13,
+                    color: "#cdd6f4",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="cliType"
+                    value="opencode"
+                    checked={cliType === "opencode"}
+                    onChange={(e) => setCliType(e.target.value as "claude" | "opencode" | "terminal" | "custom")}
+                    style={{ accentColor: "#89b4fa" }}
+                  />
+                  OpenCode
+                </label>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 13,
+                    color: "#cdd6f4",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="cliType"
+                    value="terminal"
+                    checked={cliType === "terminal"}
+                    onChange={(e) => setCliType(e.target.value as "claude" | "opencode" | "terminal" | "custom")}
+                    style={{ accentColor: "#89b4fa" }}
+                  />
+                  Terminal
+                </label>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 13,
+                    color: "#cdd6f4",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="cliType"
+                    value="custom"
+                    checked={cliType === "custom"}
+                    onChange={(e) => setCliType(e.target.value as "claude" | "opencode" | "terminal" | "custom")}
+                    style={{ accentColor: "#89b4fa" }}
+                  />
+                  Custom CLI
+                </label>
+              </div>
+            </div>
+
+            {cliType === "custom" && (
+              <>
+                <div>
+                  <label
+                    style={{ display: "block", fontSize: 12, color: "#a6adc8", marginBottom: 4 }}
+                  >
+                    실행 명령어 *
+                  </label>
+                  <input
+                    type="text"
+                    value={customCommand}
+                    onChange={(e) => setCustomCommand(e.target.value)}
+                    placeholder="예: mycli --interactive"
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      fontSize: 14,
+                      background: "#313244",
+                      color: "#cdd6f4",
+                      border: "1px solid #45475a",
+                      borderRadius: 6,
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+                <div>
+                  <label
+                    style={{ display: "block", fontSize: 12, color: "#a6adc8", marginBottom: 4 }}
+                  >
+                    종료 명령어 (선택사항)
+                  </label>
+                  <input
+                    type="text"
+                    value={customExitCommand}
+                    onChange={(e) => setCustomExitCommand(e.target.value)}
+                    placeholder="예: /quit, exit (비워두면 /exit 사용)"
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      fontSize: 14,
+                      background: "#313244",
+                      color: "#cdd6f4",
+                      border: "1px solid #45475a",
+                      borderRadius: 6,
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              </>
+            )}
 
             {error && (
               <p style={{ color: "#f38ba8", fontSize: 13, margin: 0 }}>{error}</p>

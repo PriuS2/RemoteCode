@@ -376,6 +376,19 @@ export default function App() {
     }
   };
 
+  const handleReorder = async (orderedIds: string[]) => {
+    try {
+      await fetch("/api/sessions/reorder", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ ordered_ids: orderedIds }),
+      });
+      fetchSessions();
+    } catch (e) {
+      console.error("Failed to reorder sessions:", e);
+    }
+  };
+
   if (!token) {
     return <Login onLogin={handleLogin} />;
   }
@@ -453,6 +466,7 @@ export default function App() {
                 onRename={handleRename}
                 onSuspend={handleSuspend}
                 onTerminate={handleTerminate}
+                onReorder={handleReorder}
               />
             </aside>
             <div className="sidebar-resize" onMouseDown={handleSidebarDragStart} />
