@@ -282,7 +282,7 @@ make tunnel
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/auth/login` | Password login → JWT token |
+| POST | `/api/login` | Password login → JWT token |
 | GET | `/api/health` | Health check |
 | GET | `/api/browse` | Browse folder list |
 | GET | `/api/files` | List files/folders |
@@ -297,7 +297,22 @@ make tunnel
 | POST | `/api/sessions/:id/resume` | Resume session |
 | PATCH | `/api/sessions/:id/rename` | Rename session |
 | DELETE | `/api/sessions/:id` | Terminate/delete session |
-| WS | `/ws/terminal/:id` | Terminal WebSocket |
+| POST | `/api/open-explorer` | Open OS file explorer |
+| GET | `/api/files/download` | Download file |
+| POST | `/api/files/upload` | Upload file |
+| GET | `/api/git/status` | Git status |
+| GET | `/api/git/diff` | Git diff |
+| GET | `/api/git/branches` | List branches |
+| GET | `/api/git/log` | Commit log |
+| POST | `/api/git/checkout` | Checkout branch |
+| POST | `/api/git/add` | Stage files |
+| POST | `/api/git/reset` | Unstage files |
+| POST | `/api/git/discard` | Discard changes |
+| POST | `/api/git/commit` | Create commit |
+| POST | `/api/git/push` | Push to remote |
+| POST | `/api/git/pull` | Pull from remote |
+| POST | `/api/git/fetch` | Fetch from remote |
+| WS | `/ws/{session_id}` | Terminal WebSocket |
 
 ## Security Notes
 
@@ -305,6 +320,17 @@ make tunnel
 - Change `CCR_PASSWORD` from the default value
 - In production, restrict `CCR_ALLOWED_ORIGINS` to your actual domain
 - HTTPS (e.g., via Cloudflare Tunnel) is recommended
+
+## Documentation
+
+Detailed documentation is available in the `docs/` directory:
+
+- [Architecture](docs/architecture.md) — System architecture and component details
+- [Backend API](docs/backend-api.md) — Complete API reference
+- [Configuration](docs/configuration.md) — Environment variables and settings
+- [Deployment](docs/deployment.md) — Production deployment guide
+- [File Explorer](docs/file-explorer.md) — File explorer features
+- [Git Integration](docs/git-integration.md) — Git panel and operations
 
 ## License
 

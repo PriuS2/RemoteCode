@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Python 3.11 or higher
+- Python 3.10 or higher
 - Node.js 18 or higher (for building frontend)
 - Claude Code CLI installed (`claude` command available)
 - Git (optional, for cloning)
