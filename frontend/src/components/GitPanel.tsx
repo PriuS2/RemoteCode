@@ -160,6 +160,16 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
   const [showStash, setShowStash] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const branchDropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Font size state (similar to FileExplorer)
+  const [gitFontSize, setGitFontSize] = useState(() => {
+    const v = localStorage.getItem("gitFontSize");
+    return v ? Number(v) : 12;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("gitFontSize", String(gitFontSize));
+  }, [gitFontSize]);
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
@@ -502,13 +512,13 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
   const hasStagedChanges = status ? status.staged.length > 0 : false;
 
   const panelContent = (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#181825", color: "#cdd6f4", minWidth: 0, borderRight: isMobile ? undefined : "1px solid #313244" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#181825", color: "#cdd6f4", minWidth: 0, borderRight: isMobile ? undefined : "1px solid #313244", fontSize: gitFontSize }}>
       {/* Header */}
-      <PanelHeader title="Git" onClose={onClose} onRefresh={handleRefresh} loading={loading}>
+      <PanelHeader title="Git" onClose={onClose} onRefresh={handleRefresh} loading={loading} gitFontSize={gitFontSize} onFontSizeChange={setGitFontSize}>
         {/* Tab switcher */}
         <div style={{ display: "flex", gap: 0, marginLeft: 8 }}>
-          <TabBtn label="Status" active={activeTab === "status"} onClick={() => setActiveTab("status")} />
-          <TabBtn label="Log" active={activeTab === "log"} onClick={() => setActiveTab("log")} />
+          <TabBtn label="Status" active={activeTab === "status"} onClick={() => setActiveTab("status")} gitFontSize={gitFontSize} />
+          <TabBtn label="Log" active={activeTab === "log"} onClick={() => setActiveTab("log")} gitFontSize={gitFontSize} />
         </div>
       </PanelHeader>
 
@@ -724,22 +734,48 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
    Sub-components
    ========================================================= */
 
-function PanelHeader({ title, onClose, onRefresh, loading, children }: {
-  title: string; onClose: () => void; onRefresh: () => void; loading: boolean; children?: React.ReactNode;
+function PanelHeader({ title, onClose, onRefresh, loading, children, gitFontSize, onFontSizeChange }: {
+  title: string; onClose: () => void; onRefresh: () => void; loading: boolean; children?: React.ReactNode; gitFontSize: number; onFontSizeChange: (fn: (s: number) => number) => void;
 }) {
   return (
     <div style={{
       display: "flex", alignItems: "center", height: 28, padding: "0 8px",
       background: "#181825", borderBottom: "1px solid #313244", flexShrink: 0, userSelect: "none",
     }}>
-      <span style={{ fontWeight: 700, fontSize: 12, color: "#cdd6f4" }}>{title}</span>
+      <span style={{ fontWeight: 700, fontSize: gitFontSize, color: "#cdd6f4" }}>{title}</span>
       {children}
       <div style={{ flex: 1 }} />
+      {/* Font size controls */}
+      <div style={{ display: "flex", alignItems: "center", gap: 1, marginRight: 8 }}>
+        <button
+          onClick={() => onFontSizeChange((s) => Math.max(8, s - 1))}
+          title="Decrease font size"
+          style={{
+            background: "none", border: "none", color: "#6c7086", cursor: "pointer",
+            fontSize: gitFontSize, fontWeight: 700, padding: "0 4px", lineHeight: 1, borderRadius: 3,
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+        >-</button>
+        <span style={{ fontSize: Math.round(gitFontSize * 0.85), color: "#6c7086", minWidth: "1.5em", textAlign: "center" }}>
+          {gitFontSize}
+        </span>
+        <button
+          onClick={() => onFontSizeChange((s) => Math.min(20, s + 1))}
+          title="Increase font size"
+          style={{
+            background: "none", border: "none", color: "#6c7086", cursor: "pointer",
+            fontSize: gitFontSize, fontWeight: 700, padding: "0 4px", lineHeight: 1, borderRadius: 3,
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+        >+</button>
+      </div>
       <HeaderBtn title="Refresh" onClick={onRefresh} disabled={loading}>
-        <RefreshIcon size={12} spinning={loading} />
+        <RefreshIcon size={gitFontSize} spinning={loading} />
       </HeaderBtn>
       <HeaderBtn title="Close" onClick={onClose}>
-        <CloseIcon size={12} />
+        <CloseIcon size={gitFontSize} />
       </HeaderBtn>
     </div>
   );
@@ -763,14 +799,14 @@ function HeaderBtn({ title, onClick, disabled, children }: {
   );
 }
 
-function TabBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function TabBtn({ label, active, onClick, gitFontSize }: { label: string; active: boolean; onClick: () => void; gitFontSize: number }) {
   return (
     <button
       onClick={onClick}
       style={{
         background: active ? "rgba(137,180,250,0.15)" : "none",
         border: "none", color: active ? "#89b4fa" : "#6c7086",
-        fontSize: 11, fontWeight: active ? 700 : 400,
+        fontSize: Math.round(gitFontSize * 0.92), fontWeight: active ? 700 : 400,
         padding: "2px 8px", borderRadius: 3, cursor: "pointer",
       }}
     >
