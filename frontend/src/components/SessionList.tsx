@@ -538,32 +538,38 @@ export default function SessionList({
                     padding: "2px 6px",
                     borderRadius: 4,
                     background:
-                      session.cli_type === "opencode"
-                        ? "#00d4ff"
-                        : session.cli_type === "custom"
-                          ? "#a6e3a1"
-                          : session.cli_type === "terminal"
-                            ? "#cba6f7"
-                            : "#ff9553",
+                      session.cli_type === "opencode-web"
+                        ? "#f9e2af"
+                        : session.cli_type === "opencode"
+                          ? "#00d4ff"
+                          : session.cli_type === "custom"
+                            ? "#a6e3a1"
+                            : session.cli_type === "terminal"
+                              ? "#cba6f7"
+                              : "#ff95553",
                     color: "#1e1e2e",
                   }}
                   title={
-                    session.cli_type === "opencode"
-                      ? "OpenCode CLI"
-                      : session.cli_type === "custom"
-                        ? "Custom CLI"
-                        : session.cli_type === "terminal"
-                          ? "Terminal"
-                          : "Claude Code CLI"
+                    session.cli_type === "opencode-web"
+                      ? "OpenCode Web"
+                      : session.cli_type === "opencode"
+                        ? "OpenCode CLI"
+                        : session.cli_type === "custom"
+                          ? "Custom CLI"
+                          : session.cli_type === "terminal"
+                            ? "Terminal"
+                            : "Claude Code CLI"
                   }
                 >
-                  {session.cli_type === "opencode"
-                    ? "OpenCode"
-                    : session.cli_type === "custom"
-                      ? "Custom"
-                      : session.cli_type === "terminal"
-                        ? "Terminal"
-                        : "Claude"}
+                  {session.cli_type === "opencode-web"
+                    ? "OpenCode Web"
+                    : session.cli_type === "opencode"
+                      ? "OpenCode"
+                      : session.cli_type === "custom"
+                        ? "Custom"
+                        : session.cli_type === "terminal"
+                          ? "Terminal"
+                          : "Claude"}
                 </span>
               </div>
             </div>

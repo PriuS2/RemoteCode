@@ -3,6 +3,7 @@ import Login from "./components/Login";
 import SessionList from "./components/SessionList";
 import NewSession from "./components/NewSession";
 import Terminal from "./components/Terminal";
+import OpenCodeWebViewer from "./components/OpenCodeWebViewer";
 import type { ActivityState } from "./components/Terminal";
 import {
   playNotificationSound,
@@ -494,6 +495,20 @@ export default function App() {
             const session = sessions.find((s) => s.id === sid);
             const sessionName = session?.name || "Session";
             const sessionWorkPath = session?.work_path || "";
+
+            if (session?.cli_type === "opencode-web") {
+              return (
+                <OpenCodeWebViewer
+                  key={sid}
+                  token={token}
+                  onClose={() => {
+                    setActiveSessions((prev) => prev.filter((s) => s !== sid));
+                    setMountedSessions((prev) => prev.filter((s) => s !== sid));
+                  }}
+                />
+              );
+            }
+
             return (
               <Terminal
                 key={sid}

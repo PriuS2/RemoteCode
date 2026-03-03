@@ -11,7 +11,7 @@ export default function NewSession({ token, onCreated, onCancel }: NewSessionPro
   const [workPath, setWorkPath] = useState("");
   const [name, setName] = useState("");
   const [createFolder, setCreateFolder] = useState(false);
-  const [cliType, setCliType] = useState<"claude" | "opencode" | "terminal" | "custom">("claude");
+  const [cliType, setCliType] = useState<"claude" | "opencode" | "opencode-web" | "terminal" | "custom">("claude");
   const [customCommand, setCustomCommand] = useState("");
   const [customExitCommand, setCustomExitCommand] = useState("");
   const [loading, setLoading] = useState(false);
@@ -213,7 +213,7 @@ export default function NewSession({ token, onCreated, onCancel }: NewSessionPro
                     name="cliType"
                     value="claude"
                     checked={cliType === "claude"}
-                    onChange={(e) => setCliType(e.target.value as "claude" | "opencode" | "terminal" | "custom")}
+                    onChange={(e) => setCliType(e.target.value as "claude" | "opencode" | "opencode-web" | "terminal" | "custom")}
                     style={{ accentColor: "#89b4fa" }}
                   />
                   Claude Code
@@ -233,7 +233,7 @@ export default function NewSession({ token, onCreated, onCancel }: NewSessionPro
                     name="cliType"
                     value="opencode"
                     checked={cliType === "opencode"}
-                    onChange={(e) => setCliType(e.target.value as "claude" | "opencode" | "terminal" | "custom")}
+                    onChange={(e) => setCliType(e.target.value as "claude" | "opencode" | "opencode-web" | "terminal" | "custom")}
                     style={{ accentColor: "#89b4fa" }}
                   />
                   OpenCode
@@ -251,9 +251,29 @@ export default function NewSession({ token, onCreated, onCancel }: NewSessionPro
                   <input
                     type="radio"
                     name="cliType"
+                    value="opencode-web"
+                    checked={cliType === "opencode-web"}
+                    onChange={(e) => setCliType(e.target.value as "claude" | "opencode" | "opencode-web" | "terminal" | "custom")}
+                    style={{ accentColor: "#89b4fa" }}
+                  />
+                  OpenCode Web
+                </label>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 13,
+                    color: "#cdd6f4",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="cliType"
                     value="terminal"
                     checked={cliType === "terminal"}
-                    onChange={(e) => setCliType(e.target.value as "claude" | "opencode" | "terminal" | "custom")}
+                    onChange={(e) => setCliType(e.target.value as "claude" | "opencode" | "opencode-web" | "terminal" | "custom")}
                     style={{ accentColor: "#89b4fa" }}
                   />
                   Terminal
@@ -273,7 +293,7 @@ export default function NewSession({ token, onCreated, onCancel }: NewSessionPro
                     name="cliType"
                     value="custom"
                     checked={cliType === "custom"}
-                    onChange={(e) => setCliType(e.target.value as "claude" | "opencode" | "terminal" | "custom")}
+                    onChange={(e) => setCliType(e.target.value as "claude" | "opencode" | "opencode-web" | "terminal" | "custom")}
                     style={{ accentColor: "#89b4fa" }}
                   />
                   Custom CLI

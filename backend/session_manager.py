@@ -54,6 +54,8 @@ class SessionManager:
             if not custom_command:
                 raise ValueError("Custom command is required for custom CLI type")
             command = custom_command
+        elif cli_type == "opencode-web":
+            command = None
         else:
             command = settings.claude_command
 
@@ -61,6 +63,11 @@ class SessionManager:
         session = await db_create_session(
             session_id, display_name, work_path, cli_type, custom_command, custom_exit_command
         )
+
+        # opencode-web 타입은 PTY 생성 안 함
+        if cli_type == "opencode-web":
+            logger.info(f"Session created: {session_id} ({display_name}) at {work_path} (OpenCode Web, no PTY)")
+            return session
 
         # PTY 생성 (10초 타임아웃)
         try:
@@ -92,6 +99,12 @@ class SessionManager:
             raise ValueError(f"Session not found: {session_id}")
         if session["status"] != "active":
             raise ValueError(f"Session is not active: {session_id}")
+
+        cli_type = session.get("cli_type", "claude")
+
+        if cli_type == "opencode-web":
+            await db_update_session(session_id, status="suspended")
+            return await db_get_session(session_id)
 
         instance = pty_manager.get(session_id)
         if instance and instance.is_alive():
@@ -159,6 +172,14 @@ class SessionManager:
         if session["status"] not in ("suspended", "closed"):
             raise ValueError(f"Session is not suspended or closed: {session_id}")
 
+        cli_type = session.get("cli_type", "claude")
+
+        if cli_type == "opencode-web":
+            await db_update_session(session_id, status="active")
+            await update_last_accessed(session_id)
+            logger.info(f"Session resumed: {session_id} (OpenCode Web)")
+            return await db_get_session(session_id)
+
         # 기존 PTY 정리
         existing = pty_manager.get(session_id)
         if existing:
@@ -213,8 +234,10 @@ class SessionManager:
         if not session:
             raise ValueError(f"Session not found: {session_id}")
 
-        # PTY 강제 종료
-        pty_manager.remove(session_id)
+        cli_type = session.get("cli_type", "claude")
+
+        if cli_type != "opencode-web":
+            pty_manager.remove(session_id)
 
         await db_update_session(session_id, status="closed")
         logger.info(f"Session terminated: {session_id}")
@@ -225,8 +248,10 @@ class SessionManager:
         if not session:
             raise ValueError(f"Session not found: {session_id}")
 
-        # PTY가 남아있으면 정리
-        pty_manager.remove(session_id)
+        cli_type = session.get("cli_type", "claude")
+
+        if cli_type != "opencode-web":
+            pty_manager.remove(session_id)
 
         await db_delete_session(session_id)
         logger.info(f"Session deleted: {session_id}")
