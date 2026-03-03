@@ -171,6 +171,16 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
     localStorage.setItem("gitFontSize", String(gitFontSize));
   }, [gitFontSize]);
 
+  // Commit metadata visibility toggle (for Log tab)
+  const [showCommitMetadata, setShowCommitMetadata] = useState(() => {
+    const v = localStorage.getItem("gitShowCommitMetadata");
+    return v ? v === "true" : true;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("gitShowCommitMetadata", String(showCommitMetadata));
+  }, [showCommitMetadata]);
+
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
   /* ---- API calls ---- */
@@ -520,22 +530,38 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
           <TabBtn label="Status" active={activeTab === "status"} onClick={() => setActiveTab("status")} gitFontSize={gitFontSize} />
           <TabBtn label="Log" active={activeTab === "log"} onClick={() => setActiveTab("log")} gitFontSize={gitFontSize} />
         </div>
+        {/* Log tab: commit metadata toggle */}
+        {activeTab === "log" && (
+          <button
+            onClick={() => setShowCommitMetadata((v) => !v)}
+            title={showCommitMetadata ? "Hide commit metadata" : "Show commit metadata"}
+            style={{
+              background: "none", border: "none", color: showCommitMetadata ? "#89b4fa" : "#6c7086",
+              cursor: "pointer", fontSize: Math.round(gitFontSize * 0.85),
+              padding: "2px 6px", marginLeft: 8, borderRadius: 3,
+              display: "flex", alignItems: "center", gap: 4,
+            }}
+          >
+            <span style={{ fontSize: Math.round(gitFontSize * 0.75) }}>{showCommitMetadata ? "👁" : "👁‍🗨"}</span>
+            <span>Info</span>
+          </button>
+        )}
       </PanelHeader>
 
       {/* Error bar */}
       {error && (
-        <div style={{ padding: "4px 8px", fontSize: 11, background: "rgba(243,139,168,0.15)", color: "#f38ba8", borderBottom: "1px solid #313244" }}>
+        <div style={{ padding: "4px 8px", fontSize: Math.round(gitFontSize * 0.92), background: "rgba(243,139,168,0.15)", color: "#f38ba8", borderBottom: "1px solid #313244" }}>
           {error}
         </div>
       )}
 
       {/* Branch bar */}
       {status && (
-        <div ref={branchDropdownRef} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 8px", fontSize: 11, borderBottom: "1px solid #313244", flexShrink: 0, position: "relative" }}>
-          <BranchIcon size={12} />
+        <div ref={branchDropdownRef} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 8px", fontSize: Math.round(gitFontSize * 0.92), borderBottom: "1px solid #313244", flexShrink: 0, position: "relative" }}>
+          <BranchIcon size={Math.round(gitFontSize)} />
           <button
             onClick={() => { setBranchDropdown((v) => !v); if (!branches) fetchBranches(); }}
-            style={{ background: "none", border: "none", color: "#89b4fa", cursor: "pointer", fontSize: 11, fontWeight: 600, padding: 0 }}
+            style={{ background: "none", border: "none", color: "#89b4fa", cursor: "pointer", fontSize: Math.round(gitFontSize * 0.92), fontWeight: 600, padding: 0 }}
           >
             {status.detached ? `(${status.branch || "HEAD"})` : status.branch || "unknown"}
           </button>
@@ -546,8 +572,8 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
             </span>
           )}
           <div style={{ flex: 1 }} />
-          <SmallBtn title="Pull" onClick={doPull} disabled={loading || !status.upstream}>{"\u2193"} Pull</SmallBtn>
-          <SmallBtn title={status.upstream ? "Push" : "Publish Branch"} onClick={doPush} disabled={loading || status.detached}>{"\u2191"} {status.upstream ? "Push" : "Publish"}</SmallBtn>
+          <SmallBtn title="Pull" onClick={doPull} disabled={loading || !status.upstream} gitFontSize={gitFontSize}>{"\u2193"} Pull</SmallBtn>
+          <SmallBtn title={status.upstream ? "Push" : "Publish Branch"} onClick={doPush} disabled={loading || status.detached} gitFontSize={gitFontSize}>{"\u2191"} {status.upstream ? "Push" : "Publish"}</SmallBtn>
           {/* Branch dropdown */}
           {branchDropdown && branches && (
             <div style={{
@@ -566,18 +592,18 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
                     placeholder="new-branch-name"
                     style={{
                       flex: 1, background: "#313244", border: "1px solid #45475a", borderRadius: 3,
-                      color: "#cdd6f4", fontSize: 11, padding: "2px 6px", outline: "none", minWidth: 0,
+                      color: "#cdd6f4", fontSize: Math.round(gitFontSize * 0.92), padding: "2px 6px", outline: "none", minWidth: 0,
                     }}
                   />
                   <button onClick={() => doCreateBranch(newBranchName)} disabled={!newBranchName.trim()} style={{
                     background: newBranchName.trim() ? "#a6e3a1" : "#313244", border: "none", borderRadius: 3,
-                    color: newBranchName.trim() ? "#1e1e2e" : "#6c7086", fontSize: 10, padding: "2px 6px", cursor: newBranchName.trim() ? "pointer" : "not-allowed", fontWeight: 600,
+                    color: newBranchName.trim() ? "#1e1e2e" : "#6c7086", fontSize: Math.round(gitFontSize * 0.85), padding: "2px 6px", cursor: newBranchName.trim() ? "pointer" : "not-allowed", fontWeight: 600,
                   }}>Create</button>
                 </div>
               ) : (
                 <div
                   onClick={() => setShowNewBranch(true)}
-                  style={{ padding: "4px 8px", fontSize: 11, cursor: "pointer", color: "#a6e3a1", borderBottom: "1px solid #313244" }}
+                  style={{ padding: "4px 8px", fontSize: Math.round(gitFontSize * 0.92), cursor: "pointer", color: "#a6e3a1", borderBottom: "1px solid #313244" }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#313244"; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
                 >
@@ -589,7 +615,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
                   key={b.name}
                   onClick={() => !b.is_current && doCheckout(b.name)}
                   style={{
-                    padding: "4px 8px", fontSize: 11, cursor: b.is_current ? "default" : "pointer",
+                    padding: "4px 8px", fontSize: Math.round(gitFontSize * 0.92), cursor: b.is_current ? "default" : "pointer",
                     color: b.is_current ? "#89b4fa" : "#cdd6f4",
                     background: b.is_current ? "rgba(137,180,250,0.1)" : "transparent",
                   }}
@@ -601,10 +627,10 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
                 </div>
               ))}
               {branches.remote.length > 0 && (
-                <div style={{ padding: "4px 8px", fontSize: 10, color: "#6c7086", borderTop: "1px solid #313244" }}>Remote</div>
+                <div style={{ padding: "4px 8px", fontSize: Math.round(gitFontSize * 0.85), color: "#6c7086", borderTop: "1px solid #313244" }}>Remote</div>
               )}
               {branches.remote.map((b) => (
-                <div key={b.name} style={{ padding: "4px 8px", fontSize: 11, color: "#6c7086" }}>{b.name}</div>
+                <div key={b.name} style={{ padding: "4px 8px", fontSize: Math.round(gitFontSize * 0.92), color: "#6c7086" }}>{b.name}</div>
               ))}
             </div>
           )}
@@ -613,20 +639,20 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
 
       {/* Stash bar */}
       {activeTab === "status" && (
-        <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", fontSize: 10, borderBottom: "1px solid #313244", flexShrink: 0 }}>
-          <StashIcon size={11} />
+        <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", fontSize: Math.round(gitFontSize * 0.85), borderBottom: "1px solid #313244", flexShrink: 0 }}>
+          <StashIcon size={Math.round(gitFontSize * 0.92)} />
           <span style={{ color: "#6c7086" }}>Stash{stashes.length > 0 ? ` (${stashes.length})` : ""}</span>
           <div style={{ flex: 1 }} />
-          <SmallBtn title="Stash All" onClick={() => doStash()} disabled={loading || (!status?.unstaged.length && !status?.untracked.length && !status?.staged.length)}>Stash</SmallBtn>
+          <SmallBtn title="Stash All" onClick={() => doStash()} disabled={loading || (!status?.unstaged.length && !status?.untracked.length && !status?.staged.length)} gitFontSize={gitFontSize}>Stash</SmallBtn>
           {stashes.length > 0 && (
             <>
-              <SmallBtn title="Pop Stash" onClick={doStashPop} disabled={loading}>Pop</SmallBtn>
-              <SmallBtn title="Drop Stash" onClick={doStashDrop} disabled={loading}>Drop</SmallBtn>
+              <SmallBtn title="Pop Stash" onClick={doStashPop} disabled={loading} gitFontSize={gitFontSize}>Pop</SmallBtn>
+              <SmallBtn title="Drop Stash" onClick={doStashDrop} disabled={loading} gitFontSize={gitFontSize}>Drop</SmallBtn>
             </>
           )}
           <button
             onClick={() => { setShowStash((v) => !v); if (stashes.length === 0) fetchStashes(); }}
-            style={{ background: "none", border: "none", color: showStash ? "#89b4fa" : "#6c7086", cursor: "pointer", fontSize: 9, padding: "0 2px" }}
+            style={{ background: "none", border: "none", color: showStash ? "#89b4fa" : "#6c7086", cursor: "pointer", fontSize: Math.round(gitFontSize * 0.75), padding: "0 2px" }}
           >
             {showStash ? "\u25BC" : "\u25B6"}
           </button>
@@ -635,7 +661,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
       {showStash && stashes.length > 0 && (
         <div style={{ borderBottom: "1px solid #313244", maxHeight: 100, overflowY: "auto", flexShrink: 0 }}>
           {stashes.map((s) => (
-            <div key={s.index} style={{ padding: "2px 8px 2px 24px", fontSize: 10, color: "#a6adc8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div key={s.index} style={{ padding: "2px 8px 2px 24px", fontSize: Math.round(gitFontSize * 0.85), color: "#a6adc8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               <span style={{ color: "#6c7086" }}>stash@{`{${s.index}}`}</span>{" "}
               {s.message}
             </div>
@@ -665,6 +691,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
             isMobile={isMobile}
             mobileDiffView={mobileDiffView}
             onBackFromDiff={() => { setMobileDiffView(false); setSelectedFile(null); }}
+            gitFontSize={gitFontSize}
           />
         )}
         {activeTab === "log" && (
@@ -682,6 +709,8 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
             isMobile={isMobile}
             mobileCommitView={mobileCommitView}
             onBackFromCommit={() => { setMobileCommitView(false); setSelectedCommit(null); }}
+            gitFontSize={gitFontSize}
+            showCommitMetadata={showCommitMetadata}
           />
         )}
       </div>
@@ -694,9 +723,9 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
             onChange={(e) => setCommitMessage(e.target.value)}
             placeholder="Commit message..."
             style={{
-              width: "100%", minHeight: 48, maxHeight: 120, resize: "vertical",
+              width: "100%", minHeight: Math.round(gitFontSize * 4), maxHeight: Math.round(gitFontSize * 10), resize: "vertical",
               background: "#1e1e2e", border: "1px solid #313244", borderRadius: 4,
-              color: "#cdd6f4", fontSize: 12, padding: "6px 8px",
+              color: "#cdd6f4", fontSize: gitFontSize, padding: "6px 8px",
               fontFamily: "'Cascadia Code', 'Consolas', monospace",
               boxSizing: "border-box",
             }}
@@ -709,7 +738,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
               width: "100%", marginTop: 4, padding: "6px 0", border: "none", borderRadius: 4,
               background: commitMessage.trim() && hasStagedChanges && !loading && !status.has_conflicts ? "#a6e3a1" : "#313244",
               color: commitMessage.trim() && hasStagedChanges && !loading && !status.has_conflicts ? "#1e1e2e" : "#6c7086",
-              fontWeight: 600, fontSize: 12, cursor: commitMessage.trim() && hasStagedChanges ? "pointer" : "not-allowed",
+              fontWeight: 600, fontSize: gitFontSize, cursor: commitMessage.trim() && hasStagedChanges ? "pointer" : "not-allowed",
             }}
           >
             {loading ? "Committing..." : status.has_conflicts ? "Resolve conflicts first" : "Commit"}
@@ -815,15 +844,15 @@ function TabBtn({ label, active, onClick, gitFontSize }: { label: string; active
   );
 }
 
-function SmallBtn({ title, onClick, disabled, children }: {
-  title: string; onClick: () => void; disabled?: boolean; children: React.ReactNode;
+function SmallBtn({ title, onClick, disabled, children, gitFontSize }: {
+  title: string; onClick: () => void; disabled?: boolean; children: React.ReactNode; gitFontSize: number;
 }) {
   return (
     <button
       title={title} onClick={onClick} disabled={disabled}
       style={{
         background: "#313244", border: "none", color: disabled ? "#45475a" : "#cdd6f4",
-        fontSize: 10, padding: "2px 6px", borderRadius: 3,
+        fontSize: Math.round(gitFontSize * 0.85), padding: "2px 6px", borderRadius: 3,
         cursor: disabled ? "not-allowed" : "pointer", whiteSpace: "nowrap",
       }}
       onMouseEnter={(e) => { if (!disabled) (e.currentTarget as HTMLElement).style.background = "#45475a"; }}
@@ -836,7 +865,7 @@ function SmallBtn({ title, onClick, disabled, children }: {
 
 /* ---- Status Tab ---- */
 
-function StatusTab({ status, selectedFile, selectedFileStaged, diffContent, onSelectFile, onStage, onUnstage, onDiscard, loading, stagedCollapsed, changesCollapsed, untrackedCollapsed, onToggleStaged, onToggleChanges, onToggleUntracked, isMobile, mobileDiffView, onBackFromDiff }: {
+function StatusTab({ status, selectedFile, selectedFileStaged, diffContent, onSelectFile, onStage, onUnstage, onDiscard, loading, stagedCollapsed, changesCollapsed, untrackedCollapsed, onToggleStaged, onToggleChanges, onToggleUntracked, isMobile, mobileDiffView, onBackFromDiff, gitFontSize }: {
   status: GitStatusResponse;
   selectedFile: string | null;
   selectedFileStaged: boolean;
@@ -855,20 +884,21 @@ function StatusTab({ status, selectedFile, selectedFileStaged, diffContent, onSe
   isMobile: boolean;
   mobileDiffView: boolean;
   onBackFromDiff: () => void;
+  gitFontSize: number;
 }) {
   // Mobile diff sub-view
   if (isMobile && mobileDiffView && diffContent) {
     return (
       <div>
         <div style={{ display: "flex", alignItems: "center", padding: "4px 8px", borderBottom: "1px solid #313244" }}>
-          <button onClick={onBackFromDiff} style={{ background: "none", border: "none", color: "#89b4fa", cursor: "pointer", fontSize: 12, padding: "2px 4px" }}>
+          <button onClick={onBackFromDiff} style={{ background: "none", border: "none", color: "#89b4fa", cursor: "pointer", fontSize: gitFontSize, padding: "2px 4px" }}>
             {"\u2190"} Back
           </button>
-          <span style={{ fontSize: 11, color: "#cdd6f4", marginLeft: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: Math.round(gitFontSize * 0.92), color: "#cdd6f4", marginLeft: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {basename(diffContent.file_path)}
           </span>
         </div>
-        <DiffView diff={diffContent} />
+        <DiffView diff={diffContent} gitFontSize={gitFontSize} />
       </div>
     );
   }
@@ -885,7 +915,8 @@ function StatusTab({ status, selectedFile, selectedFileStaged, diffContent, onSe
           color="#a6e3a1"
           collapsed={stagedCollapsed}
           onToggle={onToggleStaged}
-          actions={<SectionBtn label={"\u2212"} title="Unstage All" onClick={() => onUnstage(status.staged.map((f) => f.path))} disabled={loading} />}
+          actions={<SectionBtn label={"\u2212"} title="Unstage All" onClick={() => onUnstage(status.staged.map((f) => f.path))} disabled={loading} gitFontSize={gitFontSize} />}
+          gitFontSize={gitFontSize}
         >
           {status.staged.map((f) => (
             <FileRow
@@ -894,8 +925,9 @@ function StatusTab({ status, selectedFile, selectedFileStaged, diffContent, onSe
               selected={selectedFile === f.path && selectedFileStaged}
               onClick={() => onSelectFile(f.path, true)}
               actions={
-                <RowBtn label={"\u2212"} title="Unstage" color="#f9e2af" onClick={() => onUnstage([f.path])} />
+                <RowBtn label={"\u2212"} title="Unstage" color="#f9e2af" onClick={() => onUnstage([f.path])} gitFontSize={gitFontSize} />
               }
+              gitFontSize={gitFontSize}
             />
           ))}
         </FileSection>
@@ -911,10 +943,11 @@ function StatusTab({ status, selectedFile, selectedFileStaged, diffContent, onSe
           onToggle={onToggleChanges}
           actions={
             <>
-              <SectionBtn label="+" title="Stage All" onClick={() => onStage(status.unstaged.map((f) => f.path))} disabled={loading} />
-              <SectionBtn label={"\u2716"} title="Discard All" onClick={() => onDiscard(status.unstaged.map((f) => f.path))} disabled={loading} />
+              <SectionBtn label="+" title="Stage All" onClick={() => onStage(status.unstaged.map((f) => f.path))} disabled={loading} gitFontSize={gitFontSize} />
+              <SectionBtn label={"\u2716"} title="Discard All" onClick={() => onDiscard(status.unstaged.map((f) => f.path))} disabled={loading} gitFontSize={gitFontSize} />
             </>
           }
+          gitFontSize={gitFontSize}
         >
           {status.unstaged.map((f) => (
             <FileRow
@@ -924,10 +957,11 @@ function StatusTab({ status, selectedFile, selectedFileStaged, diffContent, onSe
               onClick={() => onSelectFile(f.path, false)}
               actions={
                 <>
-                  <RowBtn label="+" title="Stage" color="#a6e3a1" onClick={() => onStage([f.path])} />
-                  <RowBtn label={"\u2716"} title="Discard" color="#f38ba8" onClick={() => onDiscard([f.path])} />
+                  <RowBtn label="+" title="Stage" color="#a6e3a1" onClick={() => onStage([f.path])} gitFontSize={gitFontSize} />
+                  <RowBtn label={"\u2716"} title="Discard" color="#f38ba8" onClick={() => onDiscard([f.path])} gitFontSize={gitFontSize} />
                 </>
               }
+              gitFontSize={gitFontSize}
             />
           ))}
         </FileSection>
@@ -941,7 +975,8 @@ function StatusTab({ status, selectedFile, selectedFileStaged, diffContent, onSe
           color="#6c7086"
           collapsed={untrackedCollapsed}
           onToggle={onToggleUntracked}
-          actions={<SectionBtn label="+" title="Stage All" onClick={() => onStage(status.untracked.map((f) => f.path))} disabled={loading} />}
+          actions={<SectionBtn label="+" title="Stage All" onClick={() => onStage(status.untracked.map((f) => f.path))} disabled={loading} gitFontSize={gitFontSize} />}
+          gitFontSize={gitFontSize}
         >
           {status.untracked.map((f) => (
             <FileRow
@@ -950,8 +985,9 @@ function StatusTab({ status, selectedFile, selectedFileStaged, diffContent, onSe
               selected={selectedFile === f.path && !selectedFileStaged}
               onClick={() => onSelectFile(f.path, false)}
               actions={
-                <RowBtn label="+" title="Stage" color="#a6e3a1" onClick={() => onStage([f.path])} />
+                <RowBtn label="+" title="Stage" color="#a6e3a1" onClick={() => onStage([f.path])} gitFontSize={gitFontSize} />
               }
+              gitFontSize={gitFontSize}
             />
           ))}
         </FileSection>
@@ -959,7 +995,7 @@ function StatusTab({ status, selectedFile, selectedFileStaged, diffContent, onSe
 
       {/* Empty state */}
       {allUnstaged.length === 0 && status.staged.length === 0 && (
-        <div style={{ padding: 24, textAlign: "center", color: "#6c7086", fontSize: 12 }}>
+        <div style={{ padding: 24, textAlign: "center", color: "#6c7086", fontSize: gitFontSize }}>
           No changes detected
         </div>
       )}
@@ -967,12 +1003,12 @@ function StatusTab({ status, selectedFile, selectedFileStaged, diffContent, onSe
       {/* Diff view (desktop) */}
       {!isMobile && diffContent && selectedFile && (
         <div style={{ borderTop: "1px solid #313244" }}>
-          <div style={{ padding: "4px 8px", fontSize: 11, color: "#6c7086", background: "#1e1e2e", borderBottom: "1px solid #313244" }}>
+          <div style={{ padding: "4px 8px", fontSize: Math.round(gitFontSize * 0.92), color: "#6c7086", background: "#1e1e2e", borderBottom: "1px solid #313244" }}>
             {diffContent.file_path}
             <span style={{ marginLeft: 8, color: "#a6e3a1" }}>+{diffContent.additions}</span>
             <span style={{ marginLeft: 4, color: "#f38ba8" }}>-{diffContent.deletions}</span>
           </div>
-          <DiffView diff={diffContent} />
+          <DiffView diff={diffContent} gitFontSize={gitFontSize} />
         </div>
       )}
     </div>
@@ -981,7 +1017,7 @@ function StatusTab({ status, selectedFile, selectedFileStaged, diffContent, onSe
 
 /* ---- Log Tab ---- */
 
-function LogTab({ commits, graphLayout, hasMore, onLoadMore, selectedCommit, onSelectCommit, commitDetail, commitDiffFile, commitDiff, onSelectCommitDiffFile, isMobile, mobileCommitView, onBackFromCommit }: {
+function LogTab({ commits, graphLayout, hasMore, onLoadMore, selectedCommit, onSelectCommit, commitDetail, commitDiffFile, commitDiff, onSelectCommitDiffFile, isMobile, mobileCommitView, onBackFromCommit, gitFontSize, showCommitMetadata }: {
   commits: GitLogEntry[];
   graphLayout: ReturnType<typeof computeGraphLayout> | null;
   hasMore: boolean;
@@ -995,33 +1031,35 @@ function LogTab({ commits, graphLayout, hasMore, onLoadMore, selectedCommit, onS
   isMobile: boolean;
   mobileCommitView: boolean;
   onBackFromCommit: () => void;
+  gitFontSize: number;
+  showCommitMetadata: boolean;
 }) {
   // Mobile commit detail sub-view
   if (isMobile && mobileCommitView && commitDetail) {
     return (
       <div>
         <div style={{ display: "flex", alignItems: "center", padding: "4px 8px", borderBottom: "1px solid #313244" }}>
-          <button onClick={onBackFromCommit} style={{ background: "none", border: "none", color: "#89b4fa", cursor: "pointer", fontSize: 12 }}>
+          <button onClick={onBackFromCommit} style={{ background: "none", border: "none", color: "#89b4fa", cursor: "pointer", fontSize: gitFontSize }}>
             {"\u2190"} Back
           </button>
-          <span style={{ fontSize: 11, color: "#cdd6f4", marginLeft: 8 }}>{commitDetail.hash.slice(0, 8)}</span>
+          <span style={{ fontSize: Math.round(gitFontSize * 0.92), color: "#cdd6f4", marginLeft: 8 }}>{commitDetail.hash.slice(0, 8)}</span>
         </div>
-        <CommitDetailView detail={commitDetail} commitDiffFile={commitDiffFile} commitDiff={commitDiff} onSelectFile={onSelectCommitDiffFile} />
+        <CommitDetailView detail={commitDetail} commitDiffFile={commitDiffFile} commitDiff={commitDiff} onSelectFile={onSelectCommitDiffFile} gitFontSize={gitFontSize} />
       </div>
     );
   }
 
   if (commits.length === 0) {
     return (
-      <div style={{ padding: 24, textAlign: "center", color: "#6c7086", fontSize: 12 }}>
+      <div style={{ padding: 24, textAlign: "center", color: "#6c7086", fontSize: gitFontSize }}>
         No commits yet
       </div>
     );
   }
 
-  const ROW_H = 28;
-  const LANE_W = 16;
-  const NODE_R = 4;
+  const ROW_H = Math.round(gitFontSize * 2.3);
+  const LANE_W = Math.round(gitFontSize * 1.3);
+  const NODE_R = Math.round(gitFontSize * 0.33);
   const maxLane = graphLayout?.maxLane ?? 0;
   const graphW = (maxLane + 1) * LANE_W + 8;
 
@@ -1055,14 +1093,14 @@ function LogTab({ commits, graphLayout, hasMore, onLoadMore, selectedCommit, onS
                     const x1 = l.fromLane * LANE_W + LANE_W / 2 + 4;
                     const x2 = l.toLane * LANE_W + LANE_W / 2 + 4;
                     return (
-                      <line key={li} x1={x1} y1={ROW_H / 2} x2={x2} y2={ROW_H} stroke={l.color} strokeWidth={1.5} opacity={0.6} />
+                      <line key={li} x1={x1} y1={ROW_H / 2} x2={x2} y2={ROW_H} stroke={l.color} strokeWidth={Math.max(1, gitFontSize * 0.125)} opacity={0.6} />
                     );
                   })}
                   {/* Incoming lines into this row (continuation + diagonal arrivals) */}
                   {graphLayout?.lines.filter((l) => l.toRow === i).map((l, li) => {
                     const x = l.toLane * LANE_W + LANE_W / 2 + 4;
                     return (
-                      <line key={`cont-${li}`} x1={x} y1={0} x2={x} y2={ROW_H / 2} stroke={l.color} strokeWidth={1.5} opacity={0.6} />
+                      <line key={`cont-${li}`} x1={x} y1={0} x2={x} y2={ROW_H / 2} stroke={l.color} strokeWidth={Math.max(1, gitFontSize * 0.125)} opacity={0.6} />
                     );
                   })}
                   {/* Node circle */}
@@ -1073,8 +1111,8 @@ function LogTab({ commits, graphLayout, hasMore, onLoadMore, selectedCommit, onS
               )}
               {/* Mobile: color dot only */}
               {isMobile && node && (
-                <div style={{ width: 16, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: 4, background: node.color }} />
+                <div style={{ width: Math.round(gitFontSize * 1.3), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <div style={{ width: Math.round(gitFontSize * 0.67), height: Math.round(gitFontSize * 0.67), borderRadius: Math.round(gitFontSize * 0.33), background: node.color }} />
                 </div>
               )}
               {/* Commit info */}
@@ -1082,7 +1120,7 @@ function LogTab({ commits, graphLayout, hasMore, onLoadMore, selectedCommit, onS
                 {/* Ref badges */}
                 {c.refs.length > 0 && c.refs.map((ref, ri) => (
                   <span key={ri} style={{
-                    fontSize: 9, padding: "1px 4px", borderRadius: 3,
+                    fontSize: Math.round(gitFontSize * 0.75), padding: "1px 4px", borderRadius: 3,
                     background: "rgba(137,180,250,0.2)", color: "#89b4fa",
                     whiteSpace: "nowrap", flexShrink: 0,
                   }}>
@@ -1091,17 +1129,19 @@ function LogTab({ commits, graphLayout, hasMore, onLoadMore, selectedCommit, onS
                 ))}
                 {/* Message */}
                 <span style={{
-                  fontSize: 11, color: "#cdd6f4", overflow: "hidden",
+                  fontSize: Math.round(gitFontSize * 0.92), color: "#cdd6f4", overflow: "hidden",
                   textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0,
                 }}>
                   {c.message}
                 </span>
                 {/* Author + date + hash */}
-                <span style={{ fontSize: 10, color: "#6c7086", whiteSpace: "nowrap", flexShrink: 0 }}>
-                  {!isMobile && <>{c.author_name} &middot; </>}
-                  {relativeTime(c.date)}
-                  {!isMobile && <> &middot; <span style={{ color: "#585b70" }}>{c.short_hash}</span></>}
-                </span>
+                {showCommitMetadata && (
+                  <span style={{ fontSize: Math.round(gitFontSize * 0.85), color: "#6c7086", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    {!isMobile && <>{c.author_name} &middot; </>}
+                    {relativeTime(c.date)}
+                    {!isMobile && <> &middot; <span style={{ color: "#585b70" }}>{c.short_hash}</span></>}
+                  </span>
+                )}
               </div>
             </div>
           );
@@ -1114,7 +1154,7 @@ function LogTab({ commits, graphLayout, hasMore, onLoadMore, selectedCommit, onS
               onClick={onLoadMore}
               style={{
                 background: "#313244", border: "none", color: "#cdd6f4",
-                fontSize: 11, padding: "4px 12px", borderRadius: 4, cursor: "pointer",
+                fontSize: Math.round(gitFontSize * 0.92), padding: "4px 12px", borderRadius: 4, cursor: "pointer",
               }}
             >
               Load more...
@@ -1126,7 +1166,7 @@ function LogTab({ commits, graphLayout, hasMore, onLoadMore, selectedCommit, onS
       {/* Bottom: Commit detail (scrollable, fixed to bottom half) */}
       {showDetail && (
         <div style={{ flex: "0 0 50%", borderTop: "2px solid #45475a", overflowY: "auto", minHeight: 0 }}>
-          <CommitDetailView detail={commitDetail} commitDiffFile={commitDiffFile} commitDiff={commitDiff} onSelectFile={onSelectCommitDiffFile} />
+          <CommitDetailView detail={commitDetail} commitDiffFile={commitDiffFile} commitDiff={commitDiff} onSelectFile={onSelectCommitDiffFile} gitFontSize={gitFontSize} />
         </div>
       )}
     </div>
@@ -1135,14 +1175,15 @@ function LogTab({ commits, graphLayout, hasMore, onLoadMore, selectedCommit, onS
 
 /* ---- Commit Detail View ---- */
 
-function CommitDetailView({ detail, commitDiffFile, commitDiff, onSelectFile }: {
+function CommitDetailView({ detail, commitDiffFile, commitDiff, onSelectFile, gitFontSize }: {
   detail: GitCommitDetail;
   commitDiffFile: string | null;
   commitDiff: GitDiffResponse | null;
   onSelectFile: (f: string | null) => void;
+  gitFontSize: number;
 }) {
   return (
-    <div style={{ fontSize: 11 }}>
+    <div style={{ fontSize: Math.round(gitFontSize * 0.92) }}>
       {/* Commit info */}
       <div style={{ padding: 8, borderBottom: "1px solid #313244", background: "#1e1e2e" }}>
         <div style={{ color: "#6c7086", marginBottom: 4 }}>
@@ -1175,8 +1216,8 @@ function CommitDetailView({ detail, commitDiffFile, commitDiff, onSelectFile }: 
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(69,71,90,0.3)"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = commitDiffFile === f.path ? "rgba(137,180,250,0.1)" : "transparent"; }}
           >
-            <span style={{ width: 14, color: statusColor(f.status), fontSize: 10, fontWeight: 700, flexShrink: 0, textAlign: "center" }}>{f.status}</span>
-            <span style={{ fontSize: 11, color: "#cdd6f4", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginLeft: 6 }}>
+            <span style={{ width: 14, color: statusColor(f.status), fontSize: Math.round(gitFontSize * 0.85), fontWeight: 700, flexShrink: 0, textAlign: "center" }}>{f.status}</span>
+            <span style={{ fontSize: Math.round(gitFontSize * 0.92), color: "#cdd6f4", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginLeft: 6 }}>
               {f.path}
             </span>
           </div>
@@ -1184,16 +1225,16 @@ function CommitDetailView({ detail, commitDiffFile, commitDiff, onSelectFile }: 
       </div>
 
       {/* Diff view */}
-      {commitDiff && commitDiffFile && <DiffView diff={commitDiff} />}
+      {commitDiff && commitDiffFile && <DiffView diff={commitDiff} gitFontSize={gitFontSize} />}
     </div>
   );
 }
 
 /* ---- File Section (collapsible) ---- */
 
-function FileSection({ title, count, color, collapsed, onToggle, actions, children }: {
+function FileSection({ title, count, color, collapsed, onToggle, actions, children, gitFontSize }: {
   title: string; count: number; color: string; collapsed: boolean; onToggle: () => void;
-  actions?: React.ReactNode; children: React.ReactNode;
+  actions?: React.ReactNode; children: React.ReactNode; gitFontSize: number;
 }) {
   return (
     <div>
@@ -1204,9 +1245,9 @@ function FileSection({ title, count, color, collapsed, onToggle, actions, childr
           background: `${color}10`, borderBottom: "1px solid #313244", userSelect: "none",
         }}
       >
-        <span style={{ fontSize: 9, color: "#6c7086", marginRight: 4 }}>{collapsed ? "\u25B6" : "\u25BC"}</span>
-        <span style={{ fontSize: 11, fontWeight: 600, color }}>{title}</span>
-        <span style={{ fontSize: 10, color: "#6c7086", marginLeft: 4 }}>({count})</span>
+        <span style={{ fontSize: Math.round(gitFontSize * 0.75), color: "#6c7086", marginRight: 4 }}>{collapsed ? "\u25B6" : "\u25BC"}</span>
+        <span style={{ fontSize: Math.round(gitFontSize * 0.92), fontWeight: 600, color }}>{title}</span>
+        <span style={{ fontSize: Math.round(gitFontSize * 0.85), color: "#6c7086", marginLeft: 4 }}>({count})</span>
         <div style={{ flex: 1 }} />
         <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", gap: 2 }}>{actions}</div>
       </div>
@@ -1215,15 +1256,15 @@ function FileSection({ title, count, color, collapsed, onToggle, actions, childr
   );
 }
 
-function SectionBtn({ label, title, onClick, disabled }: {
-  label: string; title: string; onClick: () => void; disabled?: boolean;
+function SectionBtn({ label, title, onClick, disabled, gitFontSize }: {
+  label: string; title: string; onClick: () => void; disabled?: boolean; gitFontSize: number;
 }) {
   return (
     <button
       title={title} onClick={onClick} disabled={disabled}
       style={{
         background: "none", border: "none", color: "#6c7086", cursor: disabled ? "not-allowed" : "pointer",
-        fontSize: 12, fontWeight: 700, padding: "0 4px", lineHeight: 1,
+        fontSize: Math.round(gitFontSize), fontWeight: 700, padding: "0 4px", lineHeight: 1,
       }}
       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#cdd6f4"; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#6c7086"; }}
@@ -1235,8 +1276,8 @@ function SectionBtn({ label, title, onClick, disabled }: {
 
 /* ---- File Row ---- */
 
-function FileRow({ file, selected, onClick, actions }: {
-  file: GitStatusFile; selected: boolean; onClick: () => void; actions: React.ReactNode;
+function FileRow({ file, selected, onClick, actions, gitFontSize }: {
+  file: GitStatusFile; selected: boolean; onClick: () => void; actions: React.ReactNode; gitFontSize: number;
 }) {
   return (
     <div
@@ -1249,13 +1290,13 @@ function FileRow({ file, selected, onClick, actions }: {
       onMouseLeave={(e) => { if (!selected) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
     >
       <span style={{
-        width: 14, flexShrink: 0, fontSize: 10, fontWeight: 700, textAlign: "center",
+        width: 14, flexShrink: 0, fontSize: Math.round(gitFontSize * 0.85), fontWeight: 700, textAlign: "center",
         color: statusColor(file.status),
       }}>
         {file.status}
       </span>
       <span style={{
-        flex: 1, fontSize: 11, color: "#cdd6f4", overflow: "hidden",
+        flex: 1, fontSize: Math.round(gitFontSize * 0.92), color: "#cdd6f4", overflow: "hidden",
         textOverflow: "ellipsis", whiteSpace: "nowrap", marginLeft: 6,
       }} title={file.path}>
         {basename(file.path)}
@@ -1268,15 +1309,15 @@ function FileRow({ file, selected, onClick, actions }: {
   );
 }
 
-function RowBtn({ label, title, color, onClick }: {
-  label: string; title: string; color: string; onClick: () => void;
+function RowBtn({ label, title, color, onClick, gitFontSize }: {
+  label: string; title: string; color: string; onClick: () => void; gitFontSize: number;
 }) {
   return (
     <button
       title={title} onClick={onClick}
       style={{
         background: "none", border: "none", color: "#45475a", cursor: "pointer",
-        fontSize: 12, fontWeight: 700, padding: "0 3px", lineHeight: 1,
+        fontSize: Math.round(gitFontSize), fontWeight: 700, padding: "0 3px", lineHeight: 1,
       }}
       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = color; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#45475a"; }}
@@ -1288,19 +1329,19 @@ function RowBtn({ label, title, color, onClick }: {
 
 /* ---- Diff View ---- */
 
-function DiffView({ diff }: { diff: GitDiffResponse }) {
+function DiffView({ diff, gitFontSize }: { diff: GitDiffResponse; gitFontSize: number }) {
   if (diff.is_binary) {
-    return <div style={{ padding: 12, color: "#6c7086", fontSize: 11, textAlign: "center" }}>Binary file changed</div>;
+    return <div style={{ padding: 12, color: "#6c7086", fontSize: Math.round(gitFontSize * 0.92), textAlign: "center" }}>Binary file changed</div>;
   }
   if (diff.hunks.length === 0) {
-    return <div style={{ padding: 12, color: "#6c7086", fontSize: 11, textAlign: "center" }}>No diff available</div>;
+    return <div style={{ padding: 12, color: "#6c7086", fontSize: Math.round(gitFontSize * 0.92), textAlign: "center" }}>No diff available</div>;
   }
   return (
-    <div style={{ fontSize: 11, fontFamily: "'Cascadia Code', 'Consolas', monospace", overflowX: "auto" }}>
+    <div style={{ fontSize: Math.round(gitFontSize * 0.92), fontFamily: "'Cascadia Code', 'Consolas', monospace", overflowX: "auto" }}>
       {diff.hunks.map((hunk, hi) => (
         <div key={hi}>
           {/* Hunk header */}
-          <div style={{ padding: "2px 8px", color: "#89b4fa", background: "rgba(137,180,250,0.05)", fontSize: 10, whiteSpace: "pre" }}>
+          <div style={{ padding: "2px 8px", color: "#89b4fa", background: "rgba(137,180,250,0.05)", fontSize: Math.round(gitFontSize * 0.85), whiteSpace: "pre" }}>
             {hunk.header}
           </div>
           {/* Lines */}
@@ -1314,13 +1355,13 @@ function DiffView({ diff }: { diff: GitDiffResponse }) {
                   display: "flex", whiteSpace: "pre",
                   background: isAdd ? "rgba(166,227,161,0.08)" : isDel ? "rgba(243,139,168,0.08)" : "transparent",
                   color: isAdd ? "#a6e3a1" : isDel ? "#f38ba8" : "#cdd6f4",
-                  minHeight: 18, lineHeight: "18px",
+                  minHeight: Math.round(gitFontSize * 1.5), lineHeight: `${Math.round(gitFontSize * 1.5)}px`,
                 }}
               >
-                <span style={{ width: 36, flexShrink: 0, textAlign: "right", paddingRight: 4, color: "#45475a", userSelect: "none", fontSize: 10 }}>
+                <span style={{ width: 36, flexShrink: 0, textAlign: "right", paddingRight: 4, color: "#45475a", userSelect: "none", fontSize: Math.round(gitFontSize * 0.85) }}>
                   {line.old_no ?? ""}
                 </span>
-                <span style={{ width: 36, flexShrink: 0, textAlign: "right", paddingRight: 4, color: "#45475a", userSelect: "none", fontSize: 10 }}>
+                <span style={{ width: 36, flexShrink: 0, textAlign: "right", paddingRight: 4, color: "#45475a", userSelect: "none", fontSize: Math.round(gitFontSize * 0.85) }}>
                   {line.new_no ?? ""}
                 </span>
                 <span style={{ width: 14, flexShrink: 0, textAlign: "center", userSelect: "none" }}>
