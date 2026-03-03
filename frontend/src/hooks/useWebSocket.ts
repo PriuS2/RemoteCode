@@ -91,7 +91,17 @@ export function useWebSocket({
 
     connect();
 
+    // 모바일 백그라운드에서 복귀 시 즉시 재연결
+    function handleVisibilityChange() {
+      if (!document.hidden && wsRef.current?.readyState !== WebSocket.OPEN) {
+        reconnectAttemptRef.current = 0;
+        connect();
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       unmountedRef.current = true;
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
