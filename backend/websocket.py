@@ -64,6 +64,11 @@ async def ws_to_pty(ws: WebSocket, instance: PtyInstance) -> None:
                         and 1 <= cols <= 500 and 1 <= rows <= 200
                     ):
                         instance.resize(cols, rows)
+            elif msg_type == "mouse":
+                if isinstance(msg_data, dict):
+                    mouse_seq = instance.encode_mouse_event(msg_data)
+                    if mouse_seq:
+                        instance.write(mouse_seq)
     except WebSocketDisconnect:
         # WS 끊겨도 PTY는 유지 (세션 전환 지원)
         logger.info(f"WebSocket disconnected (ws_to_pty) for session {instance.session_id}")

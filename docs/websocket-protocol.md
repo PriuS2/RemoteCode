@@ -100,6 +100,40 @@ async def _close_existing_connection(session_id: str) -> None:
 - `cols`: 1-500
 - `rows`: 1-200
 
+#### Mouse Message
+마우스 이벤트를 터미널로 전송합니다 (SGR 마우스 프로토콜 사용).
+
+```json
+{
+  "type": "mouse",
+  "data": {
+    "event": "press" | "release" | "move" | "drag" | "scroll",
+    "button": 0 | 1 | 2 | 64 | 65,
+    "x": number,
+    "y": number,
+    "modifiers": {
+      "shift": boolean,
+      "ctrl": boolean,
+      "alt": boolean
+    }
+  }
+}
+```
+
+**Button 값:**
+- `0`: 좌클릭 (left)
+- `1`: 중간클릭 (middle)
+- `2`: 우클릭 (right)
+- `64`: 스크롤 업 (scroll up)
+- `65`: 스크롤 다운 (scroll down)
+
+**Event 값:**
+- `press`: 버튼 누름
+- `release`: 버튼 해제
+- `move`: 버튼 없이 이동
+- `drag`: 버튼 누른 상태로 이동
+- `scroll`: 휠 스크롤
+
 ### Server → Client
 
 #### Output Message

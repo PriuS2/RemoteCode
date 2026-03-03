@@ -8,6 +8,21 @@ import MobileKeyBar from "./MobileKeyBar";
 import FileExplorer from "./FileExplorer";
 import GitPanel, { GitIcon } from "./GitPanel";
 
+type MouseEventType = "press" | "release" | "move" | "drag" | "scroll";
+type MouseButton = 0 | 1 | 2 | 64 | 65;
+
+interface MouseEventData {
+  event: MouseEventType;
+  button: MouseButton;
+  x: number;
+  y: number;
+  modifiers: {
+    shift: boolean;
+    ctrl: boolean;
+    alt: boolean;
+  };
+}
+
 export type ActivityState = "idle" | "processing" | "done";
 
 interface TerminalProps {
@@ -66,6 +81,10 @@ export default function Terminal({
   const activityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isProcessingRef = useRef(false);
   const enterTimeRef = useRef(0);
+  const mouseDownButtonsRef = useRef(0);
+  const sendInputRef = useRef<((data: string) => void) | null>(null);
+  const sendResizeRef = useRef<((cols: number, rows: number) => void) | null>(null);
+  const sendMouseRef = useRef<((data: MouseEventData) => void) | null>(null);
   const onActivityChangeRef = useRef(onActivityChange);
   onActivityChangeRef.current = onActivityChange;
 
@@ -88,7 +107,7 @@ export default function Terminal({
 
   const wsUrl = sessionId ? getWsUrl(sessionId, token) : null;
 
-  const { sendInput, sendResize, status } = useWebSocket({
+  const { sendInput, sendResize, sendMouse, status } = useWebSocket({
     url: wsUrl,
     onMessage: (msg) => {
       if (msg.type === "output" && termRef.current) {
@@ -157,13 +176,87 @@ export default function Terminal({
     term.loadAddon(fitAddon);
     term.loadAddon(new WebLinksAddon());
 
+    // Enable mouse events - SGR mode (1006)
+    term.element?.classList.add("xterm-enable-mouse");
+
     term.open(innerRef.current);
     fitAddon.fit();
 
+    // Enable SGR mouse tracking mode (1006)
+    // This tells xterm.js to send mouse events via escape sequences
+    term.write("\x1b[?1006h");
+
     termRef.current = term;
     fitAddonRef.current = fitAddon;
+    sendInputRef.current = sendInput;
+    sendResizeRef.current = sendResize;
+    sendMouseRef.current = sendMouse;
 
     term.onData((data) => {
+      const sendInput = sendInputRef.current;
+      const sendMouse = sendMouseRef.current;
+      
+      if (!sendInput || !sendMouse) return;
+
+      // Check for mouse escape sequences (SGR 1006 mode)
+      if (data.startsWith("\x1b[") && data.includes("M")) {
+        // Parse SGR mouse sequence: ESC [ < Pb ; Px ; Py M
+        // Or extended: ESC [ < Pb ; Px ; Px ; Py ; Py T (for 1006)
+        const match = data.match(/\x1b\[<(\d+);(\d+);(\d+)([MTm])/);
+        if (match) {
+          const button = parseInt(match[1], 10);
+          const x = parseInt(match[2], 10);
+          const y = parseInt(match[3], 10);
+          const type = match[4];
+
+          let eventType: MouseEventType;
+          let actualButton: MouseButton;
+
+          // Button encoding in SGR mode:
+          // 0 = left button, 1 = middle, 2 = right
+          // 32 = motion flag added
+          // 64 = scroll up, 65 = scroll down
+          const isMotion = (button & 32) !== 0;
+          const buttonNum = button & 3;
+
+          if (button === 64 || button === 65) {
+            // Scroll events
+            eventType = "scroll";
+            actualButton = button as MouseButton;
+          } else if (type === "M") {
+            // Press (button down)
+            if (isMotion) {
+              eventType = mouseDownButtonsRef.current > 0 ? "drag" : "move";
+            } else {
+              eventType = "press";
+              mouseDownButtonsRef.current = buttonNum + 1;
+            }
+            actualButton = buttonNum as MouseButton;
+          } else if (type === "m") {
+            // Release (button up)
+            eventType = "release";
+            actualButton = buttonNum as MouseButton;
+            mouseDownButtonsRef.current = 0;
+          } else {
+            return; // Not a mouse event we recognize
+          }
+
+          sendMouse({
+            event: eventType,
+            button: actualButton,
+            x: x - 1, // Convert to 0-indexed
+            y: y - 1,
+            modifiers: {
+              shift: false,
+              ctrl: false,
+              alt: false,
+            },
+          });
+          return;
+        }
+      }
+
+      // Regular keyboard input
       sendInput(data);
       // Detect Enter key
       if (data.includes("\r") || data.includes("\n")) {
@@ -172,7 +265,7 @@ export default function Terminal({
     });
 
     term.onResize(({ cols, rows }) => {
-      sendResize(cols, rows);
+      sendResizeRef.current?.(cols, rows);
     });
 
     const observer = new ResizeObserver(() => {
@@ -285,7 +378,7 @@ export default function Terminal({
       fitAddonRef.current = null;
       term.dispose();
     };
-  }, [sendInput, sendResize]);
+  }, [sendInput, sendResize, sendMouse]);
 
   // fontSize change -> update terminal
   useEffect(() => {
