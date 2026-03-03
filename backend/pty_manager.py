@@ -148,6 +148,42 @@ class PtyInstance:
             except Exception as e:
                 logger.warning(f"Resize failed for {self.session_id}: {e}")
 
+    def encode_mouse_event(self, event_data: dict) -> Optional[str]:
+        """마우스 이벤트를 SGR 마우스 시퀀스로 변환합니다."""
+        event = event_data.get("event")
+        button = event_data.get("button", 0)
+        x = event_data.get("x", 1)
+        y = event_data.get("y", 1)
+        modifiers = event_data.get("modifiers", {})
+        
+        shift = modifiers.get("shift", False)
+        ctrl = modifiers.get("ctrl", False)
+        alt = modifiers.get("alt", False)
+        
+        modifier_flag = (shift << 2) | (ctrl << 1) | (alt << 0)
+        
+        if event == "scroll":
+            if button == 64:
+                return f"\x1b[<64;{x + 1};{y + 1}M"
+            elif button == 65:
+                return f"\x1b[<65;{x + 1};{y + 1}M"
+            return None
+        
+        if event == "press":
+            sgr_button = button | modifier_flag
+            return f"\x1b[<{sgr_button};{x + 1};{y + 1}M"
+        elif event == "release":
+            sgr_button = button | modifier_flag
+            return f"\x1b[<{sgr_button};{x + 1};{y + 1}m"
+        elif event == "move":
+            sgr_button = 3 | modifier_flag | 32
+            return f"\x1b[<{sgr_button};{x + 1};{y + 1}M"
+        elif event == "drag":
+            sgr_button = button | modifier_flag | 32
+            return f"\x1b[<{sgr_button};{x + 1};{y + 1}M"
+        
+        return None
+
     def is_alive(self) -> bool:
         if self._closed:
             return False

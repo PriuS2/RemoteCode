@@ -5,6 +5,18 @@ interface WsMessage {
   data: string;
 }
 
+interface MouseEventData {
+  event: "press" | "release" | "move" | "drag" | "scroll";
+  button: 0 | 1 | 2 | 64 | 65;
+  x: number;
+  y: number;
+  modifiers: {
+    shift: boolean;
+    ctrl: boolean;
+    alt: boolean;
+  };
+}
+
 type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
 interface UseWebSocketOptions {
@@ -128,7 +140,14 @@ export function useWebSocket({
     }
   }, []);
 
-  return { sendInput, sendResize, status };
+  const sendMouse = useCallback((data: MouseEventData) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "mouse", data }));
+    }
+  }, []);
+
+  return { sendInput, sendResize, sendMouse, status };
 }
 
 export function getWsUrl(sessionId: string, token: string): string {
