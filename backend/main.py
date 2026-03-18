@@ -1,4 +1,5 @@
 import asyncio
+import httpx
 import logging
 import os
 import platform
@@ -18,9 +19,10 @@ from pydantic import BaseModel
 
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 
 from .auth import (
+    AUTH_COOKIE_NAME,
     create_access_token,
     get_current_user,
     verify_password,
@@ -28,8 +30,9 @@ from .auth import (
 )
 from .config import _INSECURE_JWT_SECRET, settings
 from .database import close_db, init_db, mark_all_active_as_suspended
+from .opencode_web_manager import opencode_web_manager
 from .pty_manager import pty_manager
-from .session_manager import session_manager
+from .session_manager import SessionValidationError, session_manager
 from .git_utils import GitError, run_git, is_git_repo
 from .websocket import handle_terminal_ws
 
@@ -82,6 +85,7 @@ async def lifespan(app: FastAPI):
     await mark_all_active_as_suspended()
     logger.info("Server started")
     yield
+    opencode_web_manager.stop()
     pty_manager.terminate_all()
     await close_db()
     logger.info("Server stopped")
@@ -116,15 +120,64 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     )
 
 
+def _is_secure_request(request: Request) -> bool:
+    forwarded_proto = request.headers.get("x-forwarded-proto", "")
+    if forwarded_proto:
+        return forwarded_proto.split(",")[0].strip().lower() == "https"
+    return request.url.scheme == "https"
+
+
+def _set_auth_cookie(response: JSONResponse, request: Request, token: str) -> None:
+    response.set_cookie(
+        key=AUTH_COOKIE_NAME,
+        value=token,
+        max_age=settings.jwt_expire_hours * 3600,
+        httponly=True,
+        samesite="lax",
+        secure=_is_secure_request(request),
+        path="/",
+    )
+
+
+def _clear_auth_cookie(response: JSONResponse, request: Request) -> None:
+    response.delete_cookie(
+        key=AUTH_COOKIE_NAME,
+        httponly=True,
+        samesite="lax",
+        secure=_is_secure_request(request),
+        path="/",
+    )
+
+
+def _rewrite_proxy_url(value: str, target_port: int) -> str:
+    proxy_prefix = "/api/opencode-web/proxy"
+    if not value or value.startswith(("#", "data:", "javascript:", "mailto:", "tel:")):
+        return value
+    if value.startswith(proxy_prefix):
+        return value
+    if value.startswith("//"):
+        return value
+    if value.startswith(("http://", "https://")):
+        parsed = httpx.URL(value)
+        if parsed.host in {"localhost", "127.0.0.1"} and parsed.port == target_port:
+            rewritten = f"{proxy_prefix}{parsed.path or '/'}"
+            if parsed.query:
+                rewritten += f"?{parsed.query.decode()}"
+            return rewritten
+        return value
+    if value.startswith("/"):
+        return f"{proxy_prefix}{value}"
+    return f"{proxy_prefix}/{value.lstrip('/')}"
+
+
 # --- Request/Response Models ---
 
 class LoginRequest(BaseModel):
     password: str
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+class AuthSessionResponse(BaseModel):
+    authenticated: bool
 
 
 class CreateSessionRequest(BaseModel):
@@ -138,6 +191,18 @@ class CreateSessionRequest(BaseModel):
 
 class RenameSessionRequest(BaseModel):
     name: str
+
+
+class ApiErrorDetail(BaseModel):
+    code: str
+    message: str
+
+
+class SessionPreflightResponse(BaseModel):
+    ok: bool
+    code: str
+    message: str
+    resolved_command: str | None = None
 
 
 class SessionResponse(BaseModel):
@@ -155,13 +220,27 @@ class SessionResponse(BaseModel):
 
 # --- Auth API (인증 불필요) ---
 
-@app.post("/api/auth/login", response_model=TokenResponse)
+@app.post("/api/auth/login", response_model=AuthSessionResponse)
 @limiter.limit("5/minute")
 async def login(request: Request, req: LoginRequest):
     if not verify_password(req.password):
         raise HTTPException(status_code=401, detail="Invalid password")
     token = create_access_token()
-    return TokenResponse(access_token=token)
+    response = JSONResponse(content=AuthSessionResponse(authenticated=True).model_dump())
+    _set_auth_cookie(response, request, token)
+    return response
+
+
+@app.post("/api/auth/logout", response_model=AuthSessionResponse)
+async def logout(request: Request):
+    response = JSONResponse(content=AuthSessionResponse(authenticated=False).model_dump())
+    _clear_auth_cookie(response, request)
+    return response
+
+
+@app.get("/api/auth/session", response_model=AuthSessionResponse)
+async def auth_session(_user: str = Depends(get_current_user)):
+    return AuthSessionResponse(authenticated=True)
 
 
 # --- Health Check (인증 불필요) ---
@@ -340,7 +419,10 @@ async def open_in_explorer(
 
 @app.get("/api/file-content")
 async def read_file_content(
-    path: str, _user: str = Depends(get_current_user)
+    path: str,
+    start_line: int = Query(default=1, ge=1),
+    line_count: int = Query(default=400, ge=1, le=2000),
+    _user: str = Depends(get_current_user),
 ):
     path = os.path.abspath(path)
     if not os.path.isfile(path):
@@ -349,13 +431,47 @@ async def read_file_content(
     MAX_SIZE = 512 * 1024  # 512KB
     try:
         size = os.path.getsize(path)
-        truncated = size > MAX_SIZE
+        if size <= MAX_SIZE:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+            total_lines = len(content.split("\n"))
+            return {
+                "content": content,
+                "size": size,
+                "truncated": False,
+                "start_line": 1,
+                "end_line": total_lines,
+                "total_lines": total_lines,
+                "has_prev": False,
+                "has_next": False,
+            }
+
         with open(path, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read(MAX_SIZE)
+            total_lines = sum(1 for _ in f)
+        if total_lines == 0:
+            total_lines = 1
+
+        effective_start = min(start_line, total_lines)
+        effective_end = min(total_lines, effective_start + line_count - 1)
+        selected_lines: list[str] = []
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            for line_number, raw_line in enumerate(f, start=1):
+                if line_number < effective_start:
+                    continue
+                if line_number > effective_end:
+                    break
+                selected_lines.append(raw_line.rstrip("\n"))
+
+        content = "\n".join(selected_lines)
         return {
             "content": content,
             "size": size,
-            "truncated": truncated,
+            "truncated": True,
+            "start_line": effective_start,
+            "end_line": effective_start + max(len(selected_lines) - 1, 0),
+            "total_lines": total_lines,
+            "has_prev": effective_start > 1,
+            "has_next": effective_end < total_lines,
         }
     except PermissionError:
         raise HTTPException(status_code=403, detail=f"Access denied: {path}")
@@ -382,6 +498,9 @@ async def raw_file(
 
 def _validate_name(name: str) -> None:
     """Validate a file/folder name. Raises HTTPException on invalid input."""
+    if os.path.isabs(name) or os.path.splitdrive(name)[0]:
+        raise HTTPException(status_code=400, detail="Invalid name")
+
     if sys.platform == "win32":
         _INVALID_CHARS = set('/<>:"\\|?*\0')
         _RESERVED_NAMES = {
@@ -390,7 +509,7 @@ def _validate_name(name: str) -> None:
             *(f"LPT{i}" for i in range(1, 10)),
         }
     else:
-        _INVALID_CHARS = set('/\0')
+        _INVALID_CHARS = set('/\\\0')
         _RESERVED_NAMES: set[str] = set()
     if (
         not name
@@ -400,6 +519,25 @@ def _validate_name(name: str) -> None:
         or (sys.platform == "win32" and name.endswith((" ", ".")))
     ):
         raise HTTPException(status_code=400, detail="Invalid name")
+
+
+def _resolve_child_path(parent: str, name: str) -> tuple[str, str]:
+    """Resolve a child entry and ensure it stays inside the parent directory."""
+    normalized_name = name.strip()
+    _validate_name(normalized_name)
+
+    parent_real = os.path.realpath(os.path.abspath(parent))
+    target_real = os.path.realpath(os.path.join(parent_real, normalized_name))
+
+    try:
+        is_within_parent = os.path.commonpath([parent_real, target_real]) == parent_real
+    except ValueError:
+        is_within_parent = False
+
+    if not is_within_parent or os.path.dirname(target_real) != parent_real:
+        raise HTTPException(status_code=400, detail="Invalid name")
+
+    return normalized_name, target_real
 
 
 class MkdirRequest(BaseModel):
@@ -415,10 +553,7 @@ async def make_directory(
     if not os.path.isdir(parent):
         raise HTTPException(status_code=400, detail=f"Parent not found: {parent}")
 
-    name = req.name.strip()
-    _validate_name(name)
-
-    target = os.path.join(parent, name)
+    name, target = _resolve_child_path(parent, req.name)
     if os.path.exists(target):
         raise HTTPException(status_code=400, detail=f"Already exists: {name}")
 
@@ -447,14 +582,11 @@ async def rename_entry(
     if not os.path.isdir(parent):
         raise HTTPException(status_code=400, detail=f"Parent not found: {parent}")
 
-    new_name = req.newName.strip()
-    _validate_name(new_name)
-
-    old_path = os.path.join(parent, req.oldName)
+    old_name, old_path = _resolve_child_path(parent, req.oldName)
+    new_name, new_path = _resolve_child_path(parent, req.newName)
     if not os.path.exists(old_path):
-        raise HTTPException(status_code=400, detail=f"Not found: {req.oldName}")
+        raise HTTPException(status_code=400, detail=f"Not found: {old_name}")
 
-    new_path = os.path.join(parent, new_name)
     if os.path.exists(new_path):
         raise HTTPException(status_code=400, detail=f"Already exists: {new_name}")
 
@@ -484,9 +616,9 @@ async def delete_entry(
     if not os.path.isdir(parent):
         raise HTTPException(status_code=400, detail=f"Parent not found: {parent}")
 
-    target = os.path.join(parent, req.name)
+    name, target = _resolve_child_path(parent, req.name)
     if not os.path.exists(target):
-        raise HTTPException(status_code=400, detail=f"Not found: {req.name}")
+        raise HTTPException(status_code=400, detail=f"Not found: {name}")
 
     # Prevent deleting the parent directory itself
     if os.path.abspath(target) == parent:
@@ -503,7 +635,7 @@ async def delete_entry(
         logger.error(f"delete_entry error: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete")
 
-    return {"deleted": req.name}
+    return {"deleted": name}
 
 
 @app.post("/api/upload")
@@ -553,6 +685,26 @@ async def upload_files(
 
 # --- Session API (인증 필요) ---
 
+@app.post("/api/sessions/preflight", response_model=SessionPreflightResponse)
+async def preflight_session(
+    req: CreateSessionRequest, _user: str = Depends(get_current_user)
+):
+    try:
+        result = session_manager.preflight_session(
+            work_path=req.work_path,
+            create_folder=req.create_folder,
+            cli_type=req.cli_type,
+            custom_command=req.custom_command,
+        )
+        return SessionPreflightResponse(**result)
+    except SessionValidationError as e:
+        return SessionPreflightResponse(
+            ok=False,
+            code=e.code,
+            message=e.message,
+            resolved_command=None,
+        )
+
 @app.get("/api/sessions", response_model=list[SessionResponse])
 async def list_sessions(_user: str = Depends(get_current_user)):
     sessions = await session_manager.list_sessions()
@@ -573,11 +725,22 @@ async def create_session(
             custom_exit_command=req.custom_exit_command,
         )
         return session
+    except SessionValidationError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code=e.code, message=e.message).model_dump(),
+        )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code="invalid_request", message=str(e)).model_dump(),
+        )
     except Exception as e:
         logger.error(f"create_session unexpected error: {type(e).__name__}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to create session")
+        raise HTTPException(
+            status_code=500,
+            detail=ApiErrorDetail(code="spawn_failed", message="Failed to create session").model_dump(),
+        )
 
 
 @app.post("/api/sessions/{session_id}/suspend", response_model=SessionResponse)
@@ -657,8 +820,9 @@ async def reorder_sessions(
 async def websocket_terminal(
     ws: WebSocket, session_id: str, token: str = Query(default="")
 ):
-    if not verify_ws_token(token):
-        await ws.close(code=4001, reason="Unauthorized")
+    if not verify_ws_token(ws, token):
+        await ws.accept()
+        await ws.close(code=4401, reason="Unauthorized")
         return
     await handle_terminal_ws(ws, session_id)
 
@@ -1444,6 +1608,167 @@ async def git_stash_drop(req: GitPullPushRequest, _user: str = Depends(get_curre
         return {"success": True, "output": output.strip()}
     except GitError as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- OpenCode Web API ---
+
+import httpx
+
+
+class OpenCodeWebStatusResponse(BaseModel):
+    running: bool
+    port: int | None
+
+
+@app.get("/api/opencode-web/status", response_model=OpenCodeWebStatusResponse)
+async def opencode_web_status(_user: str = Depends(get_current_user)):
+    status = opencode_web_manager.get_status()
+    return OpenCodeWebStatusResponse(**status)
+
+
+class OpenCodeWebStartResponse(BaseModel):
+    port: int
+
+
+@app.post("/api/opencode-web/start", response_model=OpenCodeWebStartResponse)
+async def opencode_web_start(_user: str = Depends(get_current_user)):
+    try:
+        port = opencode_web_manager.start()
+        return OpenCodeWebStartResponse(port=port)
+    except Exception as e:
+        logger.error(f"Failed to start OpenCode Web server: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/opencode-web/stop")
+async def opencode_web_stop(_user: str = Depends(get_current_user)):
+    try:
+        opencode_web_manager.stop()
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Failed to stop OpenCode Web server: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.api_route("/api/opencode-web/proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+@app.api_route("/api/opencode-web/proxy", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+async def opencode_web_proxy(
+    request: Request,
+    path: str = "",
+    _user: str = Depends(get_current_user),
+):
+    status = opencode_web_manager.get_status()
+    if not status["running"] or status["port"] is None:
+        raise HTTPException(status_code=503, detail="OpenCode Web server is not running")
+
+    target_port = status["port"]
+    
+    # 경로 정리: 여러 개의 /를 하나로
+    if not path:
+        target_url = f"http://127.0.0.1:{target_port}/"
+    else:
+        # 경로 정리
+        clean_path = "/" + path.strip("/")
+        target_url = f"http://127.0.0.1:{target_port}{clean_path}"
+
+    if request.url.query:
+        target_url += f"?{request.url.query}"
+
+    allowed_request_headers = {
+        "accept",
+        "accept-encoding",
+        "accept-language",
+        "cache-control",
+        "content-type",
+        "origin",
+        "referer",
+        "user-agent",
+        "x-requested-with",
+    }
+    headers = {
+        key: value
+        for key, value in request.headers.items()
+        if key.lower() in allowed_request_headers
+    }
+
+    body = None
+    if request.method in ["POST", "PUT", "PATCH"]:
+        body = await request.body()
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=False) as client:
+            response = await client.request(
+                method=request.method,
+                url=target_url,
+                headers=headers,
+                content=body,
+            )
+
+        # 응답 헤더 처리
+        response_headers = dict(response.headers)
+        response_headers.pop("access-control-allow_origin", None)
+        response_headers.pop("Access-Control-Allow-Origin", None)
+        response_headers.pop("transfer-encoding", None)
+        response_headers.pop("Transfer-Encoding", None)
+        response_headers.pop("content-security-policy", None)
+        response_headers.pop("Content-Security-Policy", None)
+
+        # 바이너리 파일은 그대로 반환 (폰트, 이미지 등)
+        content_type = response.headers.get("content-type", "")
+        if "text/html" in content_type:
+            try:
+                content = response.content.decode("utf-8", errors="replace")
+                
+                import re
+                
+                # src와 href 속성값 변환
+                def replace_src_href(m):
+                    attr = m.group(1)
+                    path_val = m.group(2)
+                    rewritten = _rewrite_proxy_url(path_val, target_port)
+                    return f'{attr}="{rewritten}"'
+                
+                content = re.sub(r'(src|href)=["\']([^"\']+)["\']', replace_src_href, content)
+                
+                response_headers["content-length"] = str(len(content.encode("utf-8")))
+                return Response(content=content, status_code=response.status_code, headers=response_headers)
+            except Exception as e:
+                logger.error(f"HTML rewrite error: {e}")
+        
+        # CSS url() 변환
+        if "text/css" in content_type:
+            try:
+                content = response.content.decode("utf-8", errors="replace")
+                
+                import re
+                
+                # url() 함수 변환
+                def replace_url(m):
+                    url_val = m.group(1)
+                    rewritten = _rewrite_proxy_url(url_val, target_port)
+                    return f'url("{rewritten}")'
+                
+                content = re.sub(r'url\(["\']?([^"\')\s]+)["\']?\)', replace_url, content)
+                
+                response_headers["content-length"] = str(len(content.encode("utf-8")))
+                return Response(content=content, status_code=response.status_code, headers=response_headers)
+            except Exception as e:
+                logger.error(f"CSS rewrite error: {e}")
+
+        # Redirect 응답
+        if response.status_code in (301, 302, 303, 307, 308):
+            location = response.headers.get("location")
+            if location:
+                response_headers["location"] = _rewrite_proxy_url(location, target_port)
+
+        return Response(
+            content=response.content,
+            status_code=response.status_code,
+            headers=response_headers,
+        )
+    except Exception as e:
+        logger.error(f"Proxy error: {e}")
+        raise HTTPException(status_code=502, detail=f"Proxy error: {str(e)}")
 
 
 # --- Static Files & SPA Catch-All ---

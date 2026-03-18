@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ConfirmDialog, PromptDialog } from "./Dialog";
 import type { ActivityState } from "./Terminal";
 import type { Session } from "../types/session";
 
@@ -11,10 +12,10 @@ interface SessionListProps {
   onSelect: (id: string, split?: boolean) => void;
   onResume: (id: string) => void;
   onNewSession: () => void;
-  onDelete: (id: string) => void;
-  onRename: (id: string, newName: string) => void;
+  onDelete: (id: string) => Promise<void>;
+  onRename: (id: string, newName: string) => Promise<void>;
   onSuspend: (id: string) => void;
-  onTerminate: (id: string) => void;
+  onTerminate: (id: string) => Promise<void>;
   onReorder?: (orderedIds: string[]) => void;
 }
 
@@ -61,11 +62,8 @@ const DoneBadge = () => (
       flexShrink: 0,
       animation: "ccr-pulse 1.5s ease-in-out infinite",
     }}
-  >
-  </span>
+  />
 );
-
-/* ── Context Menu ── */
 
 interface ContextMenuProps {
   x: number;
@@ -83,12 +81,12 @@ function ContextMenu({ x, y, session, onOpen, onRename, onSuspend, onTerminate, 
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y });
 
-  // Viewport boundary check
   useEffect(() => {
     const el = menuRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    let nx = x, ny = y;
+    let nx = x;
+    let ny = y;
     if (x + rect.width > window.innerWidth - 4) nx = window.innerWidth - rect.width - 4;
     if (y + rect.height > window.innerHeight - 4) ny = window.innerHeight - rect.height - 4;
     if (nx < 4) nx = 4;
@@ -96,12 +94,13 @@ function ContextMenu({ x, y, session, onOpen, onRename, onSuspend, onTerminate, 
     if (nx !== x || ny !== y) setPos({ x: nx, y: ny });
   }, [x, y]);
 
-  // Close handlers
   useEffect(() => {
     const handleMouseDown = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
     };
-    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
     const handleDismiss = () => onClose();
 
     document.addEventListener("mousedown", handleMouseDown);
@@ -123,7 +122,6 @@ function ContextMenu({ x, y, session, onOpen, onRename, onSuspend, onTerminate, 
     color: "#cdd6f4",
     whiteSpace: "nowrap",
   };
-
   const hoverBg = "#45475a";
 
   return createPortal(
@@ -143,21 +141,20 @@ function ContextMenu({ x, y, session, onOpen, onRename, onSuspend, onTerminate, 
       }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {/* Header: session name */}
-      <div style={{
-        padding: "6px 16px 4px",
-        fontSize: "var(--web-fs-xs)",
-        color: "#6c7086",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
-        borderBottom: "1px solid #313244",
-        marginBottom: 4,
-      }}>
+      <div
+        style={{
+          padding: "6px 16px 4px",
+          fontSize: "var(--web-fs-xs)",
+          color: "#6c7086",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          borderBottom: "1px solid #313244",
+          marginBottom: 4,
+        }}
+      >
         {session.name}
       </div>
-
-      {/* Open */}
       <div
         style={itemStyle}
         onClick={onOpen}
@@ -166,8 +163,6 @@ function ContextMenu({ x, y, session, onOpen, onRename, onSuspend, onTerminate, 
       >
         Open
       </div>
-
-      {/* Rename */}
       <div
         style={itemStyle}
         onClick={onRename}
@@ -176,8 +171,6 @@ function ContextMenu({ x, y, session, onOpen, onRename, onSuspend, onTerminate, 
       >
         Rename
       </div>
-
-      {/* Suspend — only for active sessions */}
       {session.status === "active" && (
         <div
           style={{ ...itemStyle, color: "#f9e2af" }}
@@ -188,8 +181,6 @@ function ContextMenu({ x, y, session, onOpen, onRename, onSuspend, onTerminate, 
           Suspend
         </div>
       )}
-
-      {/* Kill — only for active sessions */}
       {session.status === "active" && (
         <div
           style={{ ...itemStyle, color: "#fab387" }}
@@ -200,11 +191,7 @@ function ContextMenu({ x, y, session, onOpen, onRename, onSuspend, onTerminate, 
           Kill
         </div>
       )}
-
-      {/* Separator */}
       <div style={{ height: 1, background: "#313244", margin: "4px 0" }} />
-
-      {/* Delete */}
       <div
         style={{ ...itemStyle, color: "#f38ba8" }}
         onClick={onDelete}
@@ -217,8 +204,6 @@ function ContextMenu({ x, y, session, onOpen, onRename, onSuspend, onTerminate, 
     document.body,
   );
 }
-
-/* ── SessionList ── */
 
 export default function SessionList({
   sessions,
@@ -235,20 +220,33 @@ export default function SessionList({
   onReorder,
 }: SessionListProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; session: Session } | null>(null);
-
-  // Mobile long-press refs
-  const touchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const touchMovedRef = useRef(false);
-
-  // Drag and drop state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [renameTarget, setRenameTarget] = useState<Session | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Session | null>(null);
+  const [terminateTarget, setTerminateTarget] = useState<Session | null>(null);
+  const [actionPending, setActionPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [localSessions, setLocalSessions] = useState<Session[]>(sessions);
+  const touchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync local sessions with props
   useEffect(() => {
     setLocalSessions(sessions);
   }, [sessions]);
+
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const reorderEnabled = Boolean(onReorder && !normalizedQuery);
+  const visibleSessions = useMemo(() => {
+    if (!normalizedQuery) return localSessions;
+    return localSessions.filter((session) => {
+      return (
+        session.name.toLowerCase().includes(normalizedQuery)
+        || session.work_path.toLowerCase().includes(normalizedQuery)
+      );
+    });
+  }, [localSessions, normalizedQuery]);
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
@@ -259,7 +257,6 @@ export default function SessionList({
   }, []);
 
   const handleTouchStart = useCallback((e: React.TouchEvent, session: Session) => {
-    touchMovedRef.current = false;
     touchTimerRef.current = setTimeout(() => {
       const touch = e.touches[0];
       if (touch) {
@@ -269,7 +266,6 @@ export default function SessionList({
   }, []);
 
   const handleTouchMove = useCallback(() => {
-    touchMovedRef.current = true;
     if (touchTimerRef.current) {
       clearTimeout(touchTimerRef.current);
       touchTimerRef.current = null;
@@ -285,52 +281,99 @@ export default function SessionList({
 
   const handleOpen = useCallback((session: Session) => {
     closeContextMenu();
+    setActionError(null);
     if (session.status === "active") {
       onSelect(session.id);
     } else {
       onResume(session.id);
     }
-  }, [closeContextMenu, onSelect, onResume]);
+  }, [closeContextMenu, onResume, onSelect]);
 
-  const handleRenameAction = useCallback((session: Session) => {
+  const startRename = useCallback((session: Session) => {
     closeContextMenu();
-    const newName = window.prompt("New session name:", session.name);
-    if (newName !== null && newName.trim() !== "") {
-      onRename(session.id, newName.trim());
-    }
-  }, [closeContextMenu, onRename]);
+    setActionError(null);
+    setRenameTarget(session);
+    setRenameValue(session.name);
+  }, [closeContextMenu]);
 
   const handleSuspendAction = useCallback((session: Session) => {
     closeContextMenu();
     onSuspend(session.id);
   }, [closeContextMenu, onSuspend]);
 
-  const handleTerminateAction = useCallback((session: Session) => {
+  const startTerminate = useCallback((session: Session) => {
     closeContextMenu();
-    if (!confirm(`Kill session '${session.name}'?`)) return;
-    onTerminate(session.id);
-  }, [closeContextMenu, onTerminate]);
+    setActionError(null);
+    setTerminateTarget(session);
+  }, [closeContextMenu]);
 
-  const handleDeleteAction = useCallback((session: Session) => {
+  const startDelete = useCallback((session: Session) => {
     closeContextMenu();
-    if (!confirm(`Delete session '${session.name}'?`)) return;
-    if (!confirm("Are you sure? This action cannot be undone.")) return;
-    onDelete(session.id);
-  }, [closeContextMenu, onDelete]);
+    setActionError(null);
+    setDeleteTarget(session);
+  }, [closeContextMenu]);
 
-  // Drag and drop handlers
+  const submitRename = useCallback(async () => {
+    if (!renameTarget || !renameValue.trim()) return;
+    setActionPending(true);
+    setActionError(null);
+    try {
+      await onRename(renameTarget.id, renameValue.trim());
+      setRenameTarget(null);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to rename session.");
+    } finally {
+      setActionPending(false);
+    }
+  }, [onRename, renameTarget, renameValue]);
+
+  const submitDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    setActionPending(true);
+    setActionError(null);
+    try {
+      await onDelete(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to delete session.");
+    } finally {
+      setActionPending(false);
+    }
+  }, [deleteTarget, onDelete]);
+
+  const submitTerminate = useCallback(async () => {
+    if (!terminateTarget) return;
+    setActionPending(true);
+    setActionError(null);
+    try {
+      await onTerminate(terminateTarget.id);
+      setTerminateTarget(null);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to kill session.");
+    } finally {
+      setActionPending(false);
+    }
+  }, [onTerminate, terminateTarget]);
+
+  const resetDialogs = useCallback(() => {
+    if (actionPending) return;
+    setActionError(null);
+    setRenameTarget(null);
+    setDeleteTarget(null);
+    setTerminateTarget(null);
+  }, [actionPending]);
+
   const handleDragStart = useCallback((e: React.DragEvent, sessionId: string) => {
-    if (!onReorder) return;
+    if (!reorderEnabled) return;
     setDraggedId(sessionId);
     e.dataTransfer.effectAllowed = "move";
-    // Set drag image transparency
     const dragImage = e.currentTarget.cloneNode(true) as HTMLElement;
     dragImage.style.opacity = "0.5";
     dragImage.style.width = `${e.currentTarget.clientWidth}px`;
     document.body.appendChild(dragImage);
     e.dataTransfer.setDragImage(dragImage, 0, 0);
     setTimeout(() => document.body.removeChild(dragImage), 0);
-  }, [onReorder]);
+  }, [reorderEnabled]);
 
   const handleDragEnd = useCallback(() => {
     setDraggedId(null);
@@ -339,26 +382,21 @@ export default function SessionList({
 
   const handleDragOver = useCallback((e: React.DragEvent, sessionId: string) => {
     e.preventDefault();
-    if (!onReorder || !draggedId || draggedId === sessionId) return;
+    if (!reorderEnabled || !draggedId || draggedId === sessionId) return;
     setDragOverId(sessionId);
-  }, [onReorder, draggedId]);
-
-  const handleDragLeave = useCallback(() => {
-    setDragOverId(null);
-  }, []);
+  }, [draggedId, reorderEnabled]);
 
   const handleDrop = useCallback((e: React.DragEvent, targetId: string) => {
     e.preventDefault();
-    if (!onReorder || !draggedId || draggedId === targetId) {
+    if (!reorderEnabled || !draggedId || draggedId === targetId || !onReorder) {
       setDraggedId(null);
       setDragOverId(null);
       return;
     }
 
-    // Reorder sessions
     const newSessions = [...localSessions];
-    const draggedIndex = newSessions.findIndex(s => s.id === draggedId);
-    const targetIndex = newSessions.findIndex(s => s.id === targetId);
+    const draggedIndex = newSessions.findIndex((session) => session.id === draggedId);
+    const targetIndex = newSessions.findIndex((session) => session.id === targetId);
 
     if (draggedIndex === -1 || targetIndex === -1) {
       setDraggedId(null);
@@ -366,47 +404,58 @@ export default function SessionList({
       return;
     }
 
-    // Remove dragged item and insert at target position
     const [draggedItem] = newSessions.splice(draggedIndex, 1);
     newSessions.splice(targetIndex, 0, draggedItem);
 
     setLocalSessions(newSessions);
     setDraggedId(null);
     setDragOverId(null);
-
-    // Notify parent of new order
-    onReorder(newSessions.map(s => s.id));
-  }, [onReorder, localSessions, draggedId]);
+    onReorder(newSessions.map((session) => session.id));
+  }, [draggedId, localSessions, onReorder, reorderEnabled]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div
-        style={{
-          padding: "12px 16px",
-          borderBottom: "1px solid #313244",
-          fontWeight: 600,
-          fontSize: "var(--web-fs)",
-          color: "#cdd6f4",
-        }}
-      >
-        Sessions
+      <div style={{ padding: "12px 16px", borderBottom: "1px solid #313244" }}>
+        <div style={{ fontWeight: 700, fontSize: "var(--web-fs)", color: "#cdd6f4" }}>Sessions</div>
+        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search by name or path"
+            style={{
+              width: "100%",
+              padding: "9px 11px",
+              borderRadius: 8,
+              border: "1px solid #45475a",
+              background: "#313244",
+              color: "#cdd6f4",
+              fontSize: "var(--web-fs-sm)",
+              outline: "none",
+              boxSizing: "border-box",
+            }}
+          />
+          {normalizedQuery && (
+            <div style={{ fontSize: "var(--web-fs-xs)", color: "#f9e2af" }}>
+              Reordering is disabled while filtering.
+            </div>
+          )}
+        </div>
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
         {sessions.length === 0 && (
-          <div
-            style={{
-              padding: "16px",
-              color: "#6c7086",
-              textAlign: "center",
-              fontSize: "var(--web-fs-sm)",
-            }}
-          >
+          <div style={{ padding: 16, color: "#6c7086", textAlign: "center", fontSize: "var(--web-fs-sm)" }}>
             No sessions
           </div>
         )}
+        {sessions.length > 0 && visibleSessions.length === 0 && (
+          <div style={{ padding: 16, color: "#6c7086", textAlign: "center", fontSize: "var(--web-fs-sm)" }}>
+            No matching sessions
+          </div>
+        )}
 
-        {localSessions.map((session) => {
+        {visibleSessions.map((session) => {
           const isFocused = session.id === focusedSessionId;
           const isActiveNotFocused = !isFocused && activeSessions.includes(session.id);
           const isHighlighted = isFocused || isActiveNotFocused;
@@ -414,24 +463,16 @@ export default function SessionList({
           const isDragged = draggedId === session.id;
           const isDragOver = dragOverId === session.id;
 
-          const borderColor = isFocused
-            ? "#89b4fa"
-            : isActiveNotFocused
-              ? "#585b70"
-              : "transparent";
-          const bgColor = isFocused
-            ? "#313244"
-            : isActiveNotFocused
-              ? "#252535"
-              : "transparent";
+          const borderColor = isFocused ? "#89b4fa" : isActiveNotFocused ? "#585b70" : "transparent";
+          const bgColor = isFocused ? "#313244" : isActiveNotFocused ? "#252535" : "transparent";
 
           return (
             <div
               key={session.id}
-              draggable={!!onReorder}
+              draggable={reorderEnabled}
               style={{
                 padding: "10px 16px",
-                cursor: onReorder ? "grab" : "pointer",
+                cursor: reorderEnabled ? "grab" : "pointer",
                 background: bgColor,
                 borderLeft: `3px solid ${borderColor}`,
                 borderTop: isDragOver ? "2px solid #89b4fa" : "2px solid transparent",
@@ -441,8 +482,7 @@ export default function SessionList({
               }}
               onClick={(e) => {
                 if (session.status === "active") onSelect(session.id, e.shiftKey);
-                if (session.status === "closed" || session.status === "suspended")
-                  onResume(session.id);
+                if (session.status === "closed" || session.status === "suspended") onResume(session.id);
               }}
               onContextMenu={(e) => handleContextMenu(e, session)}
               onTouchStart={(e) => handleTouchStart(e, session)}
@@ -450,28 +490,20 @@ export default function SessionList({
               onTouchEnd={handleTouchEnd}
               onTouchCancel={handleTouchEnd}
               onMouseEnter={(e) => {
-                if (!isHighlighted)
-                  (e.currentTarget as HTMLDivElement).style.background = "#28283d";
+                if (!isHighlighted) (e.currentTarget as HTMLDivElement).style.background = "#28283d";
               }}
               onMouseLeave={(e) => {
-                if (!isHighlighted)
-                  (e.currentTarget as HTMLDivElement).style.background =
-                    bgColor === "transparent" ? "transparent" : bgColor;
+                if (!isHighlighted) {
+                  (e.currentTarget as HTMLDivElement).style.background = bgColor === "transparent" ? "transparent" : bgColor;
+                }
               }}
               onDragStart={(e) => handleDragStart(e, session.id)}
               onDragEnd={handleDragEnd}
               onDragOver={(e) => handleDragOver(e, session.id)}
-              onDragLeave={handleDragLeave}
+              onDragLeave={() => setDragOverId(null)}
               onDrop={(e) => handleDrop(e, session.id)}
             >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  marginBottom: 4,
-                }}
-              >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                 <span
                   style={{
                     width: 8,
@@ -495,7 +527,6 @@ export default function SessionList({
                 >
                   {session.name}
                 </span>
-                {/* Activity indicator */}
                 {activity === "processing" && <Spinner />}
                 {activity === "done" && <DoneBadge />}
               </div>
@@ -513,14 +544,7 @@ export default function SessionList({
                 {session.work_path}
               </div>
 
-              <div
-                style={{
-                  display: "flex",
-                  gap: 4,
-                  marginTop: 6,
-                  marginLeft: 16,
-                }}
-              >
+              <div style={{ display: "flex", gap: 4, marginTop: 6, marginLeft: 16 }}>
                 <span
                   style={{
                     fontSize: "var(--web-fs-xxs)",
@@ -538,32 +562,38 @@ export default function SessionList({
                     padding: "2px 6px",
                     borderRadius: 4,
                     background:
-                      session.cli_type === "opencode"
-                        ? "#00d4ff"
-                        : session.cli_type === "custom"
-                          ? "#a6e3a1"
-                          : session.cli_type === "terminal"
-                            ? "#cba6f7"
-                            : "#ff9553",
+                      session.cli_type === "opencode-web"
+                        ? "#f9e2af"
+                        : session.cli_type === "opencode"
+                          ? "#00d4ff"
+                          : session.cli_type === "custom"
+                            ? "#a6e3a1"
+                            : session.cli_type === "terminal"
+                              ? "#cba6f7"
+                              : "#fab387",
                     color: "#1e1e2e",
                   }}
                   title={
-                    session.cli_type === "opencode"
-                      ? "OpenCode CLI"
-                      : session.cli_type === "custom"
-                        ? "Custom CLI"
-                        : session.cli_type === "terminal"
-                          ? "Terminal"
-                          : "Claude Code CLI"
+                    session.cli_type === "opencode-web"
+                      ? "OpenCode Web"
+                      : session.cli_type === "opencode"
+                        ? "OpenCode CLI"
+                        : session.cli_type === "custom"
+                          ? "Custom CLI"
+                          : session.cli_type === "terminal"
+                            ? "Terminal"
+                            : "Claude Code CLI"
                   }
                 >
-                  {session.cli_type === "opencode"
-                    ? "OpenCode"
-                    : session.cli_type === "custom"
-                      ? "Custom"
-                      : session.cli_type === "terminal"
-                        ? "Terminal"
-                        : "Claude"}
+                  {session.cli_type === "opencode-web"
+                    ? "OpenCode Web"
+                    : session.cli_type === "opencode"
+                      ? "OpenCode"
+                      : session.cli_type === "custom"
+                        ? "Custom"
+                        : session.cli_type === "terminal"
+                          ? "Terminal"
+                          : "Claude"}
                 </span>
               </div>
             </div>
@@ -572,9 +602,7 @@ export default function SessionList({
       </div>
 
       <div style={{ padding: "12px 16px", borderTop: "1px solid #313244" }}>
-        {activeSessions.length === 1 && (
-          <div className="split-hint">Shift+Click to split view</div>
-        )}
+        {activeSessions.length === 1 && <div className="split-hint">Shift+Click to split view</div>}
         <button
           onClick={onNewSession}
           style={{
@@ -593,18 +621,57 @@ export default function SessionList({
         </button>
       </div>
 
-      {/* Context Menu */}
       {contextMenu && (
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
           session={contextMenu.session}
           onOpen={() => handleOpen(contextMenu.session)}
-          onRename={() => handleRenameAction(contextMenu.session)}
+          onRename={() => startRename(contextMenu.session)}
           onSuspend={() => handleSuspendAction(contextMenu.session)}
-          onTerminate={() => handleTerminateAction(contextMenu.session)}
-          onDelete={() => handleDeleteAction(contextMenu.session)}
+          onTerminate={() => startTerminate(contextMenu.session)}
+          onDelete={() => startDelete(contextMenu.session)}
           onClose={closeContextMenu}
+        />
+      )}
+
+      {renameTarget && (
+        <PromptDialog
+          title="Rename Session"
+          label="Session name"
+          value={renameValue}
+          confirmLabel="Save"
+          pending={actionPending}
+          error={actionError}
+          onChange={setRenameValue}
+          onConfirm={submitRename}
+          onCancel={resetDialogs}
+        />
+      )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Delete Session"
+          description={`Delete session '${deleteTarget.name}' permanently? This action cannot be undone.`}
+          confirmLabel="Delete"
+          danger
+          pending={actionPending}
+          error={actionError}
+          onConfirm={submitDelete}
+          onCancel={resetDialogs}
+        />
+      )}
+
+      {terminateTarget && (
+        <ConfirmDialog
+          title="Kill Session"
+          description={`Kill session '${terminateTarget.name}' now? The running terminal will be closed immediately.`}
+          confirmLabel="Kill"
+          danger
+          pending={actionPending}
+          error={actionError}
+          onConfirm={submitTerminate}
+          onCancel={resetDialogs}
         />
       )}
     </div>

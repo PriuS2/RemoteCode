@@ -30,6 +30,7 @@ async def pty_to_ws(ws: WebSocket, instance: PtyInstance) -> None:
                 instance.append_output(data)
                 await ws.send_json({"type": "output", "data": data})
         await ws.send_json({"type": "status", "data": "closed"})
+        await ws.close(code=1000, reason="Session closed")
     except WebSocketDisconnect:
         pass
     except asyncio.CancelledError:
@@ -86,7 +87,7 @@ async def _close_existing_connection(session_id: str) -> None:
         task.cancel()
     try:
         await prev_ws.send_json({"type": "status", "data": "taken_over"})
-        await prev_ws.close(code=4001, reason="Session taken over by another client")
+        await prev_ws.close(code=4409, reason="Session taken over by another client")
     except Exception:
         pass
     logger.info(f"Evicted previous connection for session {session_id}")
@@ -99,7 +100,7 @@ async def handle_terminal_ws(ws: WebSocket, session_id: str) -> None:
     instance = pty_manager.get(session_id)
     if not instance:
         await ws.send_json({"type": "status", "data": "not_found"})
-        await ws.close()
+        await ws.close(code=4404, reason="Session not found")
         return
 
     # 기존 연결이 있으면 끊고 새 연결이 차지

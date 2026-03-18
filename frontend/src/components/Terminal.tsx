@@ -27,7 +27,6 @@ export type ActivityState = "idle" | "processing" | "done";
 
 interface TerminalProps {
   sessionId: string;
-  token: string;
   visible?: boolean;
   fontSize?: number;
   onFontSizeChange?: (delta: number) => void;
@@ -50,15 +49,34 @@ const STATUS_STYLE: Record<string, React.CSSProperties> = {
     background: "#f9e2af",
     color: "#1e1e2e",
   },
+  reconnecting: {
+    background: "#fab387",
+    color: "#1e1e2e",
+  },
   disconnected: {
     background: "#f38ba8",
     color: "#1e1e2e",
+  },
+  auth_failed: {
+    background: "#f38ba8",
+    color: "#1e1e2e",
+  },
+  taken_over: {
+    background: "#cba6f7",
+    color: "#11111b",
+  },
+  not_found: {
+    background: "#f38ba8",
+    color: "#1e1e2e",
+  },
+  closed: {
+    background: "#6c7086",
+    color: "#f5e0dc",
   },
 };
 
 export default function Terminal({
   sessionId,
-  token,
   visible = true,
   fontSize = 14,
   onFontSizeChange,
@@ -105,7 +123,7 @@ export default function Terminal({
   const [scrollThumb, setScrollThumb] = useState<{ top: number; height: number } | null>(null);
   const [scrollbarActive, setScrollbarActive] = useState(false);
 
-  const wsUrl = sessionId ? getWsUrl(sessionId, token) : null;
+  const wsUrl = sessionId ? getWsUrl(sessionId) : null;
 
   const { sendInput, sendResize, sendMouse, status } = useWebSocket({
     url: wsUrl,
@@ -135,6 +153,10 @@ export default function Terminal({
         }
       } else if (msg.type === "status" && msg.data === "closed") {
         termRef.current?.write("\r\n\x1b[31m[Session closed]\x1b[0m\r\n");
+      } else if (msg.type === "status" && msg.data === "taken_over") {
+        termRef.current?.write("\r\n\x1b[33m[Session taken over by another client]\x1b[0m\r\n");
+      } else if (msg.type === "status" && msg.data === "not_found") {
+        termRef.current?.write("\r\n\x1b[31m[Session not found]\x1b[0m\r\n");
       }
     },
     autoReconnect: true,
@@ -555,6 +577,22 @@ export default function Terminal({
   }, [gitPanelWidth]);
 
   const showBanner = status !== "connected";
+  const statusLabel =
+    status === "connecting"
+      ? "Connecting..."
+      : status === "reconnecting"
+        ? "Reconnecting..."
+        : status === "auth_failed"
+          ? "Authentication expired. Please log in again."
+          : status === "taken_over"
+            ? "Session taken over by another client."
+            : status === "not_found"
+              ? "Session not found."
+              : status === "closed"
+                ? "Session closed."
+                : status === "disconnected"
+                  ? "Disconnected."
+                  : "";
 
   // Compute position style
   const positionStyle: React.CSSProperties = splitMode
@@ -699,15 +737,13 @@ export default function Terminal({
             ...(STATUS_STYLE[status] || {}),
           }}
         >
-          {status === "connecting" && "Connecting..."}
-          {status === "disconnected" && "Disconnected - Reconnecting..."}
+          {statusLabel}
         </div>
       )}
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         {explorerOpen && (
           <div style={{ width: isMobile() ? undefined : explorerWidth, flexShrink: 0 }}>
             <FileExplorer
-              token={token}
               rootPath={workPath}
               onInsertPath={handleInsertPath}
               onClose={() => setExplorerOpen(false)}
@@ -724,7 +760,6 @@ export default function Terminal({
         {gitPanelOpen && (
           <div style={{ width: isMobile() ? undefined : gitPanelWidth, flexShrink: 0 }}>
             <GitPanel
-              token={token}
               workPath={workPath}
               onClose={() => setGitPanelOpen(false)}
               isMobile={isMobile()}

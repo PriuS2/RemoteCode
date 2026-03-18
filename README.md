@@ -4,143 +4,45 @@
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Node.js 18+](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
 
-
-A self-hosted web application that lets you use [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI remotely from your browser.
-
-Manage Claude Code processes on your server and connect from anywhere via a WebSocket-based terminal. Optionally use Cloudflare Tunnel for secure external access.
-
-
-  #### [Session management / switching]
-  ![Split View](docs/screenshots/terninal_split.png)
-
-
-  #### [File explorer]
-  | explorer | Code | Image | Audio |
-  |------|------|-------|-------|
-  | ![File Explorer](docs/screenshots/file_explorer.png) | ![Code](docs/screenshots/file_explorer_preview_code.png) | ![Image](docs/screenshots/file_explorer_preview_image.png) | ![Audio](docs/screenshots/file_explorer_preview_audio.png) |
-  
-  #### [Git support]
-  | Changes | History |
-  |------|-------|
-  | ![Changes](docs/screenshots/git_panel.png) | ![History](docs/screenshots/git_panel_history.png)
-
-
+Remote Code is a self-hosted web app for running terminal-based coding workflows from the browser.
+It provides persistent PTY-backed sessions, file browsing, Git tooling, and OpenCode Web proxying on
+top of a FastAPI backend and React frontend.
 
 ## Features
 
-- **Web Terminal** — Full terminal powered by xterm.js (input, output, resize). Supports real-time interaction with Claude Code CLI processes.
-
-  <details>
-  <summary>Click to view screenshot</summary>
-
-  ![Web Terminal](docs/screenshots/terminal.png)
-
-  </details>
-
-- **Multi Session** — Create, switch, suspend, and resume multiple independent Claude Code sessions. Each session runs as a separate PTY process. Sessions are displayed in a fixed order and can be reordered via drag-and-drop.
-
-- **Session Reordering** — Drag and drop sessions in the sidebar to organize them in your preferred order. Session order is persisted across page reloads.
-
-- **Split View** — Open two sessions side-by-side using Shift+Click for parallel workflows or comparison tasks.
-
-  <details>
-  <summary>Click to view screenshot</summary>
-
-  ![Split View](docs/screenshots/terninal_split.png)
-
-  </details>
-
-- **File Explorer** — Browse server filesystem with full file operations: preview code (syntax highlighted), images, and audio files directly in browser; insert file paths into terminal; right-click context menu for preview, open, download, or copy path options.
-
-  <details>
-  <summary>Click to view screenshot</summary>
-
-  ![File Explorer](docs/screenshots/file_explorer.png)
-
-  | Code | Image | Audio |
-  |------|-------|-------|
-  | ![Code](docs/screenshots/file_explorer_preview_code.png) | ![Image](docs/screenshots/file_explorer_preview_image.png) | ![Audio](docs/screenshots/file_explorer_preview_audio.png) |
-  
-
-  </details>
-
-- **File Upload/Download** — Drag & drop files to upload to any directory on the server; download files from server directly to your local machine.
-
-  <details>
-  <summary>Click to view screenshot</summary>
-
-  ![File Upload](docs/screenshots/file_explorer_upload.png)
-
-  </details>
-
-- **Folder Browser** — Working directory selection with drive shortcuts and preset folders (Desktop, Documents, Downloads). Create new directories via UI.
-
-  <details>
-  <summary>Click to view screenshot</summary>
-
-  ![Folder Browser](docs/screenshots/folder-browser.png)
-
-  </details>
-
-- **Session Persistence** — PTY processes survive WebSocket disconnects and can be resumed anytime without losing state.
-
-- **Git Panel** — Visualize Git commit history with ASCII-style commit graph, branch/tag navigation, and commit details view. View file diffs directly in browser; interactively select branches to switch context for diff viewing.
-
-  <details>
-  <summary>Click to view screenshot</summary>
-
-  | Changes | History |
-  |------|-------|
-  | ![Changes](docs/screenshots/git_panel.png) | ![History](docs/screenshots/git_panel_history.png)
-
-  </details>
-
-- **Authentication & Security** — Password-based login with JWT token issuance; rate limiting on login API for brute-force protection.
-
-  <details>
-  <summary>Click to view screenshot</summary>
-
-  ![Login](docs/screenshots/login.png)
-
-  </details>
-
-- **Cross-Platform** — Works on Windows, Linux, and macOS with automatic PTY backend detection (pywinpty/pexpect).
-
-- **CLI Type Selection** — Create sessions with different CLI types: Claude Code, OpenCode, Terminal, or custom commands. Each type has its own color badge in the session list.
-
-- **New Session** — Create a new session by specifying a work path. Supports browsing folders, auto-creating directories, and selecting CLI type with optional custom commands.
-
-  <details>
-  <summary>Click to view screenshot</summary>
-
-  ![New Session](docs/screenshots/new_session.png)
-
-  </details>
+- Web terminal powered by xterm.js
+- Multiple persistent sessions with suspend, resume, rename, reorder, and split view
+- CLI types: `claude`, `opencode`, `opencode-web`, `terminal`, and `custom`
+- File explorer with preview, upload, download, rename, delete, mkdir, and server-side open
+- Git status, diff, history, branch, commit, stash, pull, and push actions
+- Password login backed by an `HttpOnly` session cookie
+- Optional Cloudflare Tunnel or reverse-proxy deployment
 
 ## Architecture
 
-```
+```text
 Browser (React + xterm.js)
-    ↕ HTTP / WebSocket
-FastAPI Backend
-    ↕ PTY (pywinpty / pexpect)
-Claude Code CLI Process
+    <-> HTTP / WebSocket
+FastAPI backend
+    <-> PTY manager (pywinpty / pexpect)
+CLI process
 ```
 
-| Layer | Tech Stack |
-|-------|-----------|
+| Layer | Stack |
+| --- | --- |
 | Frontend | React 18, TypeScript, Vite, xterm.js |
-| Backend | Python, FastAPI, Uvicorn, WebSocket |
-| PTY | pywinpty (Windows) / pexpect (Linux, macOS) |
-| DB | SQLite (aiosqlite) — session metadata |
-| Auth | JWT (PyJWT), slowapi rate limit |
-| Tunnel | Cloudflare Tunnel (optional) |
+| Backend | FastAPI, Uvicorn, WebSocket |
+| PTY | pywinpty on Windows, pexpect on Linux/macOS |
+| Storage | SQLite via aiosqlite |
+| Auth | Password login + JWT-backed `HttpOnly` cookie |
 
 ## Requirements
 
-- **Python** 3.10+
-- **Node.js** 18+
-- **Claude Code CLI** — `claude` command must be in PATH
+- Python 3.10+
+- Node.js 18+
+- At least one CLI available in `PATH`
+  - `claude` for Claude Code sessions
+  - `opencode` for OpenCode and OpenCode Web sessions
 
 ## Quick Start
 
@@ -158,27 +60,30 @@ chmod +x *.sh
 make setup
 ```
 
-### 2. Environment Variables
+### 2. Configure `.env`
 
-A `.env` file is auto-generated on first run. **Make sure to change the following values:**
+The first run creates a `.env` file. Change the security-sensitive defaults before exposing the app.
 
 ```env
 CCR_HOST=0.0.0.0
 CCR_PORT=8080
 CCR_CLAUDE_COMMAND=claude
-CCR_PASSWORD=changeme              # Login password
-CCR_JWT_SECRET=change-this-secret-key  # JWT signing key (must change)
+CCR_OPENCODE_COMMAND=opencode
+CCR_OPENCODE_WEB_PORT=8096
+CCR_OPENCODE_WEB_HOSTNAME=0.0.0.0
+CCR_PASSWORD=changeme
+CCR_JWT_SECRET=change-this-secret-key
 CCR_JWT_EXPIRE_HOURS=72
 CCR_DB_PATH=sessions.db
 # CCR_ALLOWED_ORIGINS=https://your-domain.com
 ```
 
-> The server will not start if `CCR_JWT_SECRET` is left at default.
+The server refuses to start while `CCR_JWT_SECRET` is left at the insecure default.
 
 ### 3. Run
 
 ```bash
-# Development mode (backend hot-reload + Vite dev server)
+# Development mode
 # Windows
 .\start-dev.ps1
 
@@ -190,8 +95,7 @@ make dev
 ```
 
 ```bash
-# Production mode (backend serves built frontend)
-# Build frontend first
+# Production mode
 cd frontend && npm run build && cd ..
 
 # Windows
@@ -206,138 +110,134 @@ make start
 
 ### 4. Access
 
-- **Dev mode**: `http://localhost:5173` (Vite) → backend proxy
-- **Production mode**: `http://localhost:8080`
+- Development: `http://localhost:5173`
+- Production: `http://localhost:8080`
 
-## Cloudflare Tunnel (Optional)
+Log in with the password from `CCR_PASSWORD`. The backend sets an `HttpOnly` cookie and the frontend
+uses `credentials: "same-origin"` for authenticated requests.
 
-Use Cloudflare Tunnel for secure external access.
+## Supported Session Types
 
-### Quick Tunnel (Temporary URL)
+| CLI type | Description |
+| --- | --- |
+| `claude` | Claude Code CLI session |
+| `opencode` | OpenCode terminal session |
+| `opencode-web` | OpenCode Web launched through the backend proxy |
+| `terminal` | Plain shell session |
+| `custom` | User-provided command with optional custom exit command |
+
+## API Overview
+
+Remote Code uses cookie-authenticated REST APIs plus a terminal WebSocket endpoint.
+
+### Authentication
+
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/session`
+
+### Files and folders
+
+- `GET /api/browse`
+- `GET /api/files`
+- `GET /api/file-content`
+- `GET /api/file-raw`
+- `POST /api/mkdir`
+- `POST /api/rename`
+- `POST /api/delete`
+- `POST /api/upload`
+- `POST /api/open-explorer`
+
+### Sessions
+
+- `POST /api/sessions/preflight`
+- `GET /api/sessions`
+- `POST /api/sessions`
+- `POST /api/sessions/{session_id}/suspend`
+- `POST /api/sessions/{session_id}/resume`
+- `PATCH /api/sessions/{session_id}/rename`
+- `DELETE /api/sessions/{session_id}`
+- `POST /api/sessions/reorder`
+- `WS /ws/terminal/{session_id}`
+
+### Git
+
+- `GET /api/git/status`
+- `GET /api/git/log`
+- `GET /api/git/branches`
+- `GET /api/git/diff`
+- `GET /api/git/commit-detail`
+- `GET /api/git/commit-diff`
+- `POST /api/git/stage`
+- `POST /api/git/unstage`
+- `POST /api/git/discard`
+- `POST /api/git/commit`
+- `POST /api/git/checkout`
+- `POST /api/git/create-branch`
+- `POST /api/git/pull`
+- `POST /api/git/push`
+- `GET /api/git/stash-list`
+- `POST /api/git/stash`
+- `POST /api/git/stash-pop`
+- `POST /api/git/stash-drop`
+
+### OpenCode Web
+
+- `GET /api/opencode-web/status`
+- `POST /api/opencode-web/start`
+- `POST /api/opencode-web/stop`
+- `ANY /api/opencode-web/proxy`
+- `ANY /api/opencode-web/proxy/{path}`
+
+For request and response details, see [docs/backend-api.md](docs/backend-api.md).
+
+## Cloudflare Tunnel
+
+For external access you can use the bundled helper scripts:
 
 ```bash
-# Windows
-.\tunnel-quick.ps1
-
-# Linux / macOS
-./tunnel-quick.sh
-
-# Make
+# Temporary tunnel
 make tunnel-quick
-```
 
-### Named Tunnel (Fixed Domain)
-
-Set `CCR_DOMAIN` in `.env`, then:
-
-```bash
-# Windows
-.\tunnel.ps1
-
-# Linux / macOS
-./tunnel.sh
-
-# Make
+# Named tunnel
 make tunnel
 ```
 
-> Named Tunnel requires `cloudflared tunnel create` and DNS setup beforehand.
+See [docs/deployment.md](docs/deployment.md) for deployment details.
 
 ## Project Structure
 
+```text
+backend/
+  main.py
+  auth.py
+  config.py
+  database.py
+  git_utils.py
+  opencode_web_manager.py
+  pty_manager.py
+  session_manager.py
+  websocket.py
+frontend/
+  src/
+docs/
 ```
-├── backend/
-│   ├── main.py              # FastAPI app, REST API
-│   ├── pty_manager.py        # Cross-platform PTY management
-│   ├── session_manager.py    # Session lifecycle
-│   ├── websocket.py          # WebSocket ↔ PTY relay
-│   ├── git_utils.py          # Git operations (log, branch, diff)
-│   ├── auth.py               # JWT authentication
-│   ├── config.py             # Environment variable config
-│   ├── database.py           # SQLite session store
-│   └── requirements.txt
-├── frontend/
-│   ├── src/
-│   │   ├── App.tsx           # Main layout, session management
-│   │   ├── components/
-│   │   │   ├── Terminal.tsx       # xterm.js terminal
-│   │   │   ├── SessionList.tsx    # Session list sidebar
-│   │   │   ├── FileExplorer.tsx   # File explorer
-│   │   │   ├── GitPanel.tsx       # Git commit graph & history view
-│   │   │   ├── FolderBrowser.tsx  # Folder selection dialog
-│   │   │   ├── NewSession.tsx     # Session creation modal
-│   │   │   └── Login.tsx          # Login screen
-│   │   └── utils/
-│   │       ├── fileIcons.tsx      # File icons
-│   │       ├── pathUtils.ts       # Path utilities
-│   │       ├── notify.ts          # Browser notifications
-│   │       └── gitGraph.ts        # Commit graph rendering utility
-│   ├── package.json
-│   └── vite.config.ts
-├── setup.ps1 / setup.sh
-├── start.ps1 / start.sh
-├── start-dev.ps1 / start-dev.sh
-├── tunnel.ps1 / tunnel.sh
-├── tunnel-quick.ps1 / tunnel-quick.sh
-└── Makefile
-```
-
-## API Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/login` | Password login → JWT token |
-| GET | `/api/health` | Health check |
-| GET | `/api/browse` | Browse folder list |
-| GET | `/api/files` | List files/folders |
-| GET | `/api/file-content` | Read text file content |
-| GET | `/api/file-raw` | Download raw file |
-| POST | `/api/mkdir` | Create folder |
-| POST | `/api/upload` | Upload file |
-| POST | `/api/open-explorer` | Open OS file explorer |
-| GET | `/api/sessions` | List sessions |
-| POST | `/api/sessions` | Create session |
-| POST | `/api/sessions/:id/suspend` | Suspend session |
-| POST | `/api/sessions/:id/resume` | Resume session |
-| PATCH | `/api/sessions/:id/rename` | Rename session |
-| DELETE | `/api/sessions/:id` | Terminate/delete session |
-| POST | `/api/sessions/reorder` | Reorder sessions |
-| POST | `/api/open-explorer` | Open OS file explorer |
-| GET | `/api/files/download` | Download file |
-| POST | `/api/files/upload` | Upload file |
-| GET | `/api/git/status` | Git status |
-| GET | `/api/git/diff` | Git diff |
-| GET | `/api/git/branches` | List branches |
-| GET | `/api/git/log` | Commit log |
-| POST | `/api/git/checkout` | Checkout branch |
-| POST | `/api/git/add` | Stage files |
-| POST | `/api/git/reset` | Unstage files |
-| POST | `/api/git/discard` | Discard changes |
-| POST | `/api/git/commit` | Create commit |
-| POST | `/api/git/push` | Push to remote |
-| POST | `/api/git/pull` | Pull from remote |
-| POST | `/api/git/fetch` | Fetch from remote |
-| WS | `/ws/{session_id}` | Terminal WebSocket |
-
-## Security Notes
-
-- Change `CCR_JWT_SECRET` to a strong random string
-- Change `CCR_PASSWORD` from the default value
-- In production, restrict `CCR_ALLOWED_ORIGINS` to your actual domain
-- HTTPS (e.g., via Cloudflare Tunnel) is recommended
 
 ## Documentation
 
-Detailed documentation is available in the `docs/` directory:
+- [docs/README.md](docs/README.md) - documentation index
+- [docs/backend-api.md](docs/backend-api.md) - REST and WebSocket reference
+- [docs/configuration.md](docs/configuration.md) - environment variables and runtime settings
+- [docs/websocket-protocol.md](docs/websocket-protocol.md) - terminal WebSocket behavior
+- [docs/verification-checklist.md](docs/verification-checklist.md) - basic manual verification flow
 
-- [Architecture](docs/architecture.md) — System architecture and component details
-- [Backend API](docs/backend-api.md) — Complete API reference
-- [Configuration](docs/configuration.md) — Environment variables and settings
-- [Deployment](docs/deployment.md) — Production deployment guide
-- [File Explorer](docs/file-explorer.md) — File explorer features
-- [Git Integration](docs/git-integration.md) — Git panel and operations
+## Security Notes
+
+- Change `CCR_PASSWORD`
+- Change `CCR_JWT_SECRET`
+- Restrict `CCR_ALLOWED_ORIGINS` in production
+- Prefer HTTPS or a trusted tunnel when exposing the app
 
 ## License
 
 MIT
-

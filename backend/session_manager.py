@@ -2,6 +2,8 @@ import asyncio
 import logging
 import os
 import re
+import shlex
+import shutil
 import uuid
 from typing import Optional
 
@@ -20,7 +22,129 @@ from .pty_manager import PtyInstance, pty_manager
 logger = logging.getLogger(__name__)
 
 
+class SessionValidationError(ValueError):
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
 class SessionManager:
+    def _default_command(self, cli_type: str, custom_command: Optional[str] = None) -> Optional[str]:
+        if cli_type == "opencode":
+            return settings.opencode_command
+        if cli_type == "terminal":
+            if os.name == "nt":
+                return "powershell.exe"
+            return os.environ.get("SHELL", "/bin/bash")
+        if cli_type == "custom":
+            if not custom_command or not custom_command.strip():
+                raise SessionValidationError(
+                    "custom_command_missing",
+                    "Custom command is required for Custom CLI.",
+                )
+            return custom_command.strip()
+        if cli_type == "opencode-web":
+            return None
+        return settings.claude_command
+
+    def _split_command(self, command: str) -> list[str]:
+        try:
+            parts = shlex.split(command, posix=os.name != "nt")
+        except ValueError as exc:
+            raise SessionValidationError("invalid_command", f"Invalid command syntax: {exc}") from exc
+        if not parts:
+            raise SessionValidationError("invalid_command", "Command is empty.")
+        return parts
+
+    def _validate_work_path(self, work_path: str, create_folder: bool) -> str:
+        normalized = work_path.strip()
+        if not normalized:
+            raise SessionValidationError("work_path_missing", "Work path is required.")
+
+        absolute_path = os.path.abspath(normalized)
+        if os.path.exists(absolute_path):
+            if not os.path.isdir(absolute_path):
+                raise SessionValidationError(
+                    "directory_not_found",
+                    f"Directory does not exist: {absolute_path}",
+                )
+            if not os.access(absolute_path, os.R_OK | os.W_OK | os.X_OK):
+                raise SessionValidationError(
+                    "permission_denied",
+                    f"Permission denied: {absolute_path}",
+                )
+            return absolute_path
+
+        if not create_folder:
+            raise SessionValidationError(
+                "directory_not_found",
+                f"Directory does not exist: {absolute_path}",
+            )
+
+        parent = os.path.dirname(absolute_path) or absolute_path
+        while parent and not os.path.exists(parent):
+            next_parent = os.path.dirname(parent)
+            if next_parent == parent:
+                break
+            parent = next_parent
+
+        if parent and os.path.exists(parent) and not os.access(parent, os.W_OK | os.X_OK):
+            raise SessionValidationError(
+                "permission_denied",
+                f"Permission denied: {parent}",
+            )
+
+        return absolute_path
+
+    def _validate_command_available(self, command: str) -> list[str]:
+        parts = self._split_command(command)
+        executable = parts[0]
+
+        resolved = shutil.which(executable)
+        if resolved:
+            return parts
+
+        has_path_separator = any(sep in executable for sep in (os.sep, "/", "\\"))
+        if has_path_separator or os.path.isabs(executable):
+            candidate = os.path.abspath(executable)
+            if os.path.exists(candidate) and not os.access(candidate, os.X_OK):
+                raise SessionValidationError(
+                    "permission_denied",
+                    f"Permission denied: {candidate}",
+                )
+
+        raise SessionValidationError("cli_not_found", f"CLI not found: {executable}")
+
+    def preflight_session(
+        self,
+        work_path: str,
+        create_folder: bool = False,
+        cli_type: str = "claude",
+        custom_command: Optional[str] = None,
+    ) -> dict:
+        validated_path = self._validate_work_path(work_path, create_folder)
+        command = self._default_command(cli_type, custom_command)
+
+        if command is None:
+            return {
+                "ok": True,
+                "code": "ok",
+                "message": "OpenCode Web session is ready.",
+                "resolved_command": None,
+                "work_path": validated_path,
+            }
+
+        parts = self._validate_command_available(command)
+        resolved_command = " ".join(parts)
+        return {
+            "ok": True,
+            "code": "ok",
+            "message": f"{parts[0]} is available.",
+            "resolved_command": resolved_command,
+            "work_path": validated_path,
+        }
+
     async def create_session(
         self,
         work_path: str,
@@ -30,37 +154,39 @@ class SessionManager:
         custom_command: Optional[str] = None,
         custom_exit_command: Optional[str] = None,
     ) -> dict:
-        work_path = os.path.abspath(work_path)
+        preflight = self.preflight_session(
+            work_path=work_path,
+            create_folder=create_folder,
+            cli_type=cli_type,
+            custom_command=custom_command,
+        )
+        work_path = preflight["work_path"]
 
         if create_folder and not os.path.exists(work_path):
             os.makedirs(work_path, exist_ok=True)
 
         if not os.path.isdir(work_path):
-            raise ValueError(f"Directory does not exist: {work_path}")
+            raise SessionValidationError("directory_not_found", f"Directory does not exist: {work_path}")
 
         session_id = str(uuid.uuid4())
         display_name = name or os.path.basename(work_path)
 
-        # Determine which command to use based on cli_type
-        if cli_type == "opencode":
-            command = settings.opencode_command
-        elif cli_type == "terminal":
-            # OS별 기본 터미널 선택
-            if os.name == "nt":
-                command = "powershell.exe"  # Windows
-            else:
-                command = os.environ.get("SHELL", "/bin/bash")  # Linux/macOS
-        elif cli_type == "custom":
-            if not custom_command:
-                raise ValueError("Custom command is required for custom CLI type")
-            command = custom_command
-        else:
-            command = settings.claude_command
+        command = self._default_command(cli_type, custom_command)
+        command_args: list[str] = []
+        if command is not None:
+            parts = self._validate_command_available(command)
+            command = parts[0]
+            command_args = parts[1:]
 
         # DB에 세션 생성
         session = await db_create_session(
             session_id, display_name, work_path, cli_type, custom_command, custom_exit_command
         )
+
+        # opencode-web 타입은 PTY 생성 안 함
+        if cli_type == "opencode-web":
+            logger.info(f"Session created: {session_id} ({display_name}) at {work_path} (OpenCode Web, no PTY)")
+            return session
 
         # PTY 생성 (10초 타임아웃)
         try:
@@ -69,13 +195,14 @@ class SessionManager:
                     session_id=session_id,
                     work_path=work_path,
                     command=command,
+                    args=command_args,
                 ),
                 timeout=10,
             )
         except Exception as e:
             logger.error(f"PTY spawn failed for {session_id}: {e}")
             await db_delete_session(session_id)
-            raise ValueError(f"Failed to start terminal: {e}")
+            raise SessionValidationError("spawn_failed", f"Failed to start terminal: {e}") from e
 
         logger.info(f"Session created: {session_id} ({display_name}) at {work_path}")
         return session
@@ -92,6 +219,12 @@ class SessionManager:
             raise ValueError(f"Session not found: {session_id}")
         if session["status"] != "active":
             raise ValueError(f"Session is not active: {session_id}")
+
+        cli_type = session.get("cli_type", "claude")
+
+        if cli_type == "opencode-web":
+            await db_update_session(session_id, status="suspended")
+            return await db_get_session(session_id)
 
         instance = pty_manager.get(session_id)
         if instance and instance.is_alive():
@@ -159,6 +292,14 @@ class SessionManager:
         if session["status"] not in ("suspended", "closed"):
             raise ValueError(f"Session is not suspended or closed: {session_id}")
 
+        cli_type = session.get("cli_type", "claude")
+
+        if cli_type == "opencode-web":
+            await db_update_session(session_id, status="active")
+            await update_last_accessed(session_id)
+            logger.info(f"Session resumed: {session_id} (OpenCode Web)")
+            return await db_get_session(session_id)
+
         # 기존 PTY 정리
         existing = pty_manager.get(session_id)
         if existing:
@@ -168,16 +309,24 @@ class SessionManager:
         cli_type = session.get("cli_type", "claude")
         if cli_type == "opencode":
             command = settings.opencode_command
+            command_args: list[str] = []
         elif cli_type == "terminal":
             # OS별 기본 터미널 선택
             if os.name == "nt":
                 command = "powershell.exe"  # Windows
             else:
                 command = os.environ.get("SHELL", "/bin/bash")  # Linux/macOS
+            command_args = []
         elif cli_type == "custom":
-            command = session.get("custom_command") or "echo 'No custom command set'"
+            custom = session.get("custom_command")
+            if not custom:
+                raise SessionValidationError("custom_command_missing", "Custom command is required for Custom CLI.")
+            parts = self._validate_command_available(custom)
+            command = parts[0]
+            command_args = parts[1:]
         else:
             command = settings.claude_command
+            command_args = []
 
         # suspended + claude_session_id가 있으면 resume으로 대화 이어가기
         args = []
@@ -199,7 +348,7 @@ class SessionManager:
             session_id=session_id,
             work_path=session["work_path"],
             command=command,
-            args=args,
+            args=command_args + args,
         )
 
         await db_update_session(session_id, status="active")
@@ -213,8 +362,10 @@ class SessionManager:
         if not session:
             raise ValueError(f"Session not found: {session_id}")
 
-        # PTY 강제 종료
-        pty_manager.remove(session_id)
+        cli_type = session.get("cli_type", "claude")
+
+        if cli_type != "opencode-web":
+            pty_manager.remove(session_id)
 
         await db_update_session(session_id, status="closed")
         logger.info(f"Session terminated: {session_id}")
@@ -225,8 +376,10 @@ class SessionManager:
         if not session:
             raise ValueError(f"Session not found: {session_id}")
 
-        # PTY가 남아있으면 정리
-        pty_manager.remove(session_id)
+        cli_type = session.get("cli_type", "claude")
+
+        if cli_type != "opencode-web":
+            pty_manager.remove(session_id)
 
         await db_delete_session(session_id)
         logger.info(f"Session deleted: {session_id}")

@@ -1,36 +1,183 @@
-import { useState, FormEvent } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import FolderBrowser from "./FolderBrowser";
+import type { CliPreflightResponse } from "../types/api";
+import { apiFetch, readErrorDetail } from "../utils/api";
 
 interface NewSessionProps {
-  token: string;
   onCreated: (sessionId: string) => void;
   onCancel: () => void;
 }
 
-export default function NewSession({ token, onCreated, onCancel }: NewSessionProps) {
+type CliType = "claude" | "opencode" | "opencode-web" | "terminal" | "custom";
+
+const CLI_OPTIONS: Array<{
+  type: CliType;
+  label: string;
+  description: string;
+}> = [
+  { type: "claude", label: "Claude Code", description: "Default interactive coding CLI." },
+  { type: "opencode", label: "OpenCode", description: "Interactive OpenCode terminal session." },
+  { type: "opencode-web", label: "OpenCode Web", description: "Browser-based OpenCode session." },
+  { type: "terminal", label: "Terminal", description: "Plain shell session without CLI wrapper." },
+  { type: "custom", label: "Custom CLI", description: "Run your own command in the session." },
+];
+
+function badgeStyle(ok: boolean, loading: boolean): React.CSSProperties {
+  if (loading) {
+    return { background: "#89b4fa22", color: "#89b4fa", border: "1px solid #89b4fa55" };
+  }
+  if (ok) {
+    return { background: "#a6e3a122", color: "#a6e3a1", border: "1px solid #a6e3a155" };
+  }
+  return { background: "#f38ba822", color: "#f38ba8", border: "1px solid #f38ba855" };
+}
+
+export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
   const [workPath, setWorkPath] = useState("");
   const [name, setName] = useState("");
   const [createFolder, setCreateFolder] = useState(false);
-  const [cliType, setCliType] = useState<"claude" | "opencode" | "terminal" | "custom">("claude");
+  const [cliType, setCliType] = useState<CliType>("claude");
   const [customCommand, setCustomCommand] = useState("");
   const [customExitCommand, setCustomExitCommand] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showBrowser, setShowBrowser] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+  const [preflight, setPreflight] = useState<CliPreflightResponse | null>(null);
+  const [preflightLoading, setPreflightLoading] = useState(false);
+
+  const isMobile = viewportWidth <= 768;
+  const isNarrow = viewportWidth <= 380;
+  const cliColumns = isNarrow ? 1 : isMobile ? 2 : CLI_OPTIONS.length;
+
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    const trimmedPath = workPath.trim();
+    if (!trimmedPath) {
+      setPreflight(null);
+      setPreflightLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setPreflightLoading(true);
+      try {
+        const response = await apiFetch("/api/sessions/preflight", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            work_path: trimmedPath,
+            create_folder: createFolder,
+            cli_type: cliType,
+            custom_command: cliType === "custom" ? customCommand.trim() || null : null,
+          }),
+        });
+        if (!response.ok) {
+          const detail = await readErrorDetail(response, "Failed to validate CLI");
+          if (!cancelled) {
+            setPreflight({
+              ok: false,
+              code: detail.code,
+              message: detail.message,
+              resolved_command: null,
+            });
+          }
+          return;
+        }
+
+        const result: CliPreflightResponse = await response.json();
+        if (!cancelled) {
+          setPreflight(result);
+        }
+      } catch {
+        if (!cancelled) {
+          setPreflight({
+            ok: false,
+            code: "preflight_failed",
+            message: "Unable to validate the selected CLI right now.",
+            resolved_command: null,
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setPreflightLoading(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [workPath, createFolder, cliType, customCommand]);
+
+  const preflightSummary = useMemo(() => {
+    if (!workPath.trim()) {
+      return {
+        ok: false,
+        loading: false,
+        title: "Select a work path to validate the session.",
+        detail: null as string | null,
+      };
+    }
+
+    if (preflightLoading) {
+      return {
+        ok: false,
+        loading: true,
+        title: "Validating CLI availability...",
+        detail: null as string | null,
+      };
+    }
+
+    if (!preflight) {
+      return {
+        ok: true,
+        loading: false,
+        title: "Ready to validate.",
+        detail: null as string | null,
+      };
+    }
+
+    return {
+      ok: preflight.ok,
+      loading: false,
+      title: preflight.message,
+      detail: preflight.resolved_command ? `Resolved command: ${preflight.resolved_command}` : null,
+    };
+  }, [workPath, preflightLoading, preflight]);
+
+  const hasBlockingPreflight = Boolean(
+    preflight
+    && !preflight.ok
+    && [
+      "work_path_missing",
+      "directory_not_found",
+      "custom_command_missing",
+      "invalid_command",
+      "cli_not_found",
+      "permission_denied",
+    ].includes(preflight.code),
+  );
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!workPath.trim()) return;
+    if (!workPath.trim() || hasBlockingPreflight) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const res = await fetch("/api/sessions", {
+      const res = await apiFetch("/api/sessions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           work_path: workPath.trim(),
@@ -43,8 +190,8 @@ export default function NewSession({ token, onCreated, onCancel }: NewSessionPro
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || "Failed to create session");
+        const detail = await readErrorDetail(res, "Failed to create session");
+        throw new Error(detail.message);
       }
 
       const data = await res.json();
@@ -62,12 +209,12 @@ export default function NewSession({ token, onCreated, onCancel }: NewSessionPro
         style={{
           position: "fixed",
           inset: 0,
-          background: "rgba(0, 0, 0, 0.6)",
+          background: "rgba(0, 0, 0, 0.7)",
           display: "flex",
-          alignItems: "center",
+          alignItems: isMobile ? "flex-end" : "center",
           justifyContent: "center",
           zIndex: 100,
-          padding: 12,
+          padding: isMobile ? 0 : 16,
         }}
         onClick={onCancel}
       >
@@ -75,280 +222,297 @@ export default function NewSession({ token, onCreated, onCancel }: NewSessionPro
           style={{
             background: "#1e1e2e",
             border: "1px solid #313244",
-            borderRadius: 12,
-            padding: 24,
-            width: 420,
-            maxWidth: "100%",
+            borderRadius: isMobile ? "18px 18px 0 0" : 16,
+            width: "100%",
+            maxWidth: isMobile ? "100%" : 540,
+            maxHeight: isMobile ? "calc(100vh - 24px)" : "min(90vh, 760px)",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            boxShadow: "0 20px 60px rgba(0, 0, 0, 0.35)",
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <h2
-            style={{
-              margin: "0 0 20px 0",
-              fontSize: 18,
-              color: "#cdd6f4",
-              fontWeight: 600,
-            }}
-          >
-            New Session
-          </h2>
+          <div style={{ padding: "20px 22px 16px", borderBottom: "1px solid #313244" }}>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: 20,
+                color: "#cdd6f4",
+                fontWeight: 700,
+              }}
+            >
+              New Session
+            </h2>
+            <p style={{ margin: "8px 0 0", fontSize: 13, color: "#a6adc8", lineHeight: 1.5 }}>
+              Choose a workspace and the CLI that should power the session.
+            </p>
+          </div>
 
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div>
-              <label
-                style={{ display: "block", fontSize: 12, color: "#a6adc8", marginBottom: 4 }}
-              >
-                Work Path *
-              </label>
-              <div style={{ display: "flex", gap: 6 }}>
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 18,
+                padding: "18px 22px 22px",
+                overflowY: "auto",
+                minHeight: 0,
+              }}
+            >
+              <div>
+                <label style={{ display: "block", fontSize: 12, color: "#a6adc8", marginBottom: 6 }}>
+                  Work Path *
+                </label>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: isMobile ? "1fr" : "1fr auto",
+                    gap: 8,
+                  }}
+                >
+                  <input
+                    type="text"
+                    value={workPath}
+                    onChange={(e) => setWorkPath(e.target.value)}
+                    placeholder="C:\\Users\\..."
+                    autoFocus
+                    style={{
+                      width: "100%",
+                      minWidth: 0,
+                      padding: "11px 12px",
+                      fontSize: 14,
+                      background: "#313244",
+                      color: "#cdd6f4",
+                      border: "1px solid #45475a",
+                      borderRadius: 8,
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowBrowser(true)}
+                    title="Browse folders on the server"
+                    style={{
+                      padding: "0 14px",
+                      minHeight: 42,
+                      background: "#313244",
+                      color: "#cdd6f4",
+                      border: "1px solid #45475a",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      fontSize: 13,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Browse Server Folder
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: 12, color: "#a6adc8", marginBottom: 6 }}>
+                  Session Name
+                </label>
                 <input
                   type="text"
-                  value={workPath}
-                  onChange={(e) => setWorkPath(e.target.value)}
-                  placeholder="C:\Users\..."
-                  autoFocus
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Folder name will be used if left empty"
                   style={{
-                    flex: 1,
-                    minWidth: 0,
-                    padding: "10px 12px",
+                    width: "100%",
+                    padding: "11px 12px",
                     fontSize: 14,
                     background: "#313244",
                     color: "#cdd6f4",
                     border: "1px solid #45475a",
-                    borderRadius: 6,
+                    borderRadius: 8,
                     outline: "none",
                     boxSizing: "border-box",
                   }}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowBrowser(true)}
-                  title="Browse folders"
+              </div>
+
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  fontSize: 13,
+                  color: "#cdd6f4",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={createFolder}
+                  onChange={(e) => setCreateFolder(e.target.checked)}
+                  style={{ accentColor: "#89b4fa" }}
+                />
+                Create the folder if it does not exist
+              </label>
+
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+                  <label style={{ fontSize: 12, color: "#a6adc8" }}>CLI Type</label>
+                  <span
+                    style={{
+                      ...badgeStyle(preflightSummary.ok, preflightSummary.loading),
+                      padding: "3px 8px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      borderRadius: 999,
+                    }}
+                  >
+                    {preflightSummary.loading ? "VALIDATING" : preflightSummary.ok ? "READY" : "CHECK"}
+                  </span>
+                </div>
+                <div
                   style={{
-                    padding: "0 12px",
-                    background: "#313244",
-                    color: "#a6adc8",
-                    border: "1px solid #45475a",
-                    borderRadius: 6,
-                    cursor: "pointer",
-                    fontSize: 14,
-                    flexShrink: 0,
-                    display: "flex",
-                    alignItems: "center",
+                    display: "grid",
+                    gridTemplateColumns: `repeat(${cliColumns}, minmax(0, 1fr))`,
+                    gap: 10,
                   }}
                 >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path
-                      d="M1 3.5C1 2.67 1.67 2 2.5 2H6l1.5 2H13.5C14.33 4 15 4.67 15 5.5V12.5C15 13.33 14.33 14 13.5 14H2.5C1.67 14 1 13.33 1 12.5V3.5Z"
-                      fill="#a6adc8"
-                    />
-                  </svg>
-                </button>
+                  {CLI_OPTIONS.map((option) => {
+                    const active = cliType === option.type;
+                    return (
+                      <button
+                        key={option.type}
+                        type="button"
+                        onClick={() => setCliType(option.type)}
+                        style={{
+                          textAlign: "left",
+                          padding: "12px 12px 11px",
+                          borderRadius: 10,
+                          border: active ? "1px solid #89b4fa" : "1px solid #45475a",
+                          background: active ? "#313244" : "#242438",
+                          color: "#cdd6f4",
+                          cursor: "pointer",
+                          minHeight: 88,
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                          <span
+                            style={{
+                              width: 10,
+                              height: 10,
+                              borderRadius: "50%",
+                              background: active ? "#89b4fa" : "#6c7086",
+                              flexShrink: 0,
+                            }}
+                          />
+                          <span style={{ fontSize: 13, fontWeight: 700 }}>{option.label}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: "#a6adc8", lineHeight: 1.45 }}>
+                          {option.description}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 10, background: "#181825" }}>
+                  <div style={{ fontSize: 12, color: preflightSummary.ok ? "#a6e3a1" : preflightSummary.loading ? "#89b4fa" : "#f9e2af", fontWeight: 600 }}>
+                    {preflightSummary.title}
+                  </div>
+                  {preflightSummary.detail && (
+                    <div style={{ marginTop: 4, fontSize: 11, color: "#6c7086", fontFamily: "'Cascadia Code', 'Consolas', monospace" }}>
+                      {preflightSummary.detail}
+                    </div>
+                  )}
+                </div>
               </div>
+
+              {cliType === "custom" && (
+                <>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, color: "#a6adc8", marginBottom: 6 }}>
+                      Command *
+                    </label>
+                    <input
+                      type="text"
+                      value={customCommand}
+                      onChange={(e) => setCustomCommand(e.target.value)}
+                      placeholder="Example: mycli --interactive"
+                      style={{
+                        width: "100%",
+                        padding: "11px 12px",
+                        fontSize: 14,
+                        background: "#313244",
+                        color: "#cdd6f4",
+                        border: "1px solid #45475a",
+                        borderRadius: 8,
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, color: "#a6adc8", marginBottom: 6 }}>
+                      Exit Command
+                    </label>
+                    <input
+                      type="text"
+                      value={customExitCommand}
+                      onChange={(e) => setCustomExitCommand(e.target.value)}
+                      placeholder="Example: exit, /quit"
+                      style={{
+                        width: "100%",
+                        padding: "11px 12px",
+                        fontSize: 14,
+                        background: "#313244",
+                        color: "#cdd6f4",
+                        border: "1px solid #45475a",
+                        borderRadius: 8,
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+                </>
+              )}
+
+              {error && (
+                <div
+                  style={{
+                    padding: "11px 12px",
+                    borderRadius: 10,
+                    background: "#f38ba81a",
+                    border: "1px solid #f38ba84a",
+                    color: "#f38ba8",
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {error}
+                </div>
+              )}
             </div>
 
-            <div>
-              <label
-                style={{ display: "block", fontSize: 12, color: "#a6adc8", marginBottom: 4 }}
-              >
-                Session Name (optional)
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Folder name will be used if empty"
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  fontSize: 14,
-                  background: "#313244",
-                  color: "#cdd6f4",
-                  border: "1px solid #45475a",
-                  borderRadius: 6,
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            <label
+            <div
               style={{
                 display: "flex",
-                alignItems: "center",
+                justifyContent: "flex-end",
                 gap: 8,
-                fontSize: 13,
-                color: "#a6adc8",
-                cursor: "pointer",
+                padding: "14px 22px 18px",
+                borderTop: "1px solid #313244",
+                background: "#1e1e2e",
+                position: isMobile ? "sticky" : "static",
+                bottom: 0,
               }}
             >
-              <input
-                type="checkbox"
-                checked={createFolder}
-                onChange={(e) => setCreateFolder(e.target.checked)}
-                style={{ accentColor: "#89b4fa" }}
-              />
-              Create folder if it doesn't exist
-            </label>
-
-            <div style={{ marginTop: 4 }}>
-              <label
-                style={{ display: "block", fontSize: 12, color: "#a6adc8", marginBottom: 6 }}
-              >
-                CLI Type
-              </label>
-              <div style={{ display: "flex", gap: 16 }}>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 13,
-                    color: "#cdd6f4",
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="cliType"
-                    value="claude"
-                    checked={cliType === "claude"}
-                    onChange={(e) => setCliType(e.target.value as "claude" | "opencode" | "terminal" | "custom")}
-                    style={{ accentColor: "#89b4fa" }}
-                  />
-                  Claude Code
-                </label>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 13,
-                    color: "#cdd6f4",
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="cliType"
-                    value="opencode"
-                    checked={cliType === "opencode"}
-                    onChange={(e) => setCliType(e.target.value as "claude" | "opencode" | "terminal" | "custom")}
-                    style={{ accentColor: "#89b4fa" }}
-                  />
-                  OpenCode
-                </label>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 13,
-                    color: "#cdd6f4",
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="cliType"
-                    value="terminal"
-                    checked={cliType === "terminal"}
-                    onChange={(e) => setCliType(e.target.value as "claude" | "opencode" | "terminal" | "custom")}
-                    style={{ accentColor: "#89b4fa" }}
-                  />
-                  Terminal
-                </label>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 13,
-                    color: "#cdd6f4",
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="cliType"
-                    value="custom"
-                    checked={cliType === "custom"}
-                    onChange={(e) => setCliType(e.target.value as "claude" | "opencode" | "terminal" | "custom")}
-                    style={{ accentColor: "#89b4fa" }}
-                  />
-                  Custom CLI
-                </label>
-              </div>
-            </div>
-
-            {cliType === "custom" && (
-              <>
-                <div>
-                  <label
-                    style={{ display: "block", fontSize: 12, color: "#a6adc8", marginBottom: 4 }}
-                  >
-                    실행 명령어 *
-                  </label>
-                  <input
-                    type="text"
-                    value={customCommand}
-                    onChange={(e) => setCustomCommand(e.target.value)}
-                    placeholder="예: mycli --interactive"
-                    style={{
-                      width: "100%",
-                      padding: "10px 12px",
-                      fontSize: 14,
-                      background: "#313244",
-                      color: "#cdd6f4",
-                      border: "1px solid #45475a",
-                      borderRadius: 6,
-                      outline: "none",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-                <div>
-                  <label
-                    style={{ display: "block", fontSize: 12, color: "#a6adc8", marginBottom: 4 }}
-                  >
-                    종료 명령어 (선택사항)
-                  </label>
-                  <input
-                    type="text"
-                    value={customExitCommand}
-                    onChange={(e) => setCustomExitCommand(e.target.value)}
-                    placeholder="예: /quit, exit (비워두면 /exit 사용)"
-                    style={{
-                      width: "100%",
-                      padding: "10px 12px",
-                      fontSize: 14,
-                      background: "#313244",
-                      color: "#cdd6f4",
-                      border: "1px solid #45475a",
-                      borderRadius: 6,
-                      outline: "none",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-              </>
-            )}
-
-            {error && (
-              <p style={{ color: "#f38ba8", fontSize: 13, margin: 0 }}>{error}</p>
-            )}
-
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
               <button
                 type="button"
                 onClick={onCancel}
                 style={{
-                  padding: "8px 16px",
+                  padding: "10px 16px",
                   fontSize: 13,
                   background: "transparent",
                   color: "#a6adc8",
                   border: "1px solid #45475a",
-                  borderRadius: 6,
+                  borderRadius: 8,
                   cursor: "pointer",
                 }}
               >
@@ -356,17 +520,17 @@ export default function NewSession({ token, onCreated, onCancel }: NewSessionPro
               </button>
               <button
                 type="submit"
-                disabled={loading || !workPath.trim()}
+                disabled={loading || !workPath.trim() || hasBlockingPreflight}
                 style={{
-                  padding: "8px 16px",
+                  padding: "10px 16px",
                   fontSize: 13,
-                  fontWeight: 600,
+                  fontWeight: 700,
                   background: "#89b4fa",
                   color: "#1e1e2e",
                   border: "none",
-                  borderRadius: 6,
+                  borderRadius: 8,
                   cursor: loading ? "wait" : "pointer",
-                  opacity: loading || !workPath.trim() ? 0.5 : 1,
+                  opacity: loading || !workPath.trim() || hasBlockingPreflight ? 0.5 : 1,
                 }}
               >
                 {loading ? "Creating..." : "Create"}
@@ -378,7 +542,6 @@ export default function NewSession({ token, onCreated, onCancel }: NewSessionPro
 
       {showBrowser && (
         <FolderBrowser
-          token={token}
           initialPath={workPath || ""}
           onSelect={(path) => {
             setWorkPath(path);
