@@ -32,7 +32,7 @@ from .config import _INSECURE_JWT_SECRET, settings
 from .database import close_db, init_db, mark_all_active_as_suspended
 from .opencode_web_manager import opencode_web_manager
 from .pty_manager import pty_manager
-from .session_manager import session_manager
+from .session_manager import SessionValidationError, session_manager
 from .git_utils import GitError, run_git, is_git_repo
 from .websocket import handle_terminal_ws
 
@@ -191,6 +191,18 @@ class CreateSessionRequest(BaseModel):
 
 class RenameSessionRequest(BaseModel):
     name: str
+
+
+class ApiErrorDetail(BaseModel):
+    code: str
+    message: str
+
+
+class SessionPreflightResponse(BaseModel):
+    ok: bool
+    code: str
+    message: str
+    resolved_command: str | None = None
 
 
 class SessionResponse(BaseModel):
@@ -407,7 +419,10 @@ async def open_in_explorer(
 
 @app.get("/api/file-content")
 async def read_file_content(
-    path: str, _user: str = Depends(get_current_user)
+    path: str,
+    start_line: int = Query(default=1, ge=1),
+    line_count: int = Query(default=400, ge=1, le=2000),
+    _user: str = Depends(get_current_user),
 ):
     path = os.path.abspath(path)
     if not os.path.isfile(path):
@@ -416,13 +431,47 @@ async def read_file_content(
     MAX_SIZE = 512 * 1024  # 512KB
     try:
         size = os.path.getsize(path)
-        truncated = size > MAX_SIZE
+        if size <= MAX_SIZE:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+            total_lines = len(content.split("\n"))
+            return {
+                "content": content,
+                "size": size,
+                "truncated": False,
+                "start_line": 1,
+                "end_line": total_lines,
+                "total_lines": total_lines,
+                "has_prev": False,
+                "has_next": False,
+            }
+
         with open(path, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read(MAX_SIZE)
+            total_lines = sum(1 for _ in f)
+        if total_lines == 0:
+            total_lines = 1
+
+        effective_start = min(start_line, total_lines)
+        effective_end = min(total_lines, effective_start + line_count - 1)
+        selected_lines: list[str] = []
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            for line_number, raw_line in enumerate(f, start=1):
+                if line_number < effective_start:
+                    continue
+                if line_number > effective_end:
+                    break
+                selected_lines.append(raw_line.rstrip("\n"))
+
+        content = "\n".join(selected_lines)
         return {
             "content": content,
             "size": size,
-            "truncated": truncated,
+            "truncated": True,
+            "start_line": effective_start,
+            "end_line": effective_start + max(len(selected_lines) - 1, 0),
+            "total_lines": total_lines,
+            "has_prev": effective_start > 1,
+            "has_next": effective_end < total_lines,
         }
     except PermissionError:
         raise HTTPException(status_code=403, detail=f"Access denied: {path}")
@@ -636,6 +685,26 @@ async def upload_files(
 
 # --- Session API (인증 필요) ---
 
+@app.post("/api/sessions/preflight", response_model=SessionPreflightResponse)
+async def preflight_session(
+    req: CreateSessionRequest, _user: str = Depends(get_current_user)
+):
+    try:
+        result = session_manager.preflight_session(
+            work_path=req.work_path,
+            create_folder=req.create_folder,
+            cli_type=req.cli_type,
+            custom_command=req.custom_command,
+        )
+        return SessionPreflightResponse(**result)
+    except SessionValidationError as e:
+        return SessionPreflightResponse(
+            ok=False,
+            code=e.code,
+            message=e.message,
+            resolved_command=None,
+        )
+
 @app.get("/api/sessions", response_model=list[SessionResponse])
 async def list_sessions(_user: str = Depends(get_current_user)):
     sessions = await session_manager.list_sessions()
@@ -656,11 +725,22 @@ async def create_session(
             custom_exit_command=req.custom_exit_command,
         )
         return session
+    except SessionValidationError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code=e.code, message=e.message).model_dump(),
+        )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code="invalid_request", message=str(e)).model_dump(),
+        )
     except Exception as e:
         logger.error(f"create_session unexpected error: {type(e).__name__}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to create session")
+        raise HTTPException(
+            status_code=500,
+            detail=ApiErrorDetail(code="spawn_failed", message="Failed to create session").model_dump(),
+        )
 
 
 @app.post("/api/sessions/{session_id}/suspend", response_model=SessionResponse)
@@ -741,7 +821,8 @@ async def websocket_terminal(
     ws: WebSocket, session_id: str, token: str = Query(default="")
 ):
     if not verify_ws_token(ws, token):
-        await ws.close(code=4001, reason="Unauthorized")
+        await ws.accept()
+        await ws.close(code=4401, reason="Unauthorized")
         return
     await handle_terminal_ws(ws, session_id)
 

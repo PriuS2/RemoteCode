@@ -17,7 +17,15 @@ interface MouseEventData {
   };
 }
 
-type ConnectionStatus = "connecting" | "connected" | "disconnected";
+type ExtendedConnectionStatus =
+  | "connecting"
+  | "reconnecting"
+  | "connected"
+  | "disconnected"
+  | "auth_failed"
+  | "taken_over"
+  | "not_found"
+  | "closed";
 
 interface UseWebSocketOptions {
   url: string | null;
@@ -29,6 +37,7 @@ interface UseWebSocketOptions {
 
 const MAX_RECONNECT_DELAY = 30000;
 const BASE_RECONNECT_DELAY = 1000;
+const AUTH_EXPIRED_EVENT = "remote-code-auth-expired";
 
 export function useWebSocket({
   url,
@@ -44,7 +53,8 @@ export function useWebSocket({
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unmountedRef = useRef(false);
-  const [status, setStatus] = useState<ConnectionStatus>("disconnected");
+  const permanentStatusRef = useRef<ExtendedConnectionStatus | null>(null);
+  const [status, setStatus] = useState<ExtendedConnectionStatus>("disconnected");
 
   onMessageRef.current = onMessage;
   onCloseRef.current = onClose;
@@ -55,6 +65,7 @@ export function useWebSocket({
 
     if (!url) {
       setStatus("disconnected");
+      permanentStatusRef.current = null;
       return;
     }
 
@@ -69,6 +80,7 @@ export function useWebSocket({
 
     function connect() {
       if (unmountedRef.current) return;
+      if (permanentStatusRef.current && permanentStatusRef.current !== "disconnected") return;
 
       clearReconnectTimer();
 
@@ -80,19 +92,32 @@ export function useWebSocket({
         return;
       }
 
-      setStatus("connecting");
+      setStatus(reconnectAttemptRef.current > 0 ? "reconnecting" : "connecting");
       const ws = new WebSocket(socketUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
         if (unmountedRef.current) return;
         reconnectAttemptRef.current = 0;
+        permanentStatusRef.current = null;
         setStatus("connected");
       };
 
       ws.onmessage = (event) => {
         try {
           const msg: WsMessage = JSON.parse(event.data);
+          if (msg.type === "status") {
+            if (msg.data === "closed") {
+              permanentStatusRef.current = "closed";
+              setStatus("closed");
+            } else if (msg.data === "taken_over") {
+              permanentStatusRef.current = "taken_over";
+              setStatus("taken_over");
+            } else if (msg.data === "not_found") {
+              permanentStatusRef.current = "not_found";
+              setStatus("not_found");
+            }
+          }
           onMessageRef.current(msg);
         } catch {
           // Ignore malformed messages.
@@ -104,10 +129,27 @@ export function useWebSocket({
         if (wsRef.current === ws) {
           wsRef.current = null;
         }
-        setStatus("disconnected");
+        const closeCode = event.code;
+        if (closeCode === 4401) {
+          permanentStatusRef.current = "auth_failed";
+          setStatus("auth_failed");
+          window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+        } else if (closeCode === 4404) {
+          permanentStatusRef.current = "not_found";
+          setStatus("not_found");
+        } else if (closeCode === 4409) {
+          permanentStatusRef.current = "taken_over";
+          setStatus("taken_over");
+        } else if (!permanentStatusRef.current) {
+          setStatus(autoReconnect ? "reconnecting" : "disconnected");
+        }
         onCloseRef.current?.();
 
-        if (autoReconnect && event.code !== 4001) {
+        if (
+          autoReconnect
+          && !permanentStatusRef.current
+          && ![4401, 4404, 4409].includes(closeCode)
+        ) {
           const delay = Math.min(
             BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttemptRef.current),
             MAX_RECONNECT_DELAY,
@@ -126,6 +168,7 @@ export function useWebSocket({
       const readyState = wsRef.current?.readyState;
       if (
         document.hidden ||
+        permanentStatusRef.current !== null ||
         readyState === WebSocket.OPEN ||
         readyState === WebSocket.CONNECTING
       ) {
@@ -143,6 +186,7 @@ export function useWebSocket({
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       unmountedRef.current = true;
+      permanentStatusRef.current = null;
       clearReconnectTimer();
       if (wsRef.current) {
         wsRef.current.close();

@@ -10,7 +10,7 @@ import {
   requestNotificationPermission,
   sendBrowserNotification,
 } from "./utils/notify";
-import { apiFetch, onAuthExpired } from "./utils/api";
+import { apiFetch, onAuthExpired, readErrorDetail } from "./utils/api";
 import type { Session } from "./types/session";
 import "./App.css";
 
@@ -362,9 +362,13 @@ export default function App() {
 
   const handleTerminate = async (id: string) => {
     try {
-      await apiFetch(`/api/sessions/${id}`, {
+      const res = await apiFetch(`/api/sessions/${id}`, {
         method: "DELETE",
       });
+      if (!res.ok) {
+        const detail = await readErrorDetail(res, "Failed to kill session.");
+        throw new Error(detail.message);
+      }
       removeFromActiveSessions(id);
       setMountedSessions((prev) => prev.filter((sid) => sid !== id));
       setSessionActivity((prev) => {
@@ -375,14 +379,19 @@ export default function App() {
       fetchSessions();
     } catch (e) {
       console.error("Failed to terminate session:", e);
+      throw e;
     }
   };
 
   const handleDelete = async (id: string) => {
     try {
-      await apiFetch(`/api/sessions/${id}?permanent=true`, {
+      const res = await apiFetch(`/api/sessions/${id}?permanent=true`, {
         method: "DELETE",
       });
+      if (!res.ok) {
+        const detail = await readErrorDetail(res, "Failed to delete session.");
+        throw new Error(detail.message);
+      }
       removeFromActiveSessions(id);
       setMountedSessions((prev) => prev.filter((sid) => sid !== id));
       setSessionActivity((prev) => {
@@ -393,19 +402,25 @@ export default function App() {
       fetchSessions();
     } catch (e) {
       console.error("Failed to delete session:", e);
+      throw e;
     }
   };
 
   const handleRename = async (id: string, newName: string) => {
     try {
-      await apiFetch(`/api/sessions/${id}/rename`, {
+      const res = await apiFetch(`/api/sessions/${id}/rename`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newName }),
       });
+      if (!res.ok) {
+        const detail = await readErrorDetail(res, "Failed to rename session.");
+        throw new Error(detail.message);
+      }
       fetchSessions();
     } catch (e) {
       console.error("Failed to rename session:", e);
+      throw e;
     }
   };
 
@@ -562,7 +577,7 @@ export default function App() {
                 onClosePanel={() => { if (panelIndex !== -1) closeSplitPanel(panelIndex); }}
                 onSuspend={() => handleSuspend(sid)}
                 onMaximize={() => selectSession(sid)}
-                onTerminate={() => handleTerminate(sid)}
+                onTerminate={() => { void handleTerminate(sid).catch(() => {}); }}
               />
             );
           })}

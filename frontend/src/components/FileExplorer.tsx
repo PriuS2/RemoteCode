@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { ConfirmDialog, MessageDialog, PromptDialog } from "./Dialog";
 import { IconFolder, FileIcon } from "../utils/fileIcons";
 import { joinPath } from "../utils/pathUtils";
 import hljs from "highlight.js";
 import { apiFetch, readErrorMessage } from "../utils/api";
+import type { TextPreviewResponse } from "../types/api";
 
 interface FileEntry {
   name: string;
@@ -88,6 +90,7 @@ interface PreviewFile {
 }
 
 type PreviewMode = "text" | "image" | "audio";
+const DEFAULT_PREVIEW_LINE_COUNT = 400;
 
 function getRelativePath(rootPath: string, fullPath: string): string {
   // Normalize both paths: backslash → forward slash, remove trailing slash
@@ -131,6 +134,7 @@ export default function FileExplorer({
     return (localStorage.getItem("fileExplorerView") as ViewMode) || "list";
   });
   const [showHidden, setShowHidden] = useState(false);
+  const [filterQuery, setFilterQuery] = useState("");
   const [explorerFontSize, setExplorerFontSize] = useState(() => {
     const v = localStorage.getItem("explorerFontSize");
     return v ? Number(v) : 12;
@@ -147,12 +151,20 @@ export default function FileExplorer({
   const [previewSize, setPreviewSize] = useState(0);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewMediaUrl, setPreviewMediaUrl] = useState<string | null>(null);
+  const [previewStartLine, setPreviewStartLine] = useState(1);
+  const [previewEndLine, setPreviewEndLine] = useState(1);
+  const [previewTotalLines, setPreviewTotalLines] = useState(1);
+  const [previewHasPrev, setPreviewHasPrev] = useState(false);
+  const [previewHasNext, setPreviewHasNext] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number; y: number; entry: FileEntry;
   } | null>(null);
   const [renamingEntry, setRenamingEntry] = useState<FileEntry | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<FileEntry | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [modalPending, setModalPending] = useState(false);
+  const [messageDialog, setMessageDialog] = useState<string | null>(null);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [dragOver, setDragOver] = useState(false);
@@ -228,6 +240,10 @@ export default function FileExplorer({
   const visibleEntries = showHidden
     ? entries
     : entries.filter((e) => !e.name.startsWith("."));
+  const filteredEntries = filterQuery.trim()
+    ? visibleEntries.filter((entry) =>
+      entry.name.toLowerCase().includes(filterQuery.trim().toLowerCase()))
+    : visibleEntries;
 
   const handleNavigate = (folderName: string) => {
     fetchFiles(joinPath(currentPath, folderName));
@@ -249,7 +265,7 @@ export default function FileExplorer({
     const fullPath = joinPath(currentPath, entry.name);
 
     if (isTextFile(entry.extension, entry.name)) {
-      openTextPreview({ name: entry.name, path: fullPath, extension: entry.extension });
+      openTextPreview({ name: entry.name, path: fullPath, extension: entry.extension }, 1);
     } else if (isImageFile(entry.extension)) {
       openImagePreview({ name: entry.name, path: fullPath, extension: entry.extension });
     } else if (isAudioFile(entry.extension)) {
@@ -260,26 +276,32 @@ export default function FileExplorer({
     }
   };
 
-  const openTextPreview = useCallback(async (file: PreviewFile) => {
+  const openTextPreview = useCallback(async (file: PreviewFile, startLine = 1) => {
     setPreviewFile(file);
     setPreviewMode("text");
     setPreviewLoading(true);
     setPreviewContent("");
     setPreviewError(null);
     setImageUrl(null);
-    setPreviewTruncated(false);
     setPreviewSize(0);
     try {
-      const res = await apiFetch(`/api/file-content?path=${encodeURIComponent(file.path)}`);
+      const res = await apiFetch(
+        `/api/file-content?path=${encodeURIComponent(file.path)}&start_line=${startLine}&line_count=${DEFAULT_PREVIEW_LINE_COUNT}`,
+      );
       if (!res.ok) {
         throw new Error(await readErrorMessage(res, "Failed to read file"));
       }
-      const data = await res.json();
+      const data: TextPreviewResponse = await res.json();
       setPreviewContent(data.content);
       setPreviewTruncated(data.truncated);
       setPreviewSize(data.size);
+      setPreviewStartLine(data.start_line);
+      setPreviewEndLine(data.end_line);
+      setPreviewTotalLines(data.total_lines);
+      setPreviewHasPrev(data.has_prev);
+      setPreviewHasNext(data.has_next);
     } catch (e: unknown) {
-      setPreviewContent(e instanceof Error ? `Error: ${e.message}` : "Failed to read file");
+      setPreviewError(e instanceof Error ? e.message : "Failed to read file");
     } finally {
       setPreviewLoading(false);
     }
@@ -294,6 +316,11 @@ export default function FileExplorer({
     setPreviewError(null);
     setPreviewTruncated(false);
     setPreviewSize(0);
+    setPreviewStartLine(1);
+    setPreviewEndLine(1);
+    setPreviewTotalLines(1);
+    setPreviewHasPrev(false);
+    setPreviewHasNext(false);
     try {
       const res = await apiFetch(`/api/file-raw?path=${encodeURIComponent(file.path)}`);
       if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to load image"));
@@ -316,6 +343,11 @@ export default function FileExplorer({
     setPreviewError(null);
     setPreviewTruncated(false);
     setPreviewSize(0);
+    setPreviewStartLine(1);
+    setPreviewEndLine(1);
+    setPreviewTotalLines(1);
+    setPreviewHasPrev(false);
+    setPreviewHasNext(false);
     try {
       const res = await apiFetch(`/api/file-raw?path=${encodeURIComponent(file.path)}`);
       if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to load audio"));
@@ -371,19 +403,24 @@ export default function FileExplorer({
   }, []);
 
   const startRename = useCallback((entry: FileEntry) => {
+    setModalError(null);
     setRenamingEntry(entry);
     setRenameValue(entry.name);
   }, []);
 
   const cancelRename = useCallback(() => {
+    if (modalPending) return;
     setRenamingEntry(null);
     setRenameValue("");
-  }, []);
+    setModalError(null);
+  }, [modalPending]);
 
   const handleRename = useCallback(async () => {
     if (!renamingEntry) return;
     const newName = renameValue.trim();
     if (!newName || newName === renamingEntry.name) { cancelRename(); return; }
+    setModalPending(true);
+    setModalError(null);
     try {
       const res = await apiFetch("/api/rename", {
         method: "POST",
@@ -396,7 +433,9 @@ export default function FileExplorer({
       cancelRename();
       fetchFiles(currentPath);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Rename failed");
+      setModalError(e instanceof Error ? e.message : "Rename failed");
+    } finally {
+      setModalPending(false);
     }
   }, [renamingEntry, renameValue, currentPath, fetchFiles, cancelRename]);
 
@@ -416,11 +455,13 @@ export default function FileExplorer({
       setNewFolderName("");
       fetchFiles(currentPath);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to create folder");
+      setMessageDialog(e instanceof Error ? e.message : "Failed to create folder");
     }
   }, [newFolderName, currentPath, fetchFiles]);
 
   const handleDelete = useCallback(async (entry: FileEntry) => {
+    setModalPending(true);
+    setModalError(null);
     try {
       const res = await apiFetch("/api/delete", {
         method: "POST",
@@ -431,8 +472,11 @@ export default function FileExplorer({
         throw new Error(await readErrorMessage(res, "Delete failed"));
       }
       fetchFiles(currentPath);
+      setDeleteConfirm(null);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Delete failed");
+      setModalError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setModalPending(false);
     }
   }, [currentPath, fetchFiles]);
 
@@ -446,7 +490,7 @@ export default function FileExplorer({
         { label: "Open", icon: <CtxFolderOpenIcon />, onClick: () => { handleNavigate(entry.name); closeContextMenu(); } },
       ];
       if (isLocal) {
-        items.push({ label: "Open in Explorer", icon: <CtxOpenExternalIcon />, onClick: () => { handleOpenNative(fullPath); closeContextMenu(); } });
+        items.push({ label: "Open Server Folder", icon: <CtxOpenExternalIcon />, onClick: () => { handleOpenNative(fullPath); closeContextMenu(); } });
       }
       items.push({ label: "Rename", icon: <CtxRenameIcon />, onClick: () => { startRename(entry); closeContextMenu(); } });
       items.push("separator");
@@ -454,7 +498,7 @@ export default function FileExplorer({
       items.push({ label: "Copy Name", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(entry.name); closeContextMenu(); } });
       items.push({ label: "Copy Full Path", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(fullPath); closeContextMenu(); } });
       items.push("separator");
-      items.push({ label: "Delete", icon: <CtxDeleteIcon />, onClick: () => { setDeleteConfirm(entry); closeContextMenu(); } });
+      items.push({ label: "Delete", icon: <CtxDeleteIcon />, onClick: () => { setModalError(null); setDeleteConfirm(entry); closeContextMenu(); } });
       return items;
     }
 
@@ -464,8 +508,8 @@ export default function FileExplorer({
       items.push({ label: "Open (Preview)", icon: <CtxPreviewIcon />, onClick: () => { handleFileClick(entry); closeContextMenu(); } });
     }
     if (isLocal) {
-      items.push({ label: "Open (File)", icon: <CtxOpenFileIcon />, onClick: () => { handleOpenNative(fullPath); closeContextMenu(); } });
-      items.push({ label: "Open Path", icon: <CtxOpenExternalIcon />, onClick: () => { handleOpenNative(currentPath); closeContextMenu(); } });
+      items.push({ label: "Open File on Server", icon: <CtxOpenFileIcon />, onClick: () => { handleOpenNative(fullPath); closeContextMenu(); } });
+      items.push({ label: "Open Current Server Folder", icon: <CtxOpenExternalIcon />, onClick: () => { handleOpenNative(currentPath); closeContextMenu(); } });
     }
     items.push({ label: "Download", icon: <CtxDownloadIcon />, onClick: () => { downloadFile(fullPath, entry.name); closeContextMenu(); } });
     items.push({ label: "Rename", icon: <CtxRenameIcon />, onClick: () => { startRename(entry); closeContextMenu(); } });
@@ -474,7 +518,7 @@ export default function FileExplorer({
     items.push({ label: "Copy Name", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(entry.name); closeContextMenu(); } });
     items.push({ label: "Copy Full Path", icon: <CtxCopyIcon />, onClick: () => { navigator.clipboard.writeText(fullPath); closeContextMenu(); } });
     items.push("separator");
-    items.push({ label: "Delete", icon: <CtxDeleteIcon />, onClick: () => { setDeleteConfirm(entry); closeContextMenu(); } });
+    items.push({ label: "Delete", icon: <CtxDeleteIcon />, onClick: () => { setModalError(null); setDeleteConfirm(entry); closeContextMenu(); } });
     return items;
   }, [contextMenu, currentPath, isLocal, handleOpenNative, downloadFile, closeContextMenu, canPreview, startRename]);
 
@@ -555,6 +599,11 @@ export default function FileExplorer({
     setPreviewError(null);
     setPreviewTruncated(false);
     setPreviewSize(0);
+    setPreviewStartLine(1);
+    setPreviewEndLine(1);
+    setPreviewTotalLines(1);
+    setPreviewHasPrev(false);
+    setPreviewHasNext(false);
   }, [setImageUrl]);
 
   const isImagePreview = previewFile !== null && previewMode === "image";
@@ -586,16 +635,23 @@ export default function FileExplorer({
         file={previewFile}
         content={previewContent}
         loading={previewLoading}
+        errorMessage={previewError}
         truncated={previewTruncated}
         size={previewSize}
+        startLine={previewStartLine}
+        endLine={previewEndLine}
+        totalLines={previewTotalLines}
+        hasPrev={previewHasPrev}
+        hasNext={previewHasNext}
         onClose={closePreview}
         onInsertPath={handleInsertPreviewPath}
         onInsertSelection={handleInsertSelection}
+        onLoadWindow={(line) => openTextPreview(previewFile, line)}
       />
     )
   ) : (
     <ExplorerBody
-      entries={visibleEntries}
+      entries={filteredEntries}
       viewMode={viewMode}
       loading={loading}
       error={error}
@@ -606,7 +662,7 @@ export default function FileExplorer({
       onInsertEntry={handleInsertEntry}
       onContextMenu={handleContextMenu}
       isMobile={isMobile}
-      renamingEntry={renamingEntry}
+      renamingEntry={null}
       renameValue={renameValue}
       onRenameValueChange={setRenameValue}
       onRenameSubmit={handleRename}
@@ -696,13 +752,17 @@ export default function FileExplorer({
           displayPath={displayPath}
           viewMode={viewMode}
           showHidden={showHidden}
+          filterQuery={filterQuery}
           canGoBack={canGoBack}
           onBack={handleBack}
           onRefresh={() => fetchFiles(currentPath)}
           isLocal={isLocal}
           onOpenNative={() => handleOpenNative()}
+          openNativeLabel="Open Current Server Folder"
+          openNativeTitle="Open the current folder on the server"
           onToggleView={() => setViewMode((v) => (v === "grid" ? "list" : "grid"))}
           onToggleHidden={() => setShowHidden((h) => !h)}
+          onFilterChange={setFilterQuery}
           onUpload={() => fileInputRef.current?.click()}
           onNewFolder={() => { setCreatingFolder(true); setNewFolderName(""); }}
           onClose={onClose}
@@ -717,11 +777,36 @@ export default function FileExplorer({
           <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenuItems} onClose={closeContextMenu} />
         )}
         {deleteConfirm && (
-          <DeleteConfirmDialog
-            entry={deleteConfirm}
-            onConfirm={() => { handleDelete(deleteConfirm); setDeleteConfirm(null); }}
-            onCancel={() => setDeleteConfirm(null)}
+          <ConfirmDialog
+            title={`Delete ${deleteConfirm.type === "folder" ? "Folder" : "File"}`}
+            description={
+              deleteConfirm.type === "folder"
+                ? `Delete '${deleteConfirm.name}' and all of its contents on the server?`
+                : `Delete '${deleteConfirm.name}' on the server?`
+            }
+            confirmLabel="Delete"
+            danger
+            pending={modalPending}
+            error={modalError}
+            onConfirm={() => { void handleDelete(deleteConfirm); }}
+            onCancel={() => { if (!modalPending) { setDeleteConfirm(null); setModalError(null); } }}
           />
+        )}
+        {renamingEntry && (
+          <PromptDialog
+            title="Rename Item"
+            label="New name"
+            value={renameValue}
+            confirmLabel="Save"
+            pending={modalPending}
+            error={modalError}
+            onChange={setRenameValue}
+            onConfirm={() => { void handleRename(); }}
+            onCancel={cancelRename}
+          />
+        )}
+        {messageDialog && (
+          <MessageDialog title="Explorer Error" message={messageDialog} onClose={() => setMessageDialog(null)} />
         )}
       </div>
     );
@@ -749,13 +834,17 @@ export default function FileExplorer({
         displayPath={displayPath}
         viewMode={viewMode}
         showHidden={showHidden}
+        filterQuery={filterQuery}
         canGoBack={canGoBack}
         onBack={handleBack}
         onRefresh={() => fetchFiles(currentPath)}
         isLocal={isLocal}
         onOpenNative={() => handleOpenNative()}
+        openNativeLabel="Open Current Server Folder"
+        openNativeTitle="Open the current folder on the server"
         onToggleView={() => setViewMode((v) => (v === "grid" ? "list" : "grid"))}
         onToggleHidden={() => setShowHidden((h) => !h)}
+        onFilterChange={setFilterQuery}
         onUpload={() => fileInputRef.current?.click()}
         onNewFolder={() => { setCreatingFolder(true); setNewFolderName(""); }}
         onClose={onClose}
@@ -770,11 +859,36 @@ export default function FileExplorer({
         <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenuItems} onClose={closeContextMenu} />
       )}
       {deleteConfirm && (
-        <DeleteConfirmDialog
-          entry={deleteConfirm}
-          onConfirm={() => { handleDelete(deleteConfirm); setDeleteConfirm(null); }}
-          onCancel={() => setDeleteConfirm(null)}
+        <ConfirmDialog
+          title={`Delete ${deleteConfirm.type === "folder" ? "Folder" : "File"}`}
+          description={
+            deleteConfirm.type === "folder"
+              ? `Delete '${deleteConfirm.name}' and all of its contents on the server?`
+              : `Delete '${deleteConfirm.name}' on the server?`
+          }
+          confirmLabel="Delete"
+          danger
+          pending={modalPending}
+          error={modalError}
+          onConfirm={() => { void handleDelete(deleteConfirm); }}
+          onCancel={() => { if (!modalPending) { setDeleteConfirm(null); setModalError(null); } }}
         />
+      )}
+      {renamingEntry && (
+        <PromptDialog
+          title="Rename Item"
+          label="New name"
+          value={renameValue}
+          confirmLabel="Save"
+          pending={modalPending}
+          error={modalError}
+          onChange={setRenameValue}
+          onConfirm={() => { void handleRename(); }}
+          onCancel={cancelRename}
+        />
+      )}
+      {messageDialog && (
+        <MessageDialog title="Explorer Error" message={messageDialog} onClose={() => setMessageDialog(null)} />
       )}
     </div>
   );
@@ -786,13 +900,17 @@ function ExplorerHeader({
   displayPath,
   viewMode,
   showHidden,
+  filterQuery,
   canGoBack,
   onBack,
   onRefresh,
   isLocal,
   onOpenNative,
+  openNativeLabel,
+  openNativeTitle,
   onToggleView,
   onToggleHidden,
+  onFilterChange,
   onUpload,
   onNewFolder,
   onClose,
@@ -803,13 +921,17 @@ function ExplorerHeader({
   displayPath: string;
   viewMode: ViewMode;
   showHidden: boolean;
+  filterQuery: string;
   canGoBack: boolean;
   onBack: () => void;
   onRefresh: () => void;
   isLocal: boolean;
   onOpenNative: () => void;
+  openNativeLabel: string;
+  openNativeTitle: string;
   onToggleView: () => void;
   onToggleHidden: () => void;
+  onFilterChange: (value: string) => void;
   onUpload: () => void;
   onNewFolder: () => void;
   onClose: () => void;
@@ -821,56 +943,55 @@ function ExplorerHeader({
     <div
       style={{
         display: "flex",
-        alignItems: "center",
-        gap: "0.3em",
-        padding: "0.2em 0.5em",
+        flexDirection: "column",
+        gap: "0.35em",
+        padding: "0.35em 0.5em 0.45em",
         borderBottom: "1px solid #313244",
         flexShrink: 0,
         background: "#181825",
         fontSize: explorerFontSize,
       }}
     >
-      {/* Back button */}
-      <button
-        onClick={onBack}
-        disabled={!canGoBack}
-        title="Back"
-        style={{
-          background: "none",
-          border: "none",
-          color: canGoBack ? "#cdd6f4" : "#45475a",
-          cursor: canGoBack ? "pointer" : "default",
-          padding: "0.15em 0.3em",
-          display: "flex",
-          alignItems: "center",
-          borderRadius: 3,
-          flexShrink: 0,
-        }}
-      >
-        <svg width="1em" height="1em" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M8 2L4 6l4 4" />
-        </svg>
-      </button>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.3em", width: "100%" }}>
+        <button
+          onClick={onBack}
+          disabled={!canGoBack}
+          title="Back"
+          style={{
+            background: "none",
+            border: "none",
+            color: canGoBack ? "#cdd6f4" : "#45475a",
+            cursor: canGoBack ? "pointer" : "default",
+            padding: "0.15em 0.3em",
+            display: "flex",
+            alignItems: "center",
+            borderRadius: 3,
+            flexShrink: 0,
+          }}
+        >
+          <svg width="1em" height="1em" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 2L4 6l4 4" />
+          </svg>
+        </button>
 
-      {/* Path */}
-      <span
-        title={displayPath}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          fontSize: "0.95em",
-          color: "#89b4fa",
-          fontFamily: "'Cascadia Code', 'Consolas', monospace",
-        }}
-      >
-        {displayPath}
-      </span>
+        <span
+          title={displayPath}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontSize: "0.95em",
+            color: "#89b4fa",
+            fontFamily: "'Cascadia Code', 'Consolas', monospace",
+          }}
+        >
+          {displayPath}
+        </span>
 
-      {!isPreview && (
-        <>
+        {!isPreview && (
+          <>
           {/* Refresh */}
           <button
             onClick={onRefresh}
@@ -896,7 +1017,7 @@ function ExplorerHeader({
           {isLocal && (
             <button
               onClick={onOpenNative}
-              title="Open in system explorer"
+              title={`${openNativeTitle} (server-side action)`}
               style={{
                 background: "none",
                 border: "none",
@@ -994,12 +1115,11 @@ function ExplorerHeader({
           >
             <NewFolderIcon />
           </button>
-        </>
-      )}
+          </>
+        )}
 
-      {/* Font size */}
-      {!isPreview && (
-        <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
+        {!isPreview && (
+          <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
           <button
             onClick={() => onFontSizeChange((s) => Math.max(8, s - 1))}
             title="Decrease font size"
@@ -1023,30 +1143,58 @@ function ExplorerHeader({
             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
           >+</button>
+          </div>
+        )}
+
+        <button
+          onClick={onClose}
+          title="Close"
+          style={{
+            background: "none",
+            border: "none",
+            color: "#6c7086",
+            cursor: "pointer",
+            padding: "0.15em 0.3em",
+            display: "flex",
+            alignItems: "center",
+            borderRadius: 3,
+            flexShrink: 0,
+          }}
+        >
+          <svg width="1em" height="1em" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <line x1="3" y1="3" x2="9" y2="9" />
+            <line x1="9" y1="3" x2="3" y2="9" />
+          </svg>
+        </button>
+      </div>
+
+      {!isPreview && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+          <input
+            type="text"
+            value={filterQuery}
+            onChange={(event) => onFilterChange(event.target.value)}
+            placeholder="Filter current folder"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              padding: "0.45em 0.65em",
+              borderRadius: 6,
+              border: "1px solid #45475a",
+              background: "#313244",
+              color: "#cdd6f4",
+              fontSize: "0.82em",
+              outline: "none",
+              boxSizing: "border-box",
+            }}
+          />
+          {isLocal && (
+            <span style={{ fontSize: "0.72em", color: "#6c7086", whiteSpace: "nowrap" }}>
+              {openNativeLabel}
+            </span>
+          )}
         </div>
       )}
-
-      {/* Close */}
-      <button
-        onClick={onClose}
-        title="Close"
-        style={{
-          background: "none",
-          border: "none",
-          color: "#6c7086",
-          cursor: "pointer",
-          padding: "0.15em 0.3em",
-          display: "flex",
-          alignItems: "center",
-          borderRadius: 3,
-          flexShrink: 0,
-        }}
-      >
-        <svg width="1em" height="1em" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-          <line x1="3" y1="3" x2="9" y2="9" />
-          <line x1="9" y1="3" x2="3" y2="9" />
-        </svg>
-      </button>
     </div>
   );
 }
@@ -1783,26 +1931,42 @@ function FilePreview({
   file,
   content,
   loading,
+  errorMessage,
   truncated,
   size,
+  startLine,
+  endLine,
+  totalLines,
+  hasPrev,
+  hasNext,
   onClose,
   onInsertPath,
   onInsertSelection,
+  onLoadWindow,
 }: {
   file: PreviewFile;
   content: string;
   loading: boolean;
+  errorMessage: string | null;
   truncated: boolean;
   size: number;
+  startLine: number;
+  endLine: number;
+  totalLines: number;
+  hasPrev: boolean;
+  hasNext: boolean;
   onClose: () => void;
   onInsertPath: () => void;
   onInsertSelection?: (startLine: number, endLine: number, text: string) => void;
+  onLoadWindow?: (startLine: number) => void;
 }) {
   const [previewFontSize, setPreviewFontSize] = useState(() => {
     const v = localStorage.getItem("previewFontSize");
     return v ? Number(v) : 12;
   });
-  // Line selection: drag on gutter to select range
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeMatchIndex, setActiveMatchIndex] = useState(0);
+  const [jumpValue, setJumpValue] = useState("");
   const [selStart, setSelStart] = useState<number | null>(null);
   const [selEnd, setSelEnd] = useState<number | null>(null);
   const [hoverLine, setHoverLine] = useState<number | null>(null);
@@ -1886,21 +2050,32 @@ function FilePreview({
     setHoverLine(null);
   };
 
-  // Reset selection when file changes
   useEffect(() => {
     clearSelection();
-  }, [file.path]);
+  }, [file.path, startLine, endLine]);
 
-  // Build selected text from lines
   const getSelectedText = useCallback(() => {
     if (rangeFrom === null || rangeTo === null) return "";
     const allLines = content.split("\n");
-    return allLines.slice(rangeFrom - 1, rangeTo).join("\n");
-  }, [content, rangeFrom, rangeTo]);
+    return allLines.slice(rangeFrom - startLine, rangeTo - startLine + 1).join("\n");
+  }, [content, rangeFrom, rangeTo, startLine]);
 
   const lines = useMemo(() => content.split("\n"), [content]);
-  const lineCount = lines.length;
-  const gutterWidth = Math.max(String(lineCount).length * 8 + 16, 32);
+  const lineNumbers = useMemo(
+    () => lines.map((_, index) => startLine + index),
+    [lines, startLine],
+  );
+  const lineCount = lineNumbers.length;
+  const gutterWidth = Math.max(String(Math.max(endLine, totalLines)).length * 8 + 16, 32);
+  const matchLines = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return [];
+    return lines
+      .map((line, index) => ({ lineNumber: lineNumbers[index], matches: line.toLowerCase().includes(query) }))
+      .filter((item) => item.matches)
+      .map((item) => item.lineNumber);
+  }, [lineNumbers, lines, searchQuery]);
+  const activeMatchLine = matchLines.length > 0 ? matchLines[activeMatchIndex % matchLines.length] : null;
 
   const highlighted = useMemo(() => {
     if (!content || loading) return "";
@@ -1920,9 +2095,26 @@ function FilePreview({
     return highlighted.split("\n");
   }, [highlighted, lines]);
 
+  useEffect(() => {
+    setActiveMatchIndex(0);
+  }, [searchQuery, startLine, endLine]);
+
+  useEffect(() => {
+    if (activeMatchLine === null) return;
+    const target = contentRef.current?.querySelector(`[data-absolute-line="${activeMatchLine}"]`);
+    if (target instanceof HTMLElement) {
+      target.scrollIntoView({ block: "center" });
+    }
+  }, [activeMatchLine]);
+
+  const loadLineWindow = useCallback((targetLine: number) => {
+    if (!onLoadWindow) return;
+    const clamped = Math.max(1, targetLine);
+    onLoadWindow(clamped);
+  }, [onLoadWindow]);
+
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-      {/* Preview header bar */}
       <div
         style={{
           display: "flex",
@@ -1953,6 +2145,11 @@ function FilePreview({
         {size > 0 && (
           <span style={{ fontSize: 10, color: "#6c7086", flexShrink: 0 }}>
             {formatSize(size)}
+          </span>
+        )}
+        {truncated && (
+          <span style={{ fontSize: 10, color: "#f9e2af", flexShrink: 0 }}>
+            L{startLine}-{endLine} / {totalLines}
           </span>
         )}
         {/* Font size controls */}
@@ -2035,14 +2232,114 @@ function FilePreview({
         </button>
       </div>
 
-      {/* Content area */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "6px 8px",
+          borderBottom: "1px solid #313244",
+          background: "#151520",
+          flexWrap: "wrap",
+        }}
+      >
+        {truncated && (
+          <>
+            <button
+              onClick={() => loadLineWindow(Math.max(1, startLine - DEFAULT_PREVIEW_LINE_COUNT))}
+              disabled={!hasPrev}
+              style={previewToolbarButton(!hasPrev)}
+            >
+              Prev Chunk
+            </button>
+            <button
+              onClick={() => loadLineWindow(endLine + 1)}
+              disabled={!hasNext}
+              style={previewToolbarButton(!hasNext)}
+            >
+              Next Chunk
+            </button>
+          </>
+        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search loaded chunk"
+            style={previewToolbarInput}
+          />
+          <button
+            onClick={() => setActiveMatchIndex((index) => (matchLines.length ? (index - 1 + matchLines.length) % matchLines.length : 0))}
+            disabled={matchLines.length === 0}
+            style={previewToolbarButton(matchLines.length === 0)}
+          >
+            Prev
+          </button>
+          <button
+            onClick={() => setActiveMatchIndex((index) => (matchLines.length ? (index + 1) % matchLines.length : 0))}
+            disabled={matchLines.length === 0}
+            style={previewToolbarButton(matchLines.length === 0)}
+          >
+            Next
+          </button>
+          <span style={{ fontSize: 10, color: "#6c7086" }}>
+            {matchLines.length > 0 ? `${activeMatchIndex + 1}/${matchLines.length}` : "0 matches"}
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <input
+            type="number"
+            min={1}
+            value={jumpValue}
+            onChange={(event) => setJumpValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && jumpValue.trim()) {
+                const target = Number(jumpValue);
+                if (!Number.isNaN(target)) {
+                  if (target >= startLine && target <= endLine) {
+                    const row = contentRef.current?.querySelector(`[data-absolute-line="${target}"]`);
+                    if (row instanceof HTMLElement) {
+                      row.scrollIntoView({ block: "center" });
+                    }
+                  } else {
+                    loadLineWindow(Math.max(1, target - Math.floor(DEFAULT_PREVIEW_LINE_COUNT / 2)));
+                  }
+                }
+              }
+            }}
+            placeholder="Line"
+            style={{ ...previewToolbarInput, width: 88 }}
+          />
+          <button
+            onClick={() => {
+              const target = Number(jumpValue);
+              if (!Number.isNaN(target) && target > 0) {
+                if (target >= startLine && target <= endLine) {
+                  const row = contentRef.current?.querySelector(`[data-absolute-line="${target}"]`);
+                  if (row instanceof HTMLElement) row.scrollIntoView({ block: "center" });
+                } else {
+                  loadLineWindow(Math.max(1, target - Math.floor(DEFAULT_PREVIEW_LINE_COUNT / 2)));
+                }
+              }
+            }}
+            style={previewToolbarButton(false)}
+          >
+            Jump
+          </button>
+        </div>
+      </div>
+
       {loading ? (
         <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: 12 }}>
           Loading...
         </div>
+      ) : errorMessage ? (
+        <div style={{ padding: 20, textAlign: "center", color: "#f38ba8", fontSize: 12 }}>
+          {errorMessage}
+        </div>
       ) : (
         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-          {/* Selection bar - absolute overlay, no layout shift */}
           {rangeFinalized && onInsertSelection && rangeFrom !== null && rangeTo !== null && (
             <div
               style={{
@@ -2139,15 +2436,16 @@ function FilePreview({
               width: "100%",
             }}
           >
-            <tbody>
+              <tbody>
               {highlightedLines.map((line, i) => {
-                const lineNum = i + 1;
+                const lineNum = lineNumbers[i] ?? startLine + i;
                 const inRange = rangeFrom !== null && rangeTo !== null
                   && lineNum >= rangeFrom && lineNum <= rangeTo;
                 return (
                   <tr key={i}>
                     <td
                       data-line={lineNum}
+                      data-absolute-line={lineNum}
                       onMouseDown={() => handleGutterMouseDown(lineNum)}
                       onTouchStart={(e) => handleGutterTouchStart(lineNum, e)}
                       onMouseEnter={() => {
@@ -2175,12 +2473,20 @@ function FilePreview({
                       {lineNum}
                     </td>
                     <td
+                      data-absolute-line={lineNum}
                       className="hljs"
                       style={{
                         padding: "0 12px",
                         whiteSpace: "pre",
                         verticalAlign: "top",
-                        background: inRange ? "rgba(137,180,250,0.08)" : undefined,
+                        background:
+                          inRange
+                            ? "rgba(137,180,250,0.08)"
+                            : lineNum === activeMatchLine
+                              ? "rgba(249,226,175,0.18)"
+                              : matchLines.includes(lineNum)
+                                ? "rgba(249,226,175,0.08)"
+                                : undefined,
                       }}
                       dangerouslySetInnerHTML={{ __html: line || " " }}
                     />
@@ -2202,7 +2508,7 @@ function FilePreview({
                 left: 0,
               }}
             >
-              File truncated (showing first 512KB of {formatSize(size)})
+              Large file preview loaded for lines {startLine}-{endLine} of {totalLines}.
             </div>
           )}
           </div>
@@ -2211,6 +2517,29 @@ function FilePreview({
     </div>
   );
 }
+
+function previewToolbarButton(disabled: boolean): React.CSSProperties {
+  return {
+    background: disabled ? "#232336" : "#313244",
+    border: "1px solid #45475a",
+    color: disabled ? "#585b70" : "#cdd6f4",
+    borderRadius: 6,
+    padding: "4px 8px",
+    fontSize: 11,
+    cursor: disabled ? "not-allowed" : "pointer",
+  };
+}
+
+const previewToolbarInput: React.CSSProperties = {
+  padding: "4px 8px",
+  borderRadius: 6,
+  border: "1px solid #45475a",
+  background: "#313244",
+  color: "#cdd6f4",
+  fontSize: 11,
+  outline: "none",
+  boxSizing: "border-box",
+};
 
 /* ---- Image Preview ---- */
 
