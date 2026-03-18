@@ -385,6 +385,9 @@ async def raw_file(
 
 def _validate_name(name: str) -> None:
     """Validate a file/folder name. Raises HTTPException on invalid input."""
+    if os.path.isabs(name) or os.path.splitdrive(name)[0]:
+        raise HTTPException(status_code=400, detail="Invalid name")
+
     if sys.platform == "win32":
         _INVALID_CHARS = set('/<>:"\\|?*\0')
         _RESERVED_NAMES = {
@@ -393,7 +396,7 @@ def _validate_name(name: str) -> None:
             *(f"LPT{i}" for i in range(1, 10)),
         }
     else:
-        _INVALID_CHARS = set('/\0')
+        _INVALID_CHARS = set('/\\\0')
         _RESERVED_NAMES: set[str] = set()
     if (
         not name
@@ -403,6 +406,25 @@ def _validate_name(name: str) -> None:
         or (sys.platform == "win32" and name.endswith((" ", ".")))
     ):
         raise HTTPException(status_code=400, detail="Invalid name")
+
+
+def _resolve_child_path(parent: str, name: str) -> tuple[str, str]:
+    """Resolve a child entry and ensure it stays inside the parent directory."""
+    normalized_name = name.strip()
+    _validate_name(normalized_name)
+
+    parent_real = os.path.realpath(os.path.abspath(parent))
+    target_real = os.path.realpath(os.path.join(parent_real, normalized_name))
+
+    try:
+        is_within_parent = os.path.commonpath([parent_real, target_real]) == parent_real
+    except ValueError:
+        is_within_parent = False
+
+    if not is_within_parent or os.path.dirname(target_real) != parent_real:
+        raise HTTPException(status_code=400, detail="Invalid name")
+
+    return normalized_name, target_real
 
 
 class MkdirRequest(BaseModel):
@@ -418,10 +440,7 @@ async def make_directory(
     if not os.path.isdir(parent):
         raise HTTPException(status_code=400, detail=f"Parent not found: {parent}")
 
-    name = req.name.strip()
-    _validate_name(name)
-
-    target = os.path.join(parent, name)
+    name, target = _resolve_child_path(parent, req.name)
     if os.path.exists(target):
         raise HTTPException(status_code=400, detail=f"Already exists: {name}")
 
@@ -450,14 +469,11 @@ async def rename_entry(
     if not os.path.isdir(parent):
         raise HTTPException(status_code=400, detail=f"Parent not found: {parent}")
 
-    new_name = req.newName.strip()
-    _validate_name(new_name)
-
-    old_path = os.path.join(parent, req.oldName)
+    old_name, old_path = _resolve_child_path(parent, req.oldName)
+    new_name, new_path = _resolve_child_path(parent, req.newName)
     if not os.path.exists(old_path):
-        raise HTTPException(status_code=400, detail=f"Not found: {req.oldName}")
+        raise HTTPException(status_code=400, detail=f"Not found: {old_name}")
 
-    new_path = os.path.join(parent, new_name)
     if os.path.exists(new_path):
         raise HTTPException(status_code=400, detail=f"Already exists: {new_name}")
 
@@ -487,9 +503,9 @@ async def delete_entry(
     if not os.path.isdir(parent):
         raise HTTPException(status_code=400, detail=f"Parent not found: {parent}")
 
-    target = os.path.join(parent, req.name)
+    name, target = _resolve_child_path(parent, req.name)
     if not os.path.exists(target):
-        raise HTTPException(status_code=400, detail=f"Not found: {req.name}")
+        raise HTTPException(status_code=400, detail=f"Not found: {name}")
 
     # Prevent deleting the parent directory itself
     if os.path.abspath(target) == parent:
@@ -506,7 +522,7 @@ async def delete_entry(
         logger.error(f"delete_entry error: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete")
 
-    return {"deleted": req.name}
+    return {"deleted": name}
 
 
 @app.post("/api/upload")
@@ -1491,7 +1507,11 @@ async def opencode_web_stop(_user: str = Depends(get_current_user)):
 
 @app.api_route("/api/opencode-web/proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
 @app.api_route("/api/opencode-web/proxy", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
-async def opencode_web_proxy(path: str = "", request: Request = None):
+async def opencode_web_proxy(
+    request: Request,
+    path: str = "",
+    _user: str = Depends(get_current_user),
+):
     status = opencode_web_manager.get_status()
     if not status["running"] or status["port"] is None:
         raise HTTPException(status_code=503, detail="OpenCode Web server is not running")
@@ -1509,11 +1529,22 @@ async def opencode_web_proxy(path: str = "", request: Request = None):
     if request and request.url.query:
         target_url += f"?{request.url.query}"
 
-    headers = {k: v for k, v in request.headers.items()} if request else {}
-    headers.pop("host", None)
-    headers.pop("Host", None)
-    headers.pop("transfer-encoding", None)
-    headers.pop("Transfer-Encoding", None)
+    allowed_request_headers = {
+        "accept",
+        "accept-encoding",
+        "accept-language",
+        "cache-control",
+        "content-type",
+        "origin",
+        "referer",
+        "user-agent",
+        "x-requested-with",
+    }
+    headers = {
+        key: value
+        for key, value in request.headers.items()
+        if key.lower() in allowed_request_headers
+    }
 
     body = None
     if request and request.method in ["POST", "PUT", "PATCH"]:

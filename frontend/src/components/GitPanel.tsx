@@ -485,7 +485,14 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
   if (isGitRepo === false) {
     const inner = (
       <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#181825", color: "#cdd6f4" }}>
-        <PanelHeader title="Git" onClose={onClose} onRefresh={handleRefresh} loading={loading} />
+        <PanelHeader
+          title="Git"
+          onClose={onClose}
+          onRefresh={handleRefresh}
+          loading={loading}
+          gitFontSize={gitFontSize}
+          onFontSizeChange={setGitFontSize}
+        />
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center" }}>
           <div>
             <div style={{ fontSize: 14, color: "#6c7086", marginBottom: 8 }}>Not a Git repository</div>
@@ -505,7 +512,14 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
   if (isGitRepo === null) {
     const inner = (
       <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#181825", color: "#cdd6f4" }}>
-        <PanelHeader title="Git" onClose={onClose} onRefresh={handleRefresh} loading={true} />
+        <PanelHeader
+          title="Git"
+          onClose={onClose}
+          onRefresh={handleRefresh}
+          loading={true}
+          gitFontSize={gitFontSize}
+          onFontSizeChange={setGitFontSize}
+        />
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span style={{ color: "#6c7086" }}>Loading...</span>
         </div>
