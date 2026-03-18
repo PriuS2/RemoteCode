@@ -58,11 +58,30 @@ export function useWebSocket({
       return;
     }
 
+    const socketUrl = url;
+
+    function clearReconnectTimer() {
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+    }
+
     function connect() {
       if (unmountedRef.current) return;
 
+      clearReconnectTimer();
+
+      const existing = wsRef.current;
+      if (
+        existing &&
+        (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)
+      ) {
+        return;
+      }
+
       setStatus("connecting");
-      const ws = new WebSocket(url!);
+      const ws = new WebSocket(socketUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -76,22 +95,24 @@ export function useWebSocket({
           const msg: WsMessage = JSON.parse(event.data);
           onMessageRef.current(msg);
         } catch {
-          // ignore
+          // Ignore malformed messages.
         }
       };
 
       ws.onclose = (event) => {
         if (unmountedRef.current) return;
+        if (wsRef.current === ws) {
+          wsRef.current = null;
+        }
         setStatus("disconnected");
         onCloseRef.current?.();
 
-        // 4001 = auth failed, do not reconnect
         if (autoReconnect && event.code !== 4001) {
           const delay = Math.min(
             BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttemptRef.current),
-            MAX_RECONNECT_DELAY
+            MAX_RECONNECT_DELAY,
           );
-          reconnectAttemptRef.current++;
+          reconnectAttemptRef.current += 1;
           reconnectTimerRef.current = setTimeout(connect, delay);
         }
       };
@@ -101,24 +122,28 @@ export function useWebSocket({
       };
     }
 
-    connect();
-
-    // 모바일 백그라운드에서 복귀 시 즉시 재연결
     function handleVisibilityChange() {
-      if (!document.hidden && wsRef.current?.readyState !== WebSocket.OPEN) {
-        reconnectAttemptRef.current = 0;
-        connect();
+      const readyState = wsRef.current?.readyState;
+      if (
+        document.hidden ||
+        readyState === WebSocket.OPEN ||
+        readyState === WebSocket.CONNECTING
+      ) {
+        return;
       }
+
+      reconnectAttemptRef.current = 0;
+      clearReconnectTimer();
+      connect();
     }
+
+    connect();
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       unmountedRef.current = true;
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
-      }
+      clearReconnectTimer();
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
@@ -150,7 +175,7 @@ export function useWebSocket({
   return { sendInput, sendResize, sendMouse, status };
 }
 
-export function getWsUrl(sessionId: string, token: string): string {
+export function getWsUrl(sessionId: string): string {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${proto}//${window.location.host}/ws/terminal/${sessionId}?token=${encodeURIComponent(token)}`;
+  return `${proto}//${window.location.host}/ws/terminal/${sessionId}`;
 }

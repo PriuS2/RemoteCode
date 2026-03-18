@@ -1,13 +1,13 @@
 import { useState, FormEvent } from "react";
 import FolderBrowser from "./FolderBrowser";
+import { apiFetch, readErrorMessage } from "../utils/api";
 
 interface NewSessionProps {
-  token: string;
   onCreated: (sessionId: string) => void;
   onCancel: () => void;
 }
 
-export default function NewSession({ token, onCreated, onCancel }: NewSessionProps) {
+export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
   const [workPath, setWorkPath] = useState("");
   const [name, setName] = useState("");
   const [createFolder, setCreateFolder] = useState(false);
@@ -26,11 +26,10 @@ export default function NewSession({ token, onCreated, onCancel }: NewSessionPro
     setError(null);
 
     try {
-      const res = await fetch("/api/sessions", {
+      const res = await apiFetch("/api/sessions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           work_path: workPath.trim(),
@@ -43,8 +42,7 @@ export default function NewSession({ token, onCreated, onCancel }: NewSessionPro
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || "Failed to create session");
+        throw new Error(await readErrorMessage(res, "Failed to create session"));
       }
 
       const data = await res.json();
@@ -398,7 +396,6 @@ export default function NewSession({ token, onCreated, onCancel }: NewSessionPro
 
       {showBrowser && (
         <FolderBrowser
-          token={token}
           initialPath={workPath || ""}
           onSelect={(path) => {
             setWorkPath(path);

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { computeGraphLayout, type GitLogEntry } from "../utils/gitGraph";
+import { apiFetch } from "../utils/api";
 
 /* =========================================================
    Types
@@ -77,7 +78,6 @@ interface GitCommitDetail {
    ========================================================= */
 
 interface GitPanelProps {
-  token: string;
   workPath: string;
   onClose: () => void;
   isMobile: boolean;
@@ -131,7 +131,7 @@ function basename(p: string) {
    Main Component
    ========================================================= */
 
-export default function GitPanel({ token, workPath, onClose, isMobile }: GitPanelProps) {
+export default function GitPanel({ workPath, onClose, isMobile }: GitPanelProps) {
   const [isGitRepo, setIsGitRepo] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<"status" | "log">("status");
   const [status, setStatus] = useState<GitStatusResponse | null>(null);
@@ -181,13 +181,13 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
     localStorage.setItem("gitShowCommitMetadata", String(showCommitMetadata));
   }, [showCommitMetadata]);
 
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
+  const headers = useMemo(() => ({}), []);
 
   /* ---- API calls ---- */
 
   const fetchStatus = useCallback(async () => {
     try {
-      const r = await fetch(`/api/git/status?path=${encodeURIComponent(workPath)}`, { headers });
+      const r = await apiFetch(`/api/git/status?path=${encodeURIComponent(workPath)}`, { headers });
       if (!r.ok) throw new Error(await r.text());
       const data: GitStatusResponse = await r.json();
       setIsGitRepo(data.is_git_repo);
@@ -199,7 +199,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
 
   const fetchLog = useCallback(async (skip = 0) => {
     try {
-      const r = await fetch(`/api/git/log?path=${encodeURIComponent(workPath)}&skip=${skip}&count=50`, { headers });
+      const r = await apiFetch(`/api/git/log?path=${encodeURIComponent(workPath)}&skip=${skip}&count=50`, { headers });
       if (!r.ok) throw new Error(await r.text());
       const data = await r.json();
       if (skip === 0) {
@@ -215,7 +215,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
 
   const fetchBranches = useCallback(async () => {
     try {
-      const r = await fetch(`/api/git/branches?path=${encodeURIComponent(workPath)}`, { headers });
+      const r = await apiFetch(`/api/git/branches?path=${encodeURIComponent(workPath)}`, { headers });
       if (!r.ok) throw new Error(await r.text());
       setBranches(await r.json());
     } catch (e: any) {
@@ -225,7 +225,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
 
   const fetchDiff = useCallback(async (file: string, staged: boolean) => {
     try {
-      const r = await fetch(`/api/git/diff?path=${encodeURIComponent(workPath)}&file=${encodeURIComponent(file)}&staged=${staged}`, { headers });
+      const r = await apiFetch(`/api/git/diff?path=${encodeURIComponent(workPath)}&file=${encodeURIComponent(file)}&staged=${staged}`, { headers });
       if (!r.ok) throw new Error(await r.text());
       setDiffContent(await r.json());
     } catch (e: any) {
@@ -235,7 +235,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
 
   const fetchCommitDetail = useCallback(async (hash: string) => {
     try {
-      const r = await fetch(`/api/git/commit-detail?path=${encodeURIComponent(workPath)}&hash=${encodeURIComponent(hash)}`, { headers });
+      const r = await apiFetch(`/api/git/commit-detail?path=${encodeURIComponent(workPath)}&hash=${encodeURIComponent(hash)}`, { headers });
       if (!r.ok) throw new Error(await r.text());
       setCommitDetail(await r.json());
     } catch (e: any) {
@@ -245,7 +245,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
 
   const fetchCommitDiff = useCallback(async (hash: string, file: string) => {
     try {
-      const r = await fetch(`/api/git/commit-diff?path=${encodeURIComponent(workPath)}&hash=${encodeURIComponent(hash)}&file=${encodeURIComponent(file)}`, { headers });
+      const r = await apiFetch(`/api/git/commit-diff?path=${encodeURIComponent(workPath)}&hash=${encodeURIComponent(hash)}&file=${encodeURIComponent(file)}`, { headers });
       if (!r.ok) throw new Error(await r.text());
       setCommitDiff(await r.json());
     } catch (e: any) {
@@ -256,7 +256,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
   const doStage = useCallback(async (files: string[]) => {
     setLoading(true);
     try {
-      const r = await fetch("/api/git/stage", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath, files }) });
+      const r = await apiFetch("/api/git/stage", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath, files }) });
       if (!r.ok) throw new Error(await r.text());
       await fetchStatus();
     } catch (e: any) { setError(e.message); }
@@ -266,7 +266,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
   const doUnstage = useCallback(async (files: string[]) => {
     setLoading(true);
     try {
-      const r = await fetch("/api/git/unstage", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath, files }) });
+      const r = await apiFetch("/api/git/unstage", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath, files }) });
       if (!r.ok) throw new Error(await r.text());
       await fetchStatus();
     } catch (e: any) { setError(e.message); }
@@ -277,7 +277,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
     if (!confirm(`Discard changes to ${files.length} file(s)?`)) return;
     setLoading(true);
     try {
-      const r = await fetch("/api/git/discard", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath, files }) });
+      const r = await apiFetch("/api/git/discard", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath, files }) });
       if (!r.ok) throw new Error(await r.text());
       await fetchStatus();
     } catch (e: any) { setError(e.message); }
@@ -288,7 +288,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
     if (!commitMessage.trim()) return;
     setLoading(true);
     try {
-      const r = await fetch("/api/git/commit", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath, message: commitMessage }) });
+      const r = await apiFetch("/api/git/commit", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath, message: commitMessage }) });
       if (!r.ok) throw new Error(await r.text());
       setCommitMessage("");
       await fetchStatus();
@@ -300,7 +300,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
     setLoading(true);
     setBranchDropdown(false);
     try {
-      const r = await fetch("/api/git/checkout", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath, branch }) });
+      const r = await apiFetch("/api/git/checkout", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath, branch }) });
       if (!r.ok) throw new Error(await r.text());
       await fetchStatus();
       await fetchBranches();
@@ -312,7 +312,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
   const doPull = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/git/pull", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath }) });
+      const r = await apiFetch("/api/git/pull", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath }) });
       if (!r.ok) throw new Error(await r.text());
       await fetchStatus();
       if (activeTab === "log") await fetchLog();
@@ -323,7 +323,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
   const doPush = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/git/push", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath }) });
+      const r = await apiFetch("/api/git/push", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath }) });
       if (!r.ok) throw new Error(await r.text());
       await fetchStatus();
       await fetchBranches();
@@ -338,7 +338,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
     setShowNewBranch(false);
     setNewBranchName("");
     try {
-      const r = await fetch("/api/git/create-branch", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath, name: name.trim(), checkout: true }) });
+      const r = await apiFetch("/api/git/create-branch", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath, name: name.trim(), checkout: true }) });
       if (!r.ok) throw new Error(await r.text());
       await fetchStatus();
       await fetchBranches();
@@ -349,7 +349,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
 
   const fetchStashes = useCallback(async () => {
     try {
-      const r = await fetch(`/api/git/stash-list?path=${encodeURIComponent(workPath)}`, { headers });
+      const r = await apiFetch(`/api/git/stash-list?path=${encodeURIComponent(workPath)}`, { headers });
       if (!r.ok) throw new Error(await r.text());
       const data = await r.json();
       setStashes(data.stashes);
@@ -359,7 +359,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
   const doStash = useCallback(async (message?: string) => {
     setLoading(true);
     try {
-      const r = await fetch("/api/git/stash", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath, message: message || "" }) });
+      const r = await apiFetch("/api/git/stash", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath, message: message || "" }) });
       if (!r.ok) throw new Error(await r.text());
       await fetchStatus();
       await fetchStashes();
@@ -370,7 +370,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
   const doStashPop = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/git/stash-pop", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath }) });
+      const r = await apiFetch("/api/git/stash-pop", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath }) });
       if (!r.ok) throw new Error(await r.text());
       await fetchStatus();
       await fetchStashes();
@@ -382,7 +382,7 @@ export default function GitPanel({ token, workPath, onClose, isMobile }: GitPane
     if (!confirm("Drop the latest stash?")) return;
     setLoading(true);
     try {
-      const r = await fetch("/api/git/stash-drop", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath }) });
+      const r = await apiFetch("/api/git/stash-drop", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath }) });
       if (!r.ok) throw new Error(await r.text());
       await fetchStashes();
     } catch (e: any) { setError(e.message); }

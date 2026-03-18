@@ -27,7 +27,6 @@ export type ActivityState = "idle" | "processing" | "done";
 
 interface TerminalProps {
   sessionId: string;
-  token: string;
   visible?: boolean;
   fontSize?: number;
   onFontSizeChange?: (delta: number) => void;
@@ -58,7 +57,6 @@ const STATUS_STYLE: Record<string, React.CSSProperties> = {
 
 export default function Terminal({
   sessionId,
-  token,
   visible = true,
   fontSize = 14,
   onFontSizeChange,
@@ -105,7 +103,7 @@ export default function Terminal({
   const [scrollThumb, setScrollThumb] = useState<{ top: number; height: number } | null>(null);
   const [scrollbarActive, setScrollbarActive] = useState(false);
 
-  const wsUrl = sessionId ? getWsUrl(sessionId, token) : null;
+  const wsUrl = sessionId ? getWsUrl(sessionId) : null;
 
   const { sendInput, sendResize, sendMouse, status } = useWebSocket({
     url: wsUrl,
@@ -707,7 +705,6 @@ export default function Terminal({
         {explorerOpen && (
           <div style={{ width: isMobile() ? undefined : explorerWidth, flexShrink: 0 }}>
             <FileExplorer
-              token={token}
               rootPath={workPath}
               onInsertPath={handleInsertPath}
               onClose={() => setExplorerOpen(false)}
@@ -724,7 +721,6 @@ export default function Terminal({
         {gitPanelOpen && (
           <div style={{ width: isMobile() ? undefined : gitPanelWidth, flexShrink: 0 }}>
             <GitPanel
-              token={token}
               workPath={workPath}
               onClose={() => setGitPanelOpen(false)}
               isMobile={isMobile()}

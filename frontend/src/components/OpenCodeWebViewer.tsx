@@ -1,60 +1,45 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { apiFetch, readErrorMessage } from "../utils/api";
 
 interface OpenCodeWebViewerProps {
-  token: string;
   onClose: () => void;
 }
 
-export default function OpenCodeWebViewer({ token, onClose }: OpenCodeWebViewerProps) {
+export default function OpenCodeWebViewer({ onClose }: OpenCodeWebViewerProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const openedRef = useRef(false);
 
-  const authHeaders = {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
-  };
-
   useEffect(() => {
     const init = async () => {
       try {
-        const statusRes = await fetch("/api/opencode-web/status", {
-          headers: authHeaders,
-        });
-        
+        const statusRes = await apiFetch("/api/opencode-web/status");
         if (!statusRes.ok) {
-          const errData = await statusRes.json();
-          throw new Error(errData.detail || `HTTP ${statusRes.status}`);
+          throw new Error(await readErrorMessage(statusRes, `HTTP ${statusRes.status}`));
         }
-        
-        const status = await statusRes.json();
 
+        const status = await statusRes.json();
         if (!status.running) {
-          const startRes = await fetch("/api/opencode-web/start", {
+          const startRes = await apiFetch("/api/opencode-web/start", {
             method: "POST",
-            headers: authHeaders,
           });
-          
           if (!startRes.ok) {
-            const errData = await startRes.json();
-            throw new Error(errData.detail || `HTTP ${startRes.status}`);
+            throw new Error(await readErrorMessage(startRes, `HTTP ${startRes.status}`));
           }
         }
-        
+
         setLoading(false);
-        
         if (!openedRef.current) {
           openedRef.current = true;
-          const host = window.location.host;
-          const openUrl = `http://${host.split(':')[0]}:8096`;
-          window.open(openUrl, "_blank", "noopener,noreferrer");
+          window.open("/api/opencode-web/proxy/", "_blank", "noopener,noreferrer");
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to initialize");
       }
     };
+
     init();
-  }, [token]);
+  }, []);
 
   if (error) {
     return (
@@ -106,9 +91,24 @@ export default function OpenCodeWebViewer({ token, onClose }: OpenCodeWebViewerP
   }
 
   return (
-    <div style={{ width: "100%", height: "100%", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, background: "#1e1e2e", color: "#cdd6f4" }}>
-      <div>OpenCode Web이 새 창에서 열렸습니다.</div>
-      <div style={{ fontSize: 12, color: "#a6adc8" }}>브라우저 팝업 차단을 확인해 주세요.</div>
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexDirection: "column",
+        gap: 16,
+        background: "#1e1e2e",
+        color: "#cdd6f4",
+      }}
+    >
+      <div>OpenCode Web was opened in a new tab.</div>
+      <div style={{ fontSize: 12, color: "#a6adc8" }}>
+        If nothing opened, check your popup blocker and try again.
+      </div>
       <button
         onClick={onClose}
         style={{

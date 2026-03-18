@@ -10,12 +10,9 @@ import {
   requestNotificationPermission,
   sendBrowserNotification,
 } from "./utils/notify";
+import { apiFetch, onAuthExpired } from "./utils/api";
 import type { Session } from "./types/session";
 import "./App.css";
-
-function getStoredToken(): string | null {
-  return localStorage.getItem("token");
-}
 
 function getStoredFontSize(key: string, fallback: number): number {
   const v = localStorage.getItem(key);
@@ -23,7 +20,7 @@ function getStoredFontSize(key: string, fallback: number): number {
 }
 
 export default function App() {
-  const [token, setToken] = useState<string | null>(getStoredToken);
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessions, setActiveSessions] = useState<string[]>([]);
   const [focusedIndex, setFocusedIndex] = useState(0);
@@ -96,30 +93,33 @@ export default function App() {
     document.addEventListener("mouseup", onUp);
   }, []);
 
-  const authHeaders = useCallback(
-    () => ({
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    }),
-    [token]
-  );
+  const resetClientState = useCallback((isAuthenticated: boolean) => {
+    localStorage.removeItem("token");
+    setAuthenticated(isAuthenticated);
+    setSessions([]);
+    setActiveSessions([]);
+    setFocusedIndex(0);
+    setMountedSessions([]);
+    setSessionActivity({});
+  }, []);
 
   const fetchSessions = useCallback(async () => {
-    if (!token) return;
+    if (authenticated !== true) return;
     try {
-      const res = await fetch("/api/sessions", { headers: authHeaders() });
+      const res = await apiFetch("/api/sessions");
       if (res.status === 401) {
-        handleLogout();
+        resetClientState(false);
         return;
       }
       if (res.ok) {
         const data: Session[] = await res.json();
+        setAuthenticated(true);
         setSessions(data);
       }
     } catch {
       // ignore
     }
-  }, [token, authHeaders]);
+  }, [authenticated, resetClientState]);
 
   // Persist font sizes
   useEffect(() => {
@@ -176,34 +176,70 @@ export default function App() {
 
   // Request notification permission on login
   useEffect(() => {
-    if (token) {
+    if (authenticated === true) {
       requestNotificationPermission();
     }
-  }, [token]);
+  }, [authenticated]);
+
+  useEffect(() => {
+    localStorage.removeItem("token");
+  }, []);
+
+  useEffect(() => {
+    const detach = onAuthExpired(() => {
+      resetClientState(false);
+    });
+    return detach;
+  }, [resetClientState]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const restoreSession = async () => {
+      try {
+        const res = await apiFetch("/api/auth/session", { skipAuthHandling: true });
+        if (cancelled) return;
+        setAuthenticated(res.ok);
+      } catch {
+        if (!cancelled) {
+          setAuthenticated(false);
+        }
+      }
+    };
+
+    restoreSession();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // 5s polling
   useEffect(() => {
-    if (!token) return;
-    fetchSessions();
+    if (authenticated !== true) return;
+    void fetchSessions();
     pollRef.current = setInterval(fetchSessions, 5000);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [token, fetchSessions]);
+  }, [authenticated, fetchSessions]);
 
-  const handleLogin = (newToken: string) => {
-    setToken(newToken);
-  };
+  const handleLogin = useCallback(() => {
+    setAuthenticated(true);
+    void fetchSessions();
+  }, [fetchSessions]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    setToken(null);
-    setSessions([]);
-    setActiveSessions([]);
-    setFocusedIndex(0);
-    setMountedSessions([]);
-    setSessionActivity({});
-  };
+  const handleLogout = useCallback(async () => {
+    try {
+      await apiFetch("/api/auth/logout", {
+        method: "POST",
+        skipAuthHandling: true,
+      });
+    } catch {
+      // ignore
+    } finally {
+      resetClientState(false);
+    }
+  }, [resetClientState]);
 
   const isMobile = () => window.innerWidth <= 768;
 
@@ -294,9 +330,8 @@ export default function App() {
 
   const handleSuspend = async (id: string) => {
     try {
-      await fetch(`/api/sessions/${id}/suspend`, {
+      await apiFetch(`/api/sessions/${id}/suspend`, {
         method: "POST",
-        headers: authHeaders(),
       });
       removeFromActiveSessions(id);
       setMountedSessions((prev) => prev.filter((sid) => sid !== id));
@@ -313,9 +348,8 @@ export default function App() {
 
   const handleResume = async (id: string) => {
     try {
-      const res = await fetch(`/api/sessions/${id}/resume`, {
+      const res = await apiFetch(`/api/sessions/${id}/resume`, {
         method: "POST",
-        headers: authHeaders(),
       });
       if (res.ok) {
         selectSession(id);
@@ -328,9 +362,8 @@ export default function App() {
 
   const handleTerminate = async (id: string) => {
     try {
-      await fetch(`/api/sessions/${id}`, {
+      await apiFetch(`/api/sessions/${id}`, {
         method: "DELETE",
-        headers: authHeaders(),
       });
       removeFromActiveSessions(id);
       setMountedSessions((prev) => prev.filter((sid) => sid !== id));
@@ -347,9 +380,8 @@ export default function App() {
 
   const handleDelete = async (id: string) => {
     try {
-      await fetch(`/api/sessions/${id}?permanent=true`, {
+      await apiFetch(`/api/sessions/${id}?permanent=true`, {
         method: "DELETE",
-        headers: authHeaders(),
       });
       removeFromActiveSessions(id);
       setMountedSessions((prev) => prev.filter((sid) => sid !== id));
@@ -366,9 +398,9 @@ export default function App() {
 
   const handleRename = async (id: string, newName: string) => {
     try {
-      await fetch(`/api/sessions/${id}/rename`, {
+      await apiFetch(`/api/sessions/${id}/rename`, {
         method: "PATCH",
-        headers: authHeaders(),
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newName }),
       });
       fetchSessions();
@@ -379,9 +411,9 @@ export default function App() {
 
   const handleReorder = async (orderedIds: string[]) => {
     try {
-      await fetch("/api/sessions/reorder", {
+      await apiFetch("/api/sessions/reorder", {
         method: "POST",
-        headers: authHeaders(),
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ordered_ids: orderedIds }),
       });
       fetchSessions();
@@ -390,7 +422,11 @@ export default function App() {
     }
   };
 
-  if (!token) {
+  if (authenticated === null) {
+    return <div className="app-container" />;
+  }
+
+  if (!authenticated) {
     return <Login onLogin={handleLogin} />;
   }
 
@@ -500,7 +536,6 @@ export default function App() {
               return (
                 <OpenCodeWebViewer
                   key={sid}
-                  token={token}
                   onClose={() => {
                     setActiveSessions((prev) => prev.filter((s) => s !== sid));
                     setMountedSessions((prev) => prev.filter((s) => s !== sid));
@@ -513,7 +548,6 @@ export default function App() {
               <Terminal
                 key={sid}
                 sessionId={sid}
-                token={token}
                 visible={isVisible}
                 fontSize={terminalFontSize}
                 onFontSizeChange={(d) => setTerminalFontSize((s) => Math.max(8, Math.min(28, s + d)))}
@@ -565,7 +599,6 @@ export default function App() {
       {/* New Session Modal */}
       {showNewSession && (
         <NewSession
-          token={token}
           onCreated={handleSessionCreated}
           onCancel={() => setShowNewSession(false)}
         />

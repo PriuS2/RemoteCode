@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { IconFolder, FileIcon } from "../utils/fileIcons";
 import { joinPath } from "../utils/pathUtils";
 import hljs from "highlight.js";
+import { apiFetch, readErrorMessage } from "../utils/api";
 
 interface FileEntry {
   name: string;
@@ -20,7 +21,6 @@ interface FilesResponse {
 }
 
 interface FileExplorerProps {
-  token: string;
   rootPath: string;
   onInsertPath: (text: string) => void;
   onClose: () => void;
@@ -87,6 +87,8 @@ interface PreviewFile {
   extension: string | null;
 }
 
+type PreviewMode = "text" | "image" | "audio";
+
 function getRelativePath(rootPath: string, fullPath: string): string {
   // Normalize both paths: backslash → forward slash, remove trailing slash
   const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/$/, "");
@@ -116,7 +118,6 @@ function formatDate(iso: string | null): string {
 }
 
 export default function FileExplorer({
-  token,
   rootPath,
   onInsertPath,
   onClose,
@@ -139,11 +140,13 @@ export default function FileExplorer({
     localStorage.setItem("explorerFontSize", String(explorerFontSize));
   }, [explorerFontSize]);
   const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>("text");
   const [previewContent, setPreviewContent] = useState<string>("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewTruncated, setPreviewTruncated] = useState(false);
   const [previewSize, setPreviewSize] = useState(0);
-  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewMediaUrl, setPreviewMediaUrl] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     x: number; y: number; entry: FileEntry;
   } | null>(null);
@@ -161,7 +164,7 @@ export default function FileExplorer({
   const setImageUrl = useCallback((url: string | null) => {
     if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current);
     imageUrlRef.current = url;
-    setPreviewImageUrl(url);
+    setPreviewMediaUrl(url);
   }, []);
 
   useEffect(() => {
@@ -182,30 +185,25 @@ export default function FileExplorer({
 
   const handleOpenNative = useCallback(async (path?: string) => {
     try {
-      await fetch("/api/open-explorer", {
+      await apiFetch("/api/open-explorer", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ path: path ?? currentPath }),
       });
     } catch {
       // ignore
     }
-  }, [token, currentPath]);
+  }, [currentPath]);
 
   const fetchFiles = useCallback(async (path: string) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
-        `/api/files?path=${encodeURIComponent(path)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await apiFetch(`/api/files?path=${encodeURIComponent(path)}`);
       if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.detail || "Failed to load");
+        throw new Error(await readErrorMessage(res, "Failed to load"));
       }
       const data: FilesResponse = await res.json();
       setCurrentPath(data.current);
@@ -215,7 +213,7 @@ export default function FileExplorer({
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     fetchFiles(rootPath);
@@ -251,30 +249,30 @@ export default function FileExplorer({
     const fullPath = joinPath(currentPath, entry.name);
 
     if (isTextFile(entry.extension, entry.name)) {
-      openPreview({ name: entry.name, path: fullPath, extension: entry.extension });
+      openTextPreview({ name: entry.name, path: fullPath, extension: entry.extension });
     } else if (isImageFile(entry.extension)) {
       openImagePreview({ name: entry.name, path: fullPath, extension: entry.extension });
     } else if (isAudioFile(entry.extension)) {
-      openImagePreview({ name: entry.name, path: fullPath, extension: entry.extension });
+      openAudioPreview({ name: entry.name, path: fullPath, extension: entry.extension });
     } else {
       const rel = getRelativePath(rootPath, fullPath);
       onInsertPath(rel);
     }
   };
 
-  const openPreview = useCallback(async (file: PreviewFile) => {
+  const openTextPreview = useCallback(async (file: PreviewFile) => {
     setPreviewFile(file);
+    setPreviewMode("text");
     setPreviewLoading(true);
     setPreviewContent("");
+    setPreviewError(null);
+    setImageUrl(null);
     setPreviewTruncated(false);
+    setPreviewSize(0);
     try {
-      const res = await fetch(
-        `/api/file-content?path=${encodeURIComponent(file.path)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await apiFetch(`/api/file-content?path=${encodeURIComponent(file.path)}`);
       if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.detail || "Failed to read file");
+        throw new Error(await readErrorMessage(res, "Failed to read file"));
       }
       const data = await res.json();
       setPreviewContent(data.content);
@@ -285,28 +283,51 @@ export default function FileExplorer({
     } finally {
       setPreviewLoading(false);
     }
-  }, [token]);
+  }, [setImageUrl]);
 
   const openImagePreview = useCallback(async (file: PreviewFile) => {
     setImageUrl(null);
     setPreviewFile(file);
+    setPreviewMode("image");
     setPreviewLoading(true);
     setPreviewContent("");
+    setPreviewError(null);
+    setPreviewTruncated(false);
+    setPreviewSize(0);
     try {
-      const res = await fetch(
-        `/api/file-raw?path=${encodeURIComponent(file.path)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!res.ok) throw new Error("Failed to load image");
+      const res = await apiFetch(`/api/file-raw?path=${encodeURIComponent(file.path)}`);
+      if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to load image"));
       const blob = await res.blob();
       setImageUrl(URL.createObjectURL(blob));
       setPreviewSize(blob.size);
     } catch (e: unknown) {
-      setPreviewContent(e instanceof Error ? `Error: ${e.message}` : "Failed to load image");
+      setPreviewError(e instanceof Error ? e.message : "Failed to load image");
     } finally {
       setPreviewLoading(false);
     }
-  }, [token, setImageUrl]);
+  }, [setImageUrl]);
+
+  const openAudioPreview = useCallback(async (file: PreviewFile) => {
+    setImageUrl(null);
+    setPreviewFile(file);
+    setPreviewMode("audio");
+    setPreviewLoading(true);
+    setPreviewContent("");
+    setPreviewError(null);
+    setPreviewTruncated(false);
+    setPreviewSize(0);
+    try {
+      const res = await apiFetch(`/api/file-raw?path=${encodeURIComponent(file.path)}`);
+      if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to load audio"));
+      const blob = await res.blob();
+      setImageUrl(URL.createObjectURL(blob));
+      setPreviewSize(blob.size);
+    } catch (e: unknown) {
+      setPreviewError(e instanceof Error ? e.message : "Failed to load audio");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [setImageUrl]);
 
   const handleInsertEntry = (entry: FileEntry) => {
     const fullPath = joinPath(currentPath, entry.name);
@@ -329,10 +350,7 @@ export default function FileExplorer({
 
   const downloadFile = useCallback(async (fullPath: string, fileName: string) => {
     try {
-      const res = await fetch(
-        `/api/file-raw?path=${encodeURIComponent(fullPath)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await apiFetch(`/api/file-raw?path=${encodeURIComponent(fullPath)}`);
       if (!res.ok) return;
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -346,7 +364,7 @@ export default function FileExplorer({
     } catch {
       // ignore
     }
-  }, [token]);
+  }, []);
 
   const canPreview = useCallback((entry: FileEntry) => {
     return isTextFile(entry.extension, entry.name) || isImageFile(entry.extension) || isAudioFile(entry.extension);
@@ -367,34 +385,32 @@ export default function FileExplorer({
     const newName = renameValue.trim();
     if (!newName || newName === renamingEntry.name) { cancelRename(); return; }
     try {
-      const res = await fetch("/api/rename", {
+      const res = await apiFetch("/api/rename", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path: currentPath, oldName: renamingEntry.name, newName }),
       });
       if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.detail || "Rename failed");
+        throw new Error(await readErrorMessage(res, "Rename failed"));
       }
       cancelRename();
       fetchFiles(currentPath);
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : "Rename failed");
     }
-  }, [renamingEntry, renameValue, currentPath, token, fetchFiles, cancelRename]);
+  }, [renamingEntry, renameValue, currentPath, fetchFiles, cancelRename]);
 
   const handleCreateFolder = useCallback(async () => {
     const name = newFolderName.trim();
     if (!name) { setCreatingFolder(false); setNewFolderName(""); return; }
     try {
-      const res = await fetch("/api/mkdir", {
+      const res = await apiFetch("/api/mkdir", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path: currentPath, name }),
       });
       if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.detail || "Failed to create folder");
+        throw new Error(await readErrorMessage(res, "Failed to create folder"));
       }
       setCreatingFolder(false);
       setNewFolderName("");
@@ -402,24 +418,23 @@ export default function FileExplorer({
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : "Failed to create folder");
     }
-  }, [newFolderName, currentPath, token, fetchFiles]);
+  }, [newFolderName, currentPath, fetchFiles]);
 
   const handleDelete = useCallback(async (entry: FileEntry) => {
     try {
-      const res = await fetch("/api/delete", {
+      const res = await apiFetch("/api/delete", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path: currentPath, name: entry.name }),
       });
       if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.detail || "Delete failed");
+        throw new Error(await readErrorMessage(res, "Delete failed"));
       }
       fetchFiles(currentPath);
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : "Delete failed");
     }
-  }, [currentPath, token, fetchFiles]);
+  }, [currentPath, fetchFiles]);
 
   const contextMenuItems = useMemo((): ContextMenuEntry[] => {
     if (!contextMenu) return [];
@@ -471,17 +486,15 @@ export default function FileExplorer({
     try {
       const formData = new FormData();
       for (const f of files) formData.append("files", f);
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/upload?path=${encodeURIComponent(currentPath)}`,
         {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
           body: formData,
         },
       );
       if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.detail || "Upload failed");
+        throw new Error(await readErrorMessage(res, "Upload failed"));
       }
       const data = await res.json();
       setUploadProgress(`${data.count} file(s) uploaded`);
@@ -493,7 +506,7 @@ export default function FileExplorer({
     } finally {
       setUploading(false);
     }
-  }, [currentPath, token, fetchFiles]);
+  }, [currentPath, fetchFiles]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -539,29 +552,32 @@ export default function FileExplorer({
     setImageUrl(null);
     setPreviewFile(null);
     setPreviewContent("");
+    setPreviewError(null);
+    setPreviewTruncated(false);
+    setPreviewSize(0);
   }, [setImageUrl]);
 
-  const isImagePreview = previewFile !== null && isImageFile(previewFile.extension);
-  const isAudioPreview = previewFile !== null && isAudioFile(previewFile.extension);
+  const isImagePreview = previewFile !== null && previewMode === "image";
+  const isAudioPreview = previewFile !== null && previewMode === "audio";
 
   const bodyOrPreview = previewFile ? (
     isImagePreview ? (
       <ImagePreview
         file={previewFile}
-        imageUrl={previewImageUrl}
+        imageUrl={previewMediaUrl}
         loading={previewLoading}
         size={previewSize}
-        errorMessage={previewContent || null}
+        errorMessage={previewError}
         onClose={closePreview}
         onInsertPath={handleInsertPreviewPath}
       />
     ) : isAudioPreview ? (
       <AudioPreview
         file={previewFile}
-        audioUrl={previewImageUrl}
+        audioUrl={previewMediaUrl}
         loading={previewLoading}
         size={previewSize}
-        errorMessage={previewContent || null}
+        errorMessage={previewError}
         onClose={closePreview}
         onInsertPath={handleInsertPreviewPath}
       />

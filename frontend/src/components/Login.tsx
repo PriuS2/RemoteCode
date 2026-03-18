@@ -1,7 +1,8 @@
 import { useState, FormEvent } from "react";
+import { apiFetch, readErrorMessage } from "../utils/api";
 
 interface LoginProps {
-  onLogin: (token: string) => void;
+  onLogin: () => void;
 }
 
 export default function Login({ onLogin }: LoginProps) {
@@ -15,20 +16,18 @@ export default function Login({ onLogin }: LoginProps) {
     setError(null);
 
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await apiFetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password }),
+        skipAuthHandling: true,
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || "Login failed");
+        throw new Error(await readErrorMessage(res, "Login failed"));
       }
 
-      const data = await res.json();
-      localStorage.setItem("token", data.access_token);
-      onLogin(data.access_token);
+      onLogin();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {

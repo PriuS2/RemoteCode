@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import jwt
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Request, WebSocket, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import InvalidTokenError
 
@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer(auto_error=False)
 
 ALGORITHM = "HS256"
+AUTH_COOKIE_NAME = "remote_code_session"
 
 
 def verify_password(plain_password: str) -> bool:
@@ -38,16 +39,20 @@ def verify_token(token: str) -> bool:
 
 
 async def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> str:
-    """REST API용 인증 dependency."""
-    if not credentials:
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token and credentials:
+        token = credentials.credentials
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    if not verify_token(credentials.credentials):
+    if not verify_token(token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
@@ -56,8 +61,8 @@ async def get_current_user(
     return "user"
 
 
-def verify_ws_token(token: Optional[str]) -> bool:
-    """WebSocket용 토큰 검증."""
-    if not token:
+def verify_ws_token(ws: WebSocket, token: Optional[str] = None) -> bool:
+    ws_token = ws.cookies.get(AUTH_COOKIE_NAME) or token
+    if not ws_token:
         return False
-    return verify_token(token)
+    return verify_token(ws_token)

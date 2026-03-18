@@ -22,6 +22,7 @@ from slowapi.errors import RateLimitExceeded
 from starlette.responses import JSONResponse, Response
 
 from .auth import (
+    AUTH_COOKIE_NAME,
     create_access_token,
     get_current_user,
     verify_password,
@@ -119,15 +120,64 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     )
 
 
+def _is_secure_request(request: Request) -> bool:
+    forwarded_proto = request.headers.get("x-forwarded-proto", "")
+    if forwarded_proto:
+        return forwarded_proto.split(",")[0].strip().lower() == "https"
+    return request.url.scheme == "https"
+
+
+def _set_auth_cookie(response: JSONResponse, request: Request, token: str) -> None:
+    response.set_cookie(
+        key=AUTH_COOKIE_NAME,
+        value=token,
+        max_age=settings.jwt_expire_hours * 3600,
+        httponly=True,
+        samesite="lax",
+        secure=_is_secure_request(request),
+        path="/",
+    )
+
+
+def _clear_auth_cookie(response: JSONResponse, request: Request) -> None:
+    response.delete_cookie(
+        key=AUTH_COOKIE_NAME,
+        httponly=True,
+        samesite="lax",
+        secure=_is_secure_request(request),
+        path="/",
+    )
+
+
+def _rewrite_proxy_url(value: str, target_port: int) -> str:
+    proxy_prefix = "/api/opencode-web/proxy"
+    if not value or value.startswith(("#", "data:", "javascript:", "mailto:", "tel:")):
+        return value
+    if value.startswith(proxy_prefix):
+        return value
+    if value.startswith("//"):
+        return value
+    if value.startswith(("http://", "https://")):
+        parsed = httpx.URL(value)
+        if parsed.host in {"localhost", "127.0.0.1"} and parsed.port == target_port:
+            rewritten = f"{proxy_prefix}{parsed.path or '/'}"
+            if parsed.query:
+                rewritten += f"?{parsed.query.decode()}"
+            return rewritten
+        return value
+    if value.startswith("/"):
+        return f"{proxy_prefix}{value}"
+    return f"{proxy_prefix}/{value.lstrip('/')}"
+
+
 # --- Request/Response Models ---
 
 class LoginRequest(BaseModel):
     password: str
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+class AuthSessionResponse(BaseModel):
+    authenticated: bool
 
 
 class CreateSessionRequest(BaseModel):
@@ -158,13 +208,27 @@ class SessionResponse(BaseModel):
 
 # --- Auth API (인증 불필요) ---
 
-@app.post("/api/auth/login", response_model=TokenResponse)
+@app.post("/api/auth/login", response_model=AuthSessionResponse)
 @limiter.limit("5/minute")
 async def login(request: Request, req: LoginRequest):
     if not verify_password(req.password):
         raise HTTPException(status_code=401, detail="Invalid password")
     token = create_access_token()
-    return TokenResponse(access_token=token)
+    response = JSONResponse(content=AuthSessionResponse(authenticated=True).model_dump())
+    _set_auth_cookie(response, request, token)
+    return response
+
+
+@app.post("/api/auth/logout", response_model=AuthSessionResponse)
+async def logout(request: Request):
+    response = JSONResponse(content=AuthSessionResponse(authenticated=False).model_dump())
+    _clear_auth_cookie(response, request)
+    return response
+
+
+@app.get("/api/auth/session", response_model=AuthSessionResponse)
+async def auth_session(_user: str = Depends(get_current_user)):
+    return AuthSessionResponse(authenticated=True)
 
 
 # --- Health Check (인증 불필요) ---
@@ -676,7 +740,7 @@ async def reorder_sessions(
 async def websocket_terminal(
     ws: WebSocket, session_id: str, token: str = Query(default="")
 ):
-    if not verify_ws_token(token):
+    if not verify_ws_token(ws, token):
         await ws.close(code=4001, reason="Unauthorized")
         return
     await handle_terminal_ws(ws, session_id)
@@ -1520,13 +1584,13 @@ async def opencode_web_proxy(
     
     # 경로 정리: 여러 개의 /를 하나로
     if not path:
-        target_url = f"http://localhost:{target_port}/"
+        target_url = f"http://127.0.0.1:{target_port}/"
     else:
         # 경로 정리
         clean_path = "/" + path.strip("/")
-        target_url = f"http://localhost:{target_port}{clean_path}"
+        target_url = f"http://127.0.0.1:{target_port}{clean_path}"
 
-    if request and request.url.query:
+    if request.url.query:
         target_url += f"?{request.url.query}"
 
     allowed_request_headers = {
@@ -1547,13 +1611,13 @@ async def opencode_web_proxy(
     }
 
     body = None
-    if request and request.method in ["POST", "PUT", "PATCH"]:
+    if request.method in ["POST", "PUT", "PATCH"]:
         body = await request.body()
 
     try:
         async with httpx.AsyncClient(timeout=60.0, follow_redirects=False) as client:
             response = await client.request(
-                method=request.method if request else "GET",
+                method=request.method,
                 url=target_url,
                 headers=headers,
                 content=body,
@@ -1580,9 +1644,8 @@ async def opencode_web_proxy(
                 def replace_src_href(m):
                     attr = m.group(1)
                     path_val = m.group(2)
-                    if path_val.startswith(("http://", "https://", "//", "/api/", "data:")):
-                        return m.group(0)
-                    return f'{attr}="/api/opencode-web/proxy/{path_val}"'
+                    rewritten = _rewrite_proxy_url(path_val, target_port)
+                    return f'{attr}="{rewritten}"'
                 
                 content = re.sub(r'(src|href)=["\']([^"\']+)["\']', replace_src_href, content)
                 
@@ -1601,9 +1664,8 @@ async def opencode_web_proxy(
                 # url() 함수 변환
                 def replace_url(m):
                     url_val = m.group(1)
-                    if url_val.startswith(("http://", "https://", "//", "/api/", "data:")):
-                        return m.group(0)
-                    return f'url("/api/opencode-web/proxy/{url_val}")'
+                    rewritten = _rewrite_proxy_url(url_val, target_port)
+                    return f'url("{rewritten}")'
                 
                 content = re.sub(r'url\(["\']?([^"\')\s]+)["\']?\)', replace_url, content)
                 
@@ -1616,15 +1678,7 @@ async def opencode_web_proxy(
         if response.status_code in (301, 302, 303, 307, 308):
             location = response.headers.get("location")
             if location:
-                if location.startswith("http://localhost:") or location.startswith("http://127.0.0.1:"):
-                    parsed = httpx.URL(location)
-                    port = parsed.port
-                    if port == target_port:
-                        new_path = parsed.path.strip("/")
-                        new_location = f"/api/opencode-web/proxy/{new_path}"
-                        if parsed.query:
-                            new_location += f"?{parsed.query}"
-                        response_headers["location"] = new_location
+                response_headers["location"] = _rewrite_proxy_url(location, target_port)
 
         return Response(
             content=response.content,

@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { joinPath } from "../utils/pathUtils";
+import { apiFetch, readErrorMessage } from "../utils/api";
 
 interface FolderBrowserProps {
-  token: string;
   initialPath?: string;
   onSelect: (path: string) => void;
   onCancel: () => void;
@@ -44,7 +44,6 @@ const IconPlus = () => (
 );
 
 export default function FolderBrowser({
-  token,
   initialPath,
   onSelect,
   onCancel,
@@ -67,13 +66,9 @@ export default function FolderBrowser({
     setNewName("");
     setCreateError(null);
     try {
-      const res = await fetch(
-        `/api/browse?path=${encodeURIComponent(path)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await apiFetch(`/api/browse?path=${encodeURIComponent(path)}`);
       if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.detail || "Failed to browse");
+        throw new Error(await readErrorMessage(res, "Failed to browse"));
       }
       const result = await res.json();
       setData(result);
@@ -92,17 +87,15 @@ export default function FolderBrowser({
 
     setCreateError(null);
     try {
-      const res = await fetch("/api/mkdir", {
+      const res = await apiFetch("/api/mkdir", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ path: data.current, name }),
       });
       if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.detail || "Failed to create folder");
+        throw new Error(await readErrorMessage(res, "Failed to create folder"));
       }
       const result = await res.json();
       // Refresh and navigate into the new folder
