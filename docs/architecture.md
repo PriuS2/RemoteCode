@@ -143,7 +143,7 @@
 4. PtyManager spawns claude process
 5. Session appears in SessionList
 6. User clicks session to open
-7. WebSocket connects to /ws/{session_id}
+7. WebSocket connects to /ws/terminal/{session_id}
 8. Terminal displays PTY output
 ```
 

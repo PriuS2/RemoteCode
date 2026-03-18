@@ -65,7 +65,7 @@ List directory contents.
 }
 ```
 
-### GET /api/files/download
+### GET /api/file-raw
 
 Download a file.
 
@@ -78,21 +78,25 @@ Download a file.
 - `400`: Path is a directory
 - `404`: File not found
 
-### POST /api/files/upload
+### POST /api/upload
 
 Upload file(s).
 
 **Query Parameters:**
 - `path` (string): Target directory
 
-**Request:** Multipart form data with `file` field(s)
+**Request:** Multipart form data with `files` field(s)
 
 **Response:**
 ```json
 {
-  "filename": "uploaded.txt",
-  "path": "/target/path/uploaded.txt",
-  "size": 1024
+  "uploaded": [
+    {
+      "name": "uploaded.txt",
+      "size": 1024
+    }
+  ],
+  "count": 1
 }
 ```
 

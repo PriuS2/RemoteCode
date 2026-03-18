@@ -34,6 +34,7 @@ Remote Code는 웹 브라우저에서 Claude Code CLI에 원격으로 접속할 
 |----------|-------------|
 | [Architecture](./architecture.md) | 시스템 아키텍처 개요 |
 | [Backend API](./backend-api.md) | REST API 엔드포인트 |
+| [Verification Checklist](./verification-checklist.md) | 기본 수동 검증 순서 |
 | [Frontend Components](./frontend-components.md) | React 컴포넌트 구조 |
 | [Database Schema](./database-schema.md) | 데이터베이스 스키마 |
 | [WebSocket Protocol](./websocket-protocol.md) | WebSocket 메시지 프로토콜 |
@@ -54,6 +55,10 @@ make dev
 # Production mode
 make start
 ```
+
+## Verification
+
+For release checks and post-change smoke tests, use [Verification Checklist](./verification-checklist.md).
 
 ## Project Structure
 
