@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { CliPreflightResponse } from "../types/api";
 import { apiFetch, readErrorDetail } from "../utils/api";
+import { getCliTone } from "../utils/cliTones";
 import { uiPx } from "../utils/uiScale";
 
 interface AddSessionModalProps {
@@ -324,6 +325,7 @@ export default function AddSessionModal({
               >
                 {CLI_OPTIONS.map((option) => {
                   const active = cliType === option.type;
+                  const tone = getCliTone(option.type);
                   return (
                     <button
                       key={option.type}
@@ -333,8 +335,8 @@ export default function AddSessionModal({
                         textAlign: "left",
                         padding: "12px 12px 11px",
                         borderRadius: 10,
-                        border: active ? "1px solid #89b4fa" : "1px solid #45475a",
-                        background: active ? "#313244" : "#242438",
+                        border: active ? `1px solid ${tone.border}` : "1px solid #45475a",
+                        background: active ? tone.soft : "#242438",
                         color: "#cdd6f4",
                         cursor: "pointer",
                         minHeight: 88,
@@ -346,11 +348,11 @@ export default function AddSessionModal({
                             width: 10,
                             height: 10,
                             borderRadius: "50%",
-                            background: active ? "#89b4fa" : "#6c7086",
+                            background: active ? tone.hover : "#6c7086",
                             flexShrink: 0,
                           }}
                         />
-                        <span style={{ fontSize: uiPx(13), fontWeight: 700 }}>{option.label}</span>
+                        <span style={{ fontSize: uiPx(13), fontWeight: 700, color: active ? tone.hover : "#cdd6f4" }}>{option.label}</span>
                       </div>
                       <div style={{ fontSize: uiPx(11), color: "#a6adc8", lineHeight: 1.45 }}>
                         {option.description}
@@ -468,15 +470,15 @@ export default function AddSessionModal({
             <button
               type="submit"
               disabled={loading || hasBlockingPreflight}
-              style={{
-                padding: "10px 16px",
-                fontSize: uiPx(13),
-                fontWeight: 700,
-                background: "#89b4fa",
-                color: "#1e1e2e",
-                border: "none",
-                borderRadius: 8,
-                cursor: loading ? "wait" : "pointer",
+                style={{
+                  padding: "10px 16px",
+                  fontSize: uiPx(13),
+                  fontWeight: 700,
+                  background: "linear-gradient(180deg, var(--cta-primary), var(--cta-primary-strong))",
+                  color: "var(--cta-primary-text)",
+                  border: "none",
+                  borderRadius: 8,
+                  cursor: loading ? "wait" : "pointer",
                 opacity: loading || hasBlockingPreflight ? 0.5 : 1,
               }}
             >

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ConfirmDialog, MessageDialog, PromptDialog } from "./Dialog";
+import { ConfirmDialog, PromptDialog } from "./Dialog";
 import type { ActivityState } from "./Terminal";
 import type { Project } from "../types/project";
 import type { Session } from "../types/session";
+import { getCliTone } from "../utils/cliTones";
 
 interface SessionListProps {
   projects: Project[];
@@ -36,16 +37,6 @@ const STATUS_META: Record<string, { label: string; color: string; chipClass: str
   active: { label: "Active", color: "var(--success)", chipClass: "session-chip--active" },
   suspended: { label: "Suspended", color: "var(--warn)", chipClass: "session-chip--suspended" },
   closed: { label: "Closed", color: "var(--text-muted)", chipClass: "session-chip--closed" },
-};
-
-const CLI_META: Record<string, { label: string; bg: string }> = {
-  kilo: { label: "Kilo", bg: "#f5c26b" },
-  opencode: { label: "OpenCode", bg: "var(--info)" },
-  custom: { label: "Custom", bg: "var(--success)" },
-  terminal: { label: "Terminal", bg: "#b794f6" },
-  folder: { label: "Folder", bg: "#74c7ec" },
-  git: { label: "Git", bg: "#fab387" },
-  default: { label: "Claude", bg: "var(--accent)" },
 };
 
 const Spinner = () => (
@@ -83,14 +74,14 @@ const DoneBadge = () => (
 );
 
 function getCliMeta(cliType: string) {
-  return CLI_META[cliType] ?? CLI_META.default;
+  return getCliTone(cliType);
 }
 
 function isProcessSession(session: Session) {
   return session.cli_type !== "folder" && session.cli_type !== "git";
 }
 
-function isResumableSession(session: Session) {
+function canSuspendSession(session: Session) {
   return isProcessSession(session) && session.cli_type !== "kilo";
 }
 
@@ -209,7 +200,6 @@ export default function SessionList({
   const [sessionRenameValue, setSessionRenameValue] = useState("");
   const [sessionDeleteTarget, setSessionDeleteTarget] = useState<Session | null>(null);
   const [sessionTerminateTarget, setSessionTerminateTarget] = useState<Session | null>(null);
-  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const touchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -252,9 +242,6 @@ export default function SessionList({
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const reorderEnabled = !normalizedQuery;
-  const showKiloResumeNotice = useCallback(() => {
-    setSessionNotice("Kilo sessions cannot be resumed in Remote Code. Create a new Kilo session instead.");
-  }, []);
   const visibleProjects = useMemo(() => {
     if (!normalizedQuery) return localProjects;
     return localProjects
@@ -314,7 +301,6 @@ export default function SessionList({
     setSessionRenameTarget(null);
     setSessionDeleteTarget(null);
     setSessionTerminateTarget(null);
-    setSessionNotice(null);
   }, [actionPending]);
 
   const submitProjectRename = useCallback(async () => {
@@ -478,7 +464,6 @@ export default function SessionList({
       label: "Open",
       onClick: () => {
         if (contextMenu.session.status === "active") onSelect(contextMenu.session.id);
-        else if (!isResumableSession(contextMenu.session)) showKiloResumeNotice();
         else onResume(contextMenu.session.id);
         closeContextMenu();
       },
@@ -492,7 +477,7 @@ export default function SessionList({
         closeContextMenu();
       },
     },
-    ...(contextMenu.session.status === "active" && isResumableSession(contextMenu.session) ? [{
+    ...(contextMenu.session.status === "active" && canSuspendSession(contextMenu.session) ? [{
       label: "Suspend",
       onClick: () => {
         onSuspendSession(contextMenu.session.id);
@@ -647,10 +632,6 @@ export default function SessionList({
                         onClick={(event) => {
                           if (session.status === "active") onSelect(session.id, event.shiftKey);
                           if (session.status === "closed" || session.status === "suspended") {
-                            if (!isResumableSession(session)) {
-                              showKiloResumeNotice();
-                              return;
-                            }
                             onResume(session.id);
                           }
                         }}
@@ -711,7 +692,11 @@ export default function SessionList({
                           <span
                             className="session-chip session-chip--cli"
                             title={cliMeta.label}
-                            style={{ background: cliMeta.bg }}
+                            style={{
+                              background: cliMeta.solid,
+                              borderColor: cliMeta.border,
+                              color: cliMeta.text,
+                            }}
                           >
                             {cliMeta.label}
                           </span>
@@ -817,15 +802,6 @@ export default function SessionList({
           error={actionError}
           onConfirm={submitSessionTerminate}
           onCancel={resetDialogs}
-        />
-      )}
-
-      {sessionNotice && (
-        <MessageDialog
-          title="Kilo Session"
-          message={sessionNotice}
-          closeLabel="OK"
-          onClose={resetDialogs}
         />
       )}
     </div>

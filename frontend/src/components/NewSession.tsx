@@ -204,7 +204,7 @@ export default function NewProject({ onCreated, onCancel }: NewProjectProps) {
                   type="checkbox"
                   checked={createFolder}
                   onChange={(e) => setCreateFolder(e.target.checked)}
-                  style={{ accentColor: "#89b4fa" }}
+                  style={{ accentColor: "var(--cta-primary)" }}
                 />
                 Create the folder if it does not exist
               </label>
@@ -213,8 +213,8 @@ export default function NewProject({ onCreated, onCancel }: NewProjectProps) {
                 style={{
                   padding: "12px 14px",
                   borderRadius: 12,
-                  background: "#181825",
-                  border: "1px solid #313244",
+                  background: "var(--cta-primary-soft)",
+                  border: "1px solid var(--cta-primary-border)",
                   color: "#a6adc8",
                   fontSize: uiPx(12),
                   lineHeight: 1.6,
@@ -274,8 +274,8 @@ export default function NewProject({ onCreated, onCancel }: NewProjectProps) {
                   padding: "10px 16px",
                   fontSize: uiPx(13),
                   fontWeight: 700,
-                  background: "#89b4fa",
-                  color: "#1e1e2e",
+                  background: "linear-gradient(180deg, var(--cta-primary), var(--cta-primary-strong))",
+                  color: "var(--cta-primary-text)",
                   border: "none",
                   borderRadius: 8,
                   cursor: loading ? "wait" : "pointer",

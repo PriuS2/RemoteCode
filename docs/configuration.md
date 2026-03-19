@@ -68,7 +68,7 @@ CCR_ALLOWED_ORIGINS=https://your-domain.com
 
 The backend refuses to start while `CCR_JWT_SECRET` is still the insecure default value.
 
-Kilo sessions use the interactive `kilo` TUI command. Remote Code can launch them, but it does not support suspending or resuming Kilo sessions.
+Kilo sessions use the interactive `kilo` TUI command. Remote Code can launch them, but it does not support true suspend/resume for the Kilo TUI. Reopening a closed or suspended Kilo session launches `kilo` fresh in the same session entry.
 
 ## Auth behavior
 

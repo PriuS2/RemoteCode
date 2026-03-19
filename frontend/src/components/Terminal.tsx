@@ -7,6 +7,7 @@ import { useWebSocket, getWsUrl } from "../hooks/useWebSocket";
 import MobileKeyBar from "./MobileKeyBar";
 import FileExplorer from "./FileExplorer";
 import GitPanel, { GitIcon } from "./GitPanel";
+import { getCliTone } from "../utils/cliTones";
 
 type MouseEventType = "press" | "release" | "move" | "drag" | "scroll";
 type MouseButton = 0 | 1 | 2 | 64 | 65;
@@ -661,7 +662,8 @@ export default function Terminal({
           <TitleBarBtn
             icon={<FolderIcon size={iconSize} />}
             title="File Explorer"
-            hoverColor="#a6e3a1"
+            hoverColor={getCliTone("folder").hover}
+            hoverBackground={getCliTone("folder").soft}
             active={explorerOpen}
             fontSize={fontSize}
             onClick={(e) => { e.stopPropagation(); setExplorerOpen((o) => { if (!o) setGitPanelOpen(false); return !o; }); }}
@@ -669,7 +671,8 @@ export default function Terminal({
           <TitleBarBtn
             icon={<GitIcon size={iconSize} />}
             title="Git"
-            hoverColor="#fab387"
+            hoverColor={getCliTone("git").hover}
+            hoverBackground={getCliTone("git").soft}
             active={gitPanelOpen}
             fontSize={fontSize}
             onClick={(e) => { e.stopPropagation(); setGitPanelOpen((o) => { if (!o) setExplorerOpen(false); return !o; }); }}
@@ -814,6 +817,7 @@ function TitleBarBtn({
   icon,
   title,
   hoverColor,
+  hoverBackground,
   active,
   fontSize = 14,
   onClick,
@@ -821,17 +825,20 @@ function TitleBarBtn({
   icon: React.ReactNode;
   title: string;
   hoverColor: string;
+  hoverBackground?: string;
   active?: boolean;
   fontSize?: number;
   onClick: (e: React.MouseEvent) => void;
 }) {
+  const activeBackground = hoverBackground ?? `${hoverColor}18`;
+
   return (
     <button
       className={`terminal-tool-button${active ? " is-active" : ""}`}
       onClick={onClick}
       title={title}
       style={{
-        background: active ? `${hoverColor}18` : "none",
+        background: active ? activeBackground : "none",
         color: active ? hoverColor : "#6c7086",
         padding: `${Math.round(fontSize * 0.14)}px ${Math.round(fontSize * 0.29)}px`,
         lineHeight: 1,
@@ -839,12 +846,12 @@ function TitleBarBtn({
       onMouseEnter={(e) => {
         const btn = e.currentTarget as HTMLButtonElement;
         btn.style.color = hoverColor;
-        btn.style.background = `${hoverColor}18`;
+        btn.style.background = activeBackground;
       }}
       onMouseLeave={(e) => {
         const btn = e.currentTarget as HTMLButtonElement;
         btn.style.color = active ? hoverColor : "#6c7086";
-        btn.style.background = active ? `${hoverColor}18` : "none";
+        btn.style.background = active ? activeBackground : "none";
       }}
     >
       {icon}

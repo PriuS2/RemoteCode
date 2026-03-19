@@ -394,12 +394,6 @@ class SessionManager:
             raise ValueError(f"Session is not suspended or closed: {session_id}")
 
         cli_type = session.get("cli_type", "claude")
-        if cli_type == "kilo":
-            raise SessionValidationError(
-                "resume_not_supported",
-                "Kilo sessions cannot be resumed in Remote Code. Create a new Kilo session instead.",
-            )
-
         if cli_type in NON_PTY_CLI_TYPES:
             await db_update_session(session_id, status="active")
             await update_last_accessed(session_id)
@@ -443,6 +437,9 @@ class SessionManager:
             if cli_type == "opencode":
                 # OpenCode: -s <session_id>
                 args = ["-s", session["claude_session_id"]]
+            elif cli_type == "kilo":
+                # Kilo sessions relaunch fresh rather than resuming prior TUI state.
+                args = []
             elif cli_type == "terminal":
                 # Terminal: resume args not supported
                 args = []
