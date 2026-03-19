@@ -1,4 +1,5 @@
 import React from "react";
+import { uiPx } from "../utils/uiScale";
 
 interface State {
   hasError: boolean;
@@ -40,7 +41,7 @@ export default class ErrorBoundary extends React.Component<
           <pre
             style={{
               color: "#6c7086",
-              fontSize: 13,
+              fontSize: uiPx(13),
               maxWidth: "80vw",
               overflow: "auto",
               whiteSpace: "pre-wrap",
@@ -52,7 +53,7 @@ export default class ErrorBoundary extends React.Component<
             onClick={() => window.location.reload()}
             style={{
               padding: "8px 20px",
-              fontSize: 14,
+              fontSize: uiPx(14),
               fontWeight: 600,
               background: "#89b4fa",
               color: "#1e1e2e",
@@ -69,3 +70,4 @@ export default class ErrorBoundary extends React.Component<
     return this.props.children;
   }
 }
+

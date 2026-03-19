@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { computeGraphLayout, type GitLogEntry } from "../utils/gitGraph";
 import { apiFetch } from "../utils/api";
+import { uiPx } from "../utils/uiScale";
 
 /* =========================================================
    Types
@@ -495,8 +496,8 @@ export default function GitPanel({ workPath, onClose, isMobile }: GitPanelProps)
         />
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center" }}>
           <div>
-            <div style={{ fontSize: 14, color: "#6c7086", marginBottom: 8 }}>Not a Git repository</div>
-            <div style={{ fontSize: 12, color: "#585b70" }}>Run <code style={{ background: "#313244", padding: "2px 6px", borderRadius: 3 }}>git init</code> in the terminal to initialize.</div>
+            <div style={{ fontSize: uiPx(14), color: "#6c7086", marginBottom: 8 }}>Not a Git repository</div>
+            <div style={{ fontSize: uiPx(12), color: "#585b70" }}>Run <code style={{ background: "#313244", padding: "2px 6px", borderRadius: 3 }}>git init</code> in the terminal to initialize.</div>
           </div>
         </div>
       </div>
@@ -556,7 +557,7 @@ export default function GitPanel({ workPath, onClose, isMobile }: GitPanelProps)
               display: "flex", alignItems: "center", gap: 4,
             }}
           >
-            <span style={{ fontSize: Math.round(gitFontSize * 0.75) }}>{showCommitMetadata ? "👁" : "👁‍🗨"}</span>
+            <span style={{ fontSize: Math.round(gitFontSize * 0.75) }}>{showCommitMetadata ? "ON" : "OFF"}</span>
             <span>Info</span>
           </button>
         )}
@@ -1449,3 +1450,4 @@ function StashIcon({ size = 12 }: { size?: number }) {
     </svg>
   );
 }
+

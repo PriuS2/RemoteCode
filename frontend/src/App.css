@@ -5,6 +5,7 @@
   --font-ui: "IBM Plex Sans", "Segoe UI", "Noto Sans KR", sans-serif;
   --font-mono: "Cascadia Code", "Consolas", monospace;
 
+  --web-scale: 1;
   --web-fs: 14px;
   --web-fs-sm: 13px;
   --web-fs-xs: 11px;
@@ -98,6 +99,7 @@ body,
 
 body {
   font-family: var(--font-ui);
+  font-size: var(--web-fs);
   background:
     radial-gradient(circle at top left, rgba(120, 183, 255, 0.08), transparent 32%),
     radial-gradient(circle at top right, rgba(125, 212, 248, 0.06), transparent 28%),
@@ -137,6 +139,8 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  position: relative;
+  z-index: 200;
   min-height: 56px;
   padding: 0 14px;
   border-radius: var(--radius-lg);
@@ -165,7 +169,7 @@ button {
   background: linear-gradient(180deg, rgba(120, 183, 255, 0.22), rgba(120, 183, 255, 0.08));
   color: var(--accent);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: calc(13px * var(--web-scale));
   font-weight: 700;
   letter-spacing: 0.08em;
 }
@@ -177,14 +181,14 @@ button {
 }
 
 .app-title {
-  font-size: 15px;
+  font-size: calc(15px * var(--web-scale));
   font-weight: 650;
   letter-spacing: 0.01em;
   color: var(--text-primary);
 }
 
 .app-subtitle {
-  font-size: 11px;
+  font-size: calc(11px * var(--web-scale));
   color: var(--text-muted);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -200,7 +204,7 @@ button {
   border: 1px solid var(--border-subtle);
   background: rgba(34, 42, 57, 0.65);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--web-scale));
   font-weight: 500;
 }
 
@@ -235,7 +239,7 @@ button {
 
 .settings-btn,
 .sidebar-toggle {
-  font-size: 17px;
+  font-size: calc(17px * var(--web-scale));
   line-height: 1;
 }
 
@@ -267,7 +271,7 @@ button {
 }
 
 .settings-label {
-  font-size: 11px;
+  font-size: calc(11px * var(--web-scale));
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -302,7 +306,7 @@ button {
 .size-value {
   flex: 1;
   text-align: center;
-  font-size: 13px;
+  font-size: calc(13px * var(--web-scale));
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
@@ -321,7 +325,7 @@ button {
   background: var(--danger-soft);
   color: var(--danger);
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(13px * var(--web-scale));
   font-weight: 600;
 }
 
@@ -333,7 +337,7 @@ button {
   display: flex;
   flex: 1;
   min-height: 0;
-  gap: 12px;
+  gap: 0;
   position: relative;
 }
 
@@ -345,9 +349,10 @@ button {
 }
 
 .sidebar-resize {
-  width: 10px;
+  width: 12px;
   flex-shrink: 0;
-  margin-left: -7px;
+  margin-left: -3px;
+  margin-right: -3px;
   cursor: col-resize;
   position: relative;
   z-index: 10;
@@ -400,21 +405,21 @@ button {
 }
 
 .empty-state__eyebrow {
-  font-size: 11px;
+  font-size: calc(11px * var(--web-scale));
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
 .empty-state__title {
-  font-size: 26px;
+  font-size: calc(26px * var(--web-scale));
   font-weight: 650;
   color: var(--text-primary);
 }
 
 .empty-state__body {
   max-width: 360px;
-  font-size: 14px;
+  font-size: calc(14px * var(--web-scale));
   line-height: 1.6;
   color: var(--text-secondary);
 }
@@ -429,7 +434,7 @@ button {
   border-radius: 13px;
   background: linear-gradient(180deg, var(--accent), var(--accent-strong));
   color: #07111f;
-  font-size: 13px;
+  font-size: calc(13px * var(--web-scale));
   font-weight: 700;
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
@@ -493,7 +498,7 @@ button {
 }
 
 .session-list__eyebrow {
-  font-size: 11px;
+  font-size: calc(11px * var(--web-scale));
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -508,13 +513,13 @@ button {
 }
 
 .session-list__title {
-  font-size: 16px;
+  font-size: calc(16px * var(--web-scale));
   font-weight: 650;
   color: var(--text-primary);
 }
 
 .session-list__count {
-  font-size: 11px;
+  font-size: calc(11px * var(--web-scale));
   color: var(--text-muted);
 }
 
@@ -548,7 +553,7 @@ button {
 }
 
 .session-list__hint {
-  font-size: 11px;
+  font-size: calc(11px * var(--web-scale));
   color: var(--warn);
 }
 
@@ -561,7 +566,7 @@ button {
 
 .session-list__empty {
   padding: 24px 16px;
-  font-size: 13px;
+  font-size: calc(13px * var(--web-scale));
   text-align: center;
   color: var(--text-muted);
 }
@@ -649,14 +654,14 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: calc(13px * var(--web-scale));
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .session-row__path {
   padding-left: 16px;
-  font-size: 11px;
+  font-size: calc(11px * var(--web-scale));
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -669,7 +674,7 @@ button {
   min-height: 22px;
   padding: 0 8px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: calc(10px * var(--web-scale));
   font-weight: 700;
   letter-spacing: 0.03em;
   border: 1px solid transparent;
@@ -709,7 +714,7 @@ button {
 
 .split-hint {
   text-align: center;
-  font-size: 11px;
+  font-size: calc(11px * var(--web-scale));
   color: var(--text-muted);
 }
 
@@ -726,7 +731,7 @@ button {
   padding: 8px 12px 10px;
   margin-bottom: 6px;
   border-bottom: 1px solid var(--border-subtle);
-  font-size: 11px;
+  font-size: calc(11px * var(--web-scale));
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -741,7 +746,7 @@ button {
   background: transparent;
   color: var(--text-primary);
   text-align: left;
-  font-size: 13px;
+  font-size: calc(13px * var(--web-scale));
   cursor: pointer;
 }
 
@@ -810,7 +815,7 @@ button {
 }
 
 .terminal-toolbar__eyebrow {
-  font-size: 10px;
+  font-size: calc(10px * var(--web-scale));
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -826,7 +831,7 @@ button {
 .terminal-toolbar__title {
   flex: 1;
   min-width: 0;
-  font-size: 14px;
+  font-size: calc(14px * var(--web-scale));
   font-weight: 650;
   color: var(--text-primary);
   overflow: hidden;
@@ -835,7 +840,7 @@ button {
 }
 
 .terminal-toolbar__path {
-  font-size: 11px;
+  font-size: calc(11px * var(--web-scale));
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -862,7 +867,7 @@ button {
 .terminal-font-value {
   min-width: 28px;
   text-align: center;
-  font-size: 11px;
+  font-size: calc(11px * var(--web-scale));
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -928,7 +933,7 @@ button {
   min-height: 28px;
   padding: 0 14px;
   border-bottom: 1px solid var(--border-subtle);
-  font-size: 11px;
+  font-size: calc(11px * var(--web-scale));
   font-weight: 600;
 }
 
@@ -1003,7 +1008,7 @@ button {
 }
 
 .dialog-title {
-  font-size: 17px;
+  font-size: calc(17px * var(--web-scale));
   font-weight: 650;
   color: var(--text-primary);
 }
@@ -1017,7 +1022,7 @@ button {
 }
 
 .dialog-copy {
-  font-size: 13px;
+  font-size: calc(13px * var(--web-scale));
   line-height: 1.6;
   color: var(--text-secondary);
 }
@@ -1029,7 +1034,7 @@ button {
 }
 
 .dialog-label span {
-  font-size: 12px;
+  font-size: calc(12px * var(--web-scale));
   color: var(--text-muted);
 }
 
@@ -1051,7 +1056,7 @@ button {
   background: rgba(34, 42, 57, 0.75);
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(13px * var(--web-scale));
   font-weight: 600;
 }
 
@@ -1079,7 +1084,7 @@ button {
 
 .ui-error {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--web-scale));
   color: var(--danger);
 }
 
@@ -1102,7 +1107,7 @@ button {
 }
 
 .login-eyebrow {
-  font-size: 11px;
+  font-size: calc(11px * var(--web-scale));
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -1110,14 +1115,14 @@ button {
 
 .login-title {
   margin-top: 10px;
-  font-size: 30px;
+  font-size: calc(30px * var(--web-scale));
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .login-copy {
   margin-top: 10px;
-  font-size: 14px;
+  font-size: calc(14px * var(--web-scale));
   line-height: 1.6;
   color: var(--text-secondary);
 }
@@ -1136,7 +1141,7 @@ button {
 }
 
 .login-field label {
-  font-size: 12px;
+  font-size: calc(12px * var(--web-scale));
   color: var(--text-muted);
 }
 
@@ -1226,7 +1231,7 @@ button {
   }
 
   .empty-state__title {
-    font-size: 22px;
+    font-size: calc(22px * var(--web-scale));
   }
 
   .mobile-keybar {
@@ -1248,3 +1253,4 @@ button {
     display: none;
   }
 }
+
