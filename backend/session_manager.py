@@ -30,7 +30,7 @@ from .pty_manager import PtyInstance, pty_manager
 logger = logging.getLogger(__name__)
 
 NON_PTY_CLI_TYPES = {"folder", "git"}
-SUPPORTED_CLI_TYPES = {"claude", "opencode", "terminal", "custom", "folder", "git"}
+SUPPORTED_CLI_TYPES = {"claude", "kilo", "opencode", "terminal", "custom", "folder", "git"}
 
 
 class SessionValidationError(ValueError):
@@ -47,6 +47,8 @@ class SessionManager:
 
     def _default_command(self, cli_type: str, custom_command: Optional[str] = None) -> Optional[str]:
         self._validate_cli_type(cli_type)
+        if cli_type == "kilo":
+            return settings.kilo_command
         if cli_type == "opencode":
             return settings.opencode_command
         if cli_type == "terminal":
@@ -157,10 +159,15 @@ class SessionManager:
 
         parts = self._validate_command_available(command)
         resolved_command = " ".join(parts)
+        ready_messages = {
+            "claude": "Claude Code CLI is available.",
+            "kilo": "Kilo CLI is available.",
+            "opencode": "OpenCode CLI is available.",
+        }
         return {
             "ok": True,
             "code": "ok",
-            "message": f"{parts[0]} is available.",
+            "message": ready_messages.get(cli_type, f"{parts[0]} is available."),
             "resolved_command": resolved_command,
             "work_path": validated_path,
         }
@@ -310,6 +317,11 @@ class SessionManager:
             raise ValueError(f"Session is not active: {session_id}")
 
         cli_type = session.get("cli_type", "claude")
+        if cli_type == "kilo":
+            raise SessionValidationError(
+                "suspend_not_supported",
+                "Kilo sessions cannot be suspended in Remote Code. Create a new Kilo session instead.",
+            )
 
         if cli_type in NON_PTY_CLI_TYPES:
             await db_update_session(session_id, status="suspended")
@@ -382,6 +394,11 @@ class SessionManager:
             raise ValueError(f"Session is not suspended or closed: {session_id}")
 
         cli_type = session.get("cli_type", "claude")
+        if cli_type == "kilo":
+            raise SessionValidationError(
+                "resume_not_supported",
+                "Kilo sessions cannot be resumed in Remote Code. Create a new Kilo session instead.",
+            )
 
         if cli_type in NON_PTY_CLI_TYPES:
             await db_update_session(session_id, status="active")
@@ -396,7 +413,10 @@ class SessionManager:
 
         # Determine which command to use based on cli_type
         cli_type = session.get("cli_type", "claude")
-        if cli_type == "opencode":
+        if cli_type == "kilo":
+            command = settings.kilo_command
+            command_args: list[str] = []
+        elif cli_type == "opencode":
             command = settings.opencode_command
             command_args: list[str] = []
         elif cli_type == "terminal":

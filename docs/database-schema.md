@@ -19,7 +19,7 @@ Main table storing session information.
 | `created_at` | TEXT | NOT NULL | ISO 8601 timestamp (UTC) |
 | `last_accessed_at` | TEXT | NOT NULL | ISO 8601 timestamp (UTC) |
 | `status` | TEXT | NOT NULL DEFAULT 'active' | Session status |
-| `cli_type` | TEXT | NOT NULL DEFAULT 'claude' | CLI type (claude, opencode, terminal, custom) |
+| `cli_type` | TEXT | NOT NULL DEFAULT 'claude' | CLI type (claude, kilo, opencode, terminal, custom) |
 | `custom_command` | TEXT | NULLABLE | Custom command for custom CLI type |
 | `custom_exit_command` | TEXT | NULLABLE | Custom exit command for custom CLI type |
 | `order_index` | INTEGER | NOT NULL DEFAULT 0 | Display order in sidebar (ascending) |
@@ -31,6 +31,7 @@ Main table storing session information.
 
 **CLI Types:**
 - `claude`: Claude Code CLI
+- `kilo`: Kilo Code CLI
 - `opencode`: OpenCode CLI
 - `terminal`: System terminal (PowerShell on Windows, bash on Linux/macOS)
 - `custom`: Custom user-defined command

@@ -63,6 +63,7 @@ Recommended spot checks:
 From the New Session modal, verify:
 
 - a normal `claude` session can be created
+- if `kilo` is installed, a `kilo` session can be created
 - a `terminal` session can be created
 - if `opencode` is installed, an `opencode` session can be created
 - preflight validation shows a clear failure when a required CLI is unavailable
@@ -75,6 +76,7 @@ Check session actions:
 - resume session
 - delete session
 - reorder sessions in the sidebar
+- a suspended or closed `kilo` session shows that resume is unsupported and should be recreated
 
 ## 5. Terminal and WebSocket behavior
 

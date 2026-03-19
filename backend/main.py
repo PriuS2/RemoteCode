@@ -876,8 +876,16 @@ async def suspend_session(
     try:
         session = await session_manager.suspend_session(session_id)
         return session
+    except SessionValidationError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code=e.code, message=e.message).model_dump(),
+        )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code="invalid_request", message=str(e)).model_dump(),
+        )
 
 
 @app.post("/api/sessions/{session_id}/resume", response_model=SessionResponse)
@@ -887,8 +895,16 @@ async def resume_session(
     try:
         session = await session_manager.resume_session(session_id)
         return session
+    except SessionValidationError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code=e.code, message=e.message).model_dump(),
+        )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code="invalid_request", message=str(e)).model_dump(),
+        )
 
 
 @app.patch("/api/sessions/{session_id}/rename")

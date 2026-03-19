@@ -632,6 +632,7 @@ export default function App() {
             const session = findSession(projects, sid);
             const sessionName = session?.name || "Session";
             const sessionWorkPath = session?.work_path || "";
+            const canSuspend = session?.cli_type !== "kilo";
 
             if (isPanelSession(session)) {
               const panelLabel = session.cli_type === "folder" ? "Folder Session" : "Git Session";
@@ -700,6 +701,7 @@ export default function App() {
                 onClosePanel={() => {
                   if (panelIndex !== -1) closeSplitPanel(panelIndex);
                 }}
+                canSuspend={canSuspend}
                 onSuspend={() => handleSuspend(sid)}
                 onMaximize={() => selectSession(sid)}
                 onTerminate={() => {

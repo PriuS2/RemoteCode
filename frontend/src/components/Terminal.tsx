@@ -39,6 +39,7 @@ interface TerminalProps {
   sessionName: string;
   workPath: string;
   onClosePanel: () => void;
+  canSuspend?: boolean;
   onSuspend: () => void;
   onMaximize: () => void;
   onTerminate: () => void;
@@ -89,6 +90,7 @@ export default function Terminal({
   sessionName,
   workPath,
   onClosePanel,
+  canSuspend = true,
   onSuspend,
   onMaximize,
   onTerminate,
@@ -686,13 +688,15 @@ export default function Terminal({
               } catch { /* ignore */ }
             }}
           />
-          <TitleBarBtn
-            icon={<MinimizeIcon size={iconSize} />}
-            title="Suspend"
-            hoverColor="#f9e2af"
-            fontSize={fontSize}
-            onClick={(e) => { e.stopPropagation(); onSuspend(); }}
-          />
+          {canSuspend && (
+            <TitleBarBtn
+              icon={<MinimizeIcon size={iconSize} />}
+              title="Suspend"
+              hoverColor="#f9e2af"
+              fontSize={fontSize}
+              onClick={(e) => { e.stopPropagation(); onSuspend(); }}
+            />
+          )}
           {splitMode && (
             <TitleBarBtn
               icon={<MaximizeIcon size={iconSize} />}

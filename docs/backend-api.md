@@ -381,7 +381,8 @@ Response:
 
 Notes:
 
-- `cli_type` may be `claude`, `opencode`, `opencode-web`, `terminal`, or `custom`.
+- `cli_type` may be `claude`, `kilo`, `opencode`, `opencode-web`, `terminal`, or `custom`.
+- `kilo` sessions can be created and run, but suspend/resume returns `400` with structured error detail.
 - Validation failures return `400` with structured error detail.
 
 Structured error shape used by this endpoint:

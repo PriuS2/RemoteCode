@@ -88,17 +88,19 @@ function DialogButton({
 export function MessageDialog({
   title,
   message,
+  closeLabel = "Close",
   onClose,
 }: {
   title: string;
   message: string;
+  closeLabel?: string;
   onClose: () => void;
 }) {
   return (
     <BaseDialog
       title={title}
       onClose={onClose}
-      footer={<DialogButton label="Close" primary onClick={onClose} />}
+      footer={<DialogButton label={closeLabel} primary onClick={onClose} />}
     >
       <p className="dialog-copy">{message}</p>
     </BaseDialog>

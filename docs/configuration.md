@@ -9,6 +9,7 @@ Remote Code uses Pydantic settings with the `CCR_` prefix.
 | `host` | `CCR_HOST` | `0.0.0.0` | FastAPI bind address |
 | `port` | `CCR_PORT` | `8080` | FastAPI bind port |
 | `claude_command` | `CCR_CLAUDE_COMMAND` | `claude` | Claude Code CLI command |
+| `kilo_command` | `CCR_KILO_COMMAND` | `kilo` | Kilo Code CLI command |
 | `opencode_command` | `CCR_OPENCODE_COMMAND` | `opencode` | OpenCode CLI command |
 | `opencode_web_port` | `CCR_OPENCODE_WEB_PORT` | `8096` | OpenCode Web port |
 | `opencode_web_hostname` | `CCR_OPENCODE_WEB_HOSTNAME` | `0.0.0.0` | OpenCode Web bind host |
@@ -28,6 +29,7 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8080
     claude_command: str = "claude"
+    kilo_command: str = "kilo"
     opencode_command: str = "opencode"
     opencode_web_port: int = 8096
     opencode_web_hostname: str = "0.0.0.0"
@@ -46,6 +48,7 @@ class Settings(BaseSettings):
 CCR_HOST=0.0.0.0
 CCR_PORT=8080
 CCR_CLAUDE_COMMAND=claude
+CCR_KILO_COMMAND=kilo
 CCR_OPENCODE_COMMAND=opencode
 CCR_OPENCODE_WEB_PORT=8096
 CCR_OPENCODE_WEB_HOSTNAME=0.0.0.0
@@ -64,6 +67,8 @@ CCR_ALLOWED_ORIGINS=https://your-domain.com
 - Prefer HTTPS or a trusted reverse proxy
 
 The backend refuses to start while `CCR_JWT_SECRET` is still the insecure default value.
+
+Kilo sessions use the interactive `kilo` TUI command. Remote Code can launch them, but it does not support suspending or resuming Kilo sessions.
 
 ## Auth behavior
 

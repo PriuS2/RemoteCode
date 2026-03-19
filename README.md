@@ -12,7 +12,7 @@ top of a FastAPI backend and React frontend.
 
 - Web terminal powered by xterm.js
 - Multiple persistent sessions with suspend, resume, rename, reorder, and split view
-- CLI types: `claude`, `opencode`, `opencode-web`, `terminal`, and `custom`
+- CLI types: `claude`, `kilo`, `opencode`, `opencode-web`, `terminal`, and `custom`
 - File explorer with preview, upload, download, rename, delete, mkdir, and server-side open
 - Git status, diff, history, branch, commit, stash, pull, and push actions
 - Password login backed by an `HttpOnly` session cookie
@@ -42,6 +42,7 @@ CLI process
 - Node.js 18+
 - At least one CLI available in `PATH`
   - `claude` for Claude Code sessions
+  - `kilo` for Kilo Code sessions
   - `opencode` for OpenCode and OpenCode Web sessions
 
 ## Quick Start
@@ -68,6 +69,7 @@ The first run creates a `.env` file. Change the security-sensitive defaults befo
 CCR_HOST=0.0.0.0
 CCR_PORT=8080
 CCR_CLAUDE_COMMAND=claude
+CCR_KILO_COMMAND=kilo
 CCR_OPENCODE_COMMAND=opencode
 CCR_OPENCODE_WEB_PORT=8096
 CCR_OPENCODE_WEB_HOSTNAME=0.0.0.0
@@ -121,6 +123,7 @@ uses `credentials: "same-origin"` for authenticated requests.
 | CLI type | Description |
 | --- | --- |
 | `claude` | Claude Code CLI session |
+| `kilo` | Kilo Code CLI session |
 | `opencode` | OpenCode terminal session |
 | `opencode-web` | OpenCode Web launched through the backend proxy |
 | `terminal` | Plain shell session |
