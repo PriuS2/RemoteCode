@@ -888,9 +888,9 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  min-height: 58px;
-  padding: 10px 14px;
+  gap: 10px;
+  min-height: 50px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border-subtle);
   background: rgba(22, 27, 38, 0.95);
   user-select: none;
@@ -945,22 +945,22 @@ button {
 .terminal-toolbar__actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
 .terminal-font-controls {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 12px;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
   background: rgba(34, 42, 57, 0.7);
   border: 1px solid var(--border-subtle);
 }
 
 .terminal-font-value {
-  min-width: 28px;
+  min-width: 24px;
   text-align: center;
   font-size: calc(11px * var(--web-scale));
   color: var(--text-muted);
@@ -971,10 +971,10 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 34px;
-  height: 34px;
-  padding: 0 10px;
-  border-radius: 11px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 9px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-muted);

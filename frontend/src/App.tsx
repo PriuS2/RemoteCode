@@ -3,8 +3,10 @@ import Login from "./components/Login";
 import SessionList from "./components/SessionList";
 import NewProject from "./components/NewSession";
 import AddSessionModal from "./components/AddSessionModal";
+import FileExplorer from "./components/FileExplorer";
+import GitPanel from "./components/GitPanel";
+import PanelSessionView from "./components/PanelSessionView";
 import Terminal from "./components/Terminal";
-import OpenCodeWebViewer from "./components/OpenCodeWebViewer";
 import type { ActivityState } from "./components/Terminal";
 import {
   playNotificationSound,
@@ -30,6 +32,10 @@ function findSession(projects: Project[], sessionId: string): Session | undefine
 
 function findProject(projects: Project[], projectId: string): Project | undefined {
   return projects.find((project) => project.id === projectId);
+}
+
+function isPanelSession(session: Session | undefined): session is Session {
+  return session?.cli_type === "folder" || session?.cli_type === "git";
 }
 
 function getStoredFontSize(key: string, fallback: number): number {
@@ -317,6 +323,14 @@ export default function App() {
     },
     [],
   );
+
+  const handleCopyPath = useCallback(async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // ignore clipboard failures
+    }
+  }, []);
 
   const handleProjectCreated = (projectId: string) => {
     setShowNewProject(false);
@@ -619,14 +633,49 @@ export default function App() {
             const sessionName = session?.name || "Session";
             const sessionWorkPath = session?.work_path || "";
 
-            if (session?.cli_type === "opencode-web") {
+            if (isPanelSession(session)) {
+              const panelLabel = session.cli_type === "folder" ? "Folder Session" : "Git Session";
               return (
-                <OpenCodeWebViewer
+                <PanelSessionView
                   key={sid}
-                  onClose={() => {
-                    removeFromActiveSessions(sid);
-                    setMountedSessions((prev) => prev.filter((s) => s !== sid));
+                  visible={isVisible}
+                  panelIndex={panelIndex}
+                  splitMode={splitMode}
+                  splitRatio={splitRatio}
+                  isFocused={isVisible && panelIndex === focusedIndex}
+                  onFocus={() => {
+                    if (panelIndex !== -1) setFocusedIndex(panelIndex);
                   }}
+                  sessionName={sessionName}
+                  workPath={sessionWorkPath}
+                  panelLabel={panelLabel}
+                  onClosePanel={() => {
+                    if (panelIndex !== -1) closeSplitPanel(panelIndex);
+                  }}
+                  onMaximize={() => selectSession(sid)}
+                  renderContent={(refreshKey) => (
+                    session.cli_type === "folder" ? (
+                      <FileExplorer
+                        key={`folder-${sid}-${refreshKey}`}
+                        rootPath={sessionWorkPath}
+                        onInsertPath={(text) => { void handleCopyPath(text); }}
+                        onClose={() => {}}
+                        isMobile={isMobile()}
+                        embedded
+                        showCloseButton={false}
+                      />
+                    ) : (
+                      <GitPanel
+                        key={`git-${sid}-${refreshKey}`}
+                        workPath={sessionWorkPath}
+                        onClose={() => {}}
+                        isMobile={isMobile()}
+                        embedded
+                        showHeaderTitle={false}
+                        showWindowControls={false}
+                      />
+                    )
+                  )}
                 />
               );
             }

@@ -11,7 +11,7 @@ interface AddSessionModalProps {
   onCancel: () => void;
 }
 
-type CliType = "claude" | "opencode" | "opencode-web" | "terminal" | "custom";
+type CliType = "claude" | "opencode" | "terminal" | "folder" | "git" | "custom";
 
 const CLI_OPTIONS: Array<{
   type: CliType;
@@ -20,8 +20,9 @@ const CLI_OPTIONS: Array<{
 }> = [
   { type: "claude", label: "Claude Code", description: "Default interactive coding CLI." },
   { type: "opencode", label: "OpenCode", description: "Interactive OpenCode terminal session." },
-  { type: "opencode-web", label: "OpenCode Web", description: "Browser-based OpenCode session." },
   { type: "terminal", label: "Terminal", description: "Plain shell session without CLI wrapper." },
+  { type: "folder", label: "Folder", description: "Saved file explorer session for this project." },
+  { type: "git", label: "Git", description: "Saved Git panel session for this project." },
   { type: "custom", label: "Custom CLI", description: "Run your own command in the session." },
 ];
 
@@ -42,6 +43,7 @@ export default function AddSessionModal({
   onCreated,
   onCancel,
 }: AddSessionModalProps) {
+  const isPanelSession = (type: CliType) => type === "folder" || type === "git";
   const [name, setName] = useState("");
   const [cliType, setCliType] = useState<CliType>("claude");
   const [customCommand, setCustomCommand] = useState("");
@@ -63,6 +65,17 @@ export default function AddSessionModal({
   }, []);
 
   useEffect(() => {
+    if (isPanelSession(cliType)) {
+      setPreflight({
+        ok: true,
+        code: "ok",
+        message: cliType === "folder" ? "Folder session is ready." : "Git session is ready.",
+        resolved_command: null,
+      });
+      setPreflightLoading(false);
+      return;
+    }
+
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       setPreflightLoading(true);

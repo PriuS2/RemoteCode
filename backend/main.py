@@ -1,5 +1,4 @@
 import asyncio
-import httpx
 import logging
 import os
 import platform
@@ -19,7 +18,7 @@ from pydantic import BaseModel
 
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse
 
 from .auth import (
     AUTH_COOKIE_NAME,
@@ -30,7 +29,6 @@ from .auth import (
 )
 from .config import _INSECURE_JWT_SECRET, settings
 from .database import close_db, init_db, mark_all_active_as_suspended
-from .opencode_web_manager import opencode_web_manager
 from .pty_manager import pty_manager
 from .session_manager import SessionValidationError, session_manager
 from .git_utils import GitError, run_git, is_git_repo
@@ -85,7 +83,6 @@ async def lifespan(app: FastAPI):
     await mark_all_active_as_suspended()
     logger.info("Server started")
     yield
-    opencode_web_manager.stop()
     pty_manager.terminate_all()
     await close_db()
     logger.info("Server stopped")
@@ -147,27 +144,6 @@ def _clear_auth_cookie(response: JSONResponse, request: Request) -> None:
         secure=_is_secure_request(request),
         path="/",
     )
-
-
-def _rewrite_proxy_url(value: str, target_port: int) -> str:
-    proxy_prefix = "/api/opencode-web/proxy"
-    if not value or value.startswith(("#", "data:", "javascript:", "mailto:", "tel:")):
-        return value
-    if value.startswith(proxy_prefix):
-        return value
-    if value.startswith("//"):
-        return value
-    if value.startswith(("http://", "https://")):
-        parsed = httpx.URL(value)
-        if parsed.host in {"localhost", "127.0.0.1"} and parsed.port == target_port:
-            rewritten = f"{proxy_prefix}{parsed.path or '/'}"
-            if parsed.query:
-                rewritten += f"?{parsed.query.decode()}"
-            return rewritten
-        return value
-    if value.startswith("/"):
-        return f"{proxy_prefix}{value}"
-    return f"{proxy_prefix}/{value.lstrip('/')}"
 
 
 # --- Request/Response Models ---
@@ -1722,165 +1698,6 @@ async def git_stash_drop(req: GitPullPushRequest, _user: str = Depends(get_curre
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# --- OpenCode Web API ---
-
-import httpx
-
-
-class OpenCodeWebStatusResponse(BaseModel):
-    running: bool
-    port: int | None
-
-
-@app.get("/api/opencode-web/status", response_model=OpenCodeWebStatusResponse)
-async def opencode_web_status(_user: str = Depends(get_current_user)):
-    status = opencode_web_manager.get_status()
-    return OpenCodeWebStatusResponse(**status)
-
-
-class OpenCodeWebStartResponse(BaseModel):
-    port: int
-
-
-@app.post("/api/opencode-web/start", response_model=OpenCodeWebStartResponse)
-async def opencode_web_start(_user: str = Depends(get_current_user)):
-    try:
-        port = opencode_web_manager.start()
-        return OpenCodeWebStartResponse(port=port)
-    except Exception as e:
-        logger.error(f"Failed to start OpenCode Web server: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/opencode-web/stop")
-async def opencode_web_stop(_user: str = Depends(get_current_user)):
-    try:
-        opencode_web_manager.stop()
-        return {"success": True}
-    except Exception as e:
-        logger.error(f"Failed to stop OpenCode Web server: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.api_route("/api/opencode-web/proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
-@app.api_route("/api/opencode-web/proxy", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
-async def opencode_web_proxy(
-    request: Request,
-    path: str = "",
-    _user: str = Depends(get_current_user),
-):
-    status = opencode_web_manager.get_status()
-    if not status["running"] or status["port"] is None:
-        raise HTTPException(status_code=503, detail="OpenCode Web server is not running")
-
-    target_port = status["port"]
-    
-    # 경로 정리: 여러 개의 /를 하나로
-    if not path:
-        target_url = f"http://127.0.0.1:{target_port}/"
-    else:
-        # 경로 정리
-        clean_path = "/" + path.strip("/")
-        target_url = f"http://127.0.0.1:{target_port}{clean_path}"
-
-    if request.url.query:
-        target_url += f"?{request.url.query}"
-
-    allowed_request_headers = {
-        "accept",
-        "accept-encoding",
-        "accept-language",
-        "cache-control",
-        "content-type",
-        "origin",
-        "referer",
-        "user-agent",
-        "x-requested-with",
-    }
-    headers = {
-        key: value
-        for key, value in request.headers.items()
-        if key.lower() in allowed_request_headers
-    }
-
-    body = None
-    if request.method in ["POST", "PUT", "PATCH"]:
-        body = await request.body()
-
-    try:
-        async with httpx.AsyncClient(timeout=60.0, follow_redirects=False) as client:
-            response = await client.request(
-                method=request.method,
-                url=target_url,
-                headers=headers,
-                content=body,
-            )
-
-        # 응답 헤더 처리
-        response_headers = dict(response.headers)
-        response_headers.pop("access-control-allow_origin", None)
-        response_headers.pop("Access-Control-Allow-Origin", None)
-        response_headers.pop("transfer-encoding", None)
-        response_headers.pop("Transfer-Encoding", None)
-        response_headers.pop("content-security-policy", None)
-        response_headers.pop("Content-Security-Policy", None)
-
-        # 바이너리 파일은 그대로 반환 (폰트, 이미지 등)
-        content_type = response.headers.get("content-type", "")
-        if "text/html" in content_type:
-            try:
-                content = response.content.decode("utf-8", errors="replace")
-                
-                import re
-                
-                # src와 href 속성값 변환
-                def replace_src_href(m):
-                    attr = m.group(1)
-                    path_val = m.group(2)
-                    rewritten = _rewrite_proxy_url(path_val, target_port)
-                    return f'{attr}="{rewritten}"'
-                
-                content = re.sub(r'(src|href)=["\']([^"\']+)["\']', replace_src_href, content)
-                
-                response_headers["content-length"] = str(len(content.encode("utf-8")))
-                return Response(content=content, status_code=response.status_code, headers=response_headers)
-            except Exception as e:
-                logger.error(f"HTML rewrite error: {e}")
-        
-        # CSS url() 변환
-        if "text/css" in content_type:
-            try:
-                content = response.content.decode("utf-8", errors="replace")
-                
-                import re
-                
-                # url() 함수 변환
-                def replace_url(m):
-                    url_val = m.group(1)
-                    rewritten = _rewrite_proxy_url(url_val, target_port)
-                    return f'url("{rewritten}")'
-                
-                content = re.sub(r'url\(["\']?([^"\')\s]+)["\']?\)', replace_url, content)
-                
-                response_headers["content-length"] = str(len(content.encode("utf-8")))
-                return Response(content=content, status_code=response.status_code, headers=response_headers)
-            except Exception as e:
-                logger.error(f"CSS rewrite error: {e}")
-
-        # Redirect 응답
-        if response.status_code in (301, 302, 303, 307, 308):
-            location = response.headers.get("location")
-            if location:
-                response_headers["location"] = _rewrite_proxy_url(location, target_port)
-
-        return Response(
-            content=response.content,
-            status_code=response.status_code,
-            headers=response_headers,
-        )
-    except Exception as e:
-        logger.error(f"Proxy error: {e}")
-        raise HTTPException(status_code=502, detail=f"Proxy error: {str(e)}")
 
 
 # --- Static Files & SPA Catch-All ---

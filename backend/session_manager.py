@@ -29,6 +29,9 @@ from .pty_manager import PtyInstance, pty_manager
 
 logger = logging.getLogger(__name__)
 
+NON_PTY_CLI_TYPES = {"folder", "git"}
+SUPPORTED_CLI_TYPES = {"claude", "opencode", "terminal", "custom", "folder", "git"}
+
 
 class SessionValidationError(ValueError):
     def __init__(self, code: str, message: str) -> None:
@@ -38,7 +41,12 @@ class SessionValidationError(ValueError):
 
 
 class SessionManager:
+    def _validate_cli_type(self, cli_type: str) -> None:
+        if cli_type not in SUPPORTED_CLI_TYPES:
+            raise SessionValidationError("invalid_command", f"Unsupported session type: {cli_type}")
+
     def _default_command(self, cli_type: str, custom_command: Optional[str] = None) -> Optional[str]:
+        self._validate_cli_type(cli_type)
         if cli_type == "opencode":
             return settings.opencode_command
         if cli_type == "terminal":
@@ -52,7 +60,7 @@ class SessionManager:
                     "Custom command is required for Custom CLI.",
                 )
             return custom_command.strip()
-        if cli_type == "opencode-web":
+        if cli_type in NON_PTY_CLI_TYPES:
             return None
         return settings.claude_command
 
@@ -135,10 +143,14 @@ class SessionManager:
         command = self._default_command(cli_type, custom_command)
 
         if command is None:
+            ready_messages = {
+                "folder": "Folder session is ready.",
+                "git": "Git session is ready.",
+            }
             return {
                 "ok": True,
                 "code": "ok",
-                "message": "OpenCode Web session is ready.",
+                "message": ready_messages.get(cli_type, "Session is ready."),
                 "resolved_command": None,
                 "work_path": validated_path,
             }
@@ -172,7 +184,13 @@ class SessionManager:
         return project
 
     async def list_projects(self) -> list[dict]:
-        return await db_list_projects()
+        projects = await db_list_projects()
+        for project in projects:
+            project["sessions"] = [
+                session for session in project.get("sessions", [])
+                if session.get("cli_type") in SUPPORTED_CLI_TYPES
+            ]
+        return projects
 
     async def rename_project(self, project_id: str, name: str) -> dict:
         project = await db_get_project(project_id)
@@ -188,7 +206,7 @@ class SessionManager:
 
         sessions = await db_list_project_sessions(project_id)
         for session in sessions:
-            if session.get("cli_type", "claude") != "opencode-web":
+            if session.get("cli_type", "claude") not in NON_PTY_CLI_TYPES:
                 pty_manager.remove(session["id"])
 
         await db_delete_project_record(project_id)
@@ -251,9 +269,9 @@ class SessionManager:
             custom_exit_command,
         )
 
-        # opencode-web 타입은 PTY 생성 안 함
-        if cli_type == "opencode-web":
-            logger.info(f"Session created: {session_id} ({display_name}) at {work_path} (OpenCode Web, no PTY)")
+        # Non-PTY session types only persist state and render dedicated UI panels.
+        if cli_type in NON_PTY_CLI_TYPES:
+            logger.info(f"Session created: {session_id} ({display_name}) at {work_path} ({cli_type}, no PTY)")
             return session
 
         # PTY 생성 (10초 타임아웃)
@@ -276,7 +294,10 @@ class SessionManager:
         return session
 
     async def list_sessions(self) -> list[dict]:
-        return await db_list_sessions()
+        return [
+            session for session in await db_list_sessions()
+            if session.get("cli_type") in SUPPORTED_CLI_TYPES
+        ]
 
     async def get_session(self, session_id: str) -> Optional[dict]:
         return await db_get_session(session_id)
@@ -290,7 +311,7 @@ class SessionManager:
 
         cli_type = session.get("cli_type", "claude")
 
-        if cli_type == "opencode-web":
+        if cli_type in NON_PTY_CLI_TYPES:
             await db_update_session(session_id, status="suspended")
             return await db_get_session(session_id)
 
@@ -362,10 +383,10 @@ class SessionManager:
 
         cli_type = session.get("cli_type", "claude")
 
-        if cli_type == "opencode-web":
+        if cli_type in NON_PTY_CLI_TYPES:
             await db_update_session(session_id, status="active")
             await update_last_accessed(session_id)
-            logger.info(f"Session resumed: {session_id} (OpenCode Web)")
+            logger.info(f"Session resumed: {session_id} ({cli_type})")
             return await db_get_session(session_id)
 
         # 기존 PTY 정리
@@ -432,7 +453,7 @@ class SessionManager:
 
         cli_type = session.get("cli_type", "claude")
 
-        if cli_type != "opencode-web":
+        if cli_type not in NON_PTY_CLI_TYPES:
             pty_manager.remove(session_id)
 
         await db_update_session(session_id, status="closed")
@@ -446,7 +467,7 @@ class SessionManager:
 
         cli_type = session.get("cli_type", "claude")
 
-        if cli_type != "opencode-web":
+        if cli_type not in NON_PTY_CLI_TYPES:
             pty_manager.remove(session_id)
 
         await db_delete_session(session_id)

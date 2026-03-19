@@ -39,10 +39,11 @@ const STATUS_META: Record<string, { label: string; color: string; chipClass: str
 };
 
 const CLI_META: Record<string, { label: string; bg: string }> = {
-  "opencode-web": { label: "OpenCode Web", bg: "var(--warn)" },
   opencode: { label: "OpenCode", bg: "var(--info)" },
   custom: { label: "Custom", bg: "var(--success)" },
   terminal: { label: "Terminal", bg: "#b794f6" },
+  folder: { label: "Folder", bg: "#74c7ec" },
+  git: { label: "Git", bg: "#fab387" },
   default: { label: "Claude", bg: "var(--accent)" },
 };
 
@@ -82,6 +83,10 @@ const DoneBadge = () => (
 
 function getCliMeta(cliType: string) {
   return CLI_META[cliType] ?? CLI_META.default;
+}
+
+function isProcessSession(session: Session) {
+  return session.cli_type !== "folder" && session.cli_type !== "git";
 }
 
 function reorderList<T extends { id: string }>(items: T[], draggedId: string, targetId: string): T[] {
@@ -476,7 +481,7 @@ export default function SessionList({
         closeContextMenu();
       },
     },
-    ...(contextMenu.session.status === "active" ? [{
+    ...(contextMenu.session.status === "active" && isProcessSession(contextMenu.session) ? [{
       label: "Suspend",
       onClick: () => {
         onSuspendSession(contextMenu.session.id);
@@ -484,7 +489,7 @@ export default function SessionList({
       },
       warn: true,
     }] : []),
-    ...(contextMenu.session.status === "active" ? [{
+    ...(contextMenu.session.status === "active" && isProcessSession(contextMenu.session) ? [{
       label: "Kill",
       onClick: () => {
         setActionError(null);

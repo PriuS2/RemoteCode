@@ -633,8 +633,8 @@ export default function Terminal({
       <div
         className={`terminal-toolbar${isFocused ? " is-focused" : ""}`}
         style={{
-          minHeight: 58,
-          padding: `10px ${Math.max(14, Math.round(fontSize * 0.7))}px`,
+          minHeight: 50,
+          padding: `8px ${Math.max(12, Math.round(fontSize * 0.6))}px`,
         }}
       >
         <div className="terminal-toolbar__meta">
