@@ -6,6 +6,7 @@ const EXT_MAP: Record<string, { color: string; label: string }> = {
   ".py":    { color: "#89b4fa", label: "PY" },
   ".json":  { color: "#f9e2af", label: "{}" },
   ".md":    { color: "#89b4fa", label: "MD" },
+  ".pdf":   { color: "#f38ba8", label: "PDF" },
   ".css":   { color: "#cba6f7", label: "CS" },
   ".scss":  { color: "#cba6f7", label: "SC" },
   ".html":  { color: "#fab387", label: "HT" },
