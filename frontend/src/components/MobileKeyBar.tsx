@@ -1,10 +1,11 @@
 import { useRef, useCallback } from "react";
+import { uiPx } from "../utils/uiScale";
 
 interface MobileKeyBarProps {
   onKey: (data: string) => void;
 }
 
-/* ── Arrow SVG icon (reused from original) ── */
+/* ?? Arrow SVG icon (reused from original) ?? */
 const ArrowIcon = ({
   direction,
 }: {
@@ -32,7 +33,7 @@ const ArrowIcon = ({
   );
 };
 
-/* ── Enter icon ── */
+/* ?? Enter icon ?? */
 const EnterIcon = () => (
   <svg
     width="16"
@@ -48,7 +49,7 @@ const EnterIcon = () => (
   </svg>
 );
 
-/* ── Undo icon ── */
+/* ?? Undo icon ?? */
 const UndoIcon = () => (
   <svg
     width="16"
@@ -64,7 +65,7 @@ const UndoIcon = () => (
   </svg>
 );
 
-/* ── Styles ── */
+/* ?? Styles ?? */
 const BTN_BASE: React.CSSProperties = {
   height: 34,
   padding: "0 4px",
@@ -72,7 +73,7 @@ const BTN_BASE: React.CSSProperties = {
   borderRadius: 5,
   background: "#313244",
   color: "#cdd6f4",
-  fontSize: 12,
+  fontSize: uiPx(12),
   fontWeight: 600,
   fontFamily: "'Cascadia Code', 'Consolas', monospace",
   cursor: "pointer",
@@ -92,7 +93,7 @@ const PREFIX_BTN: React.CSSProperties = {
   background: "#45475a",
   color: "#89b4fa",
   fontWeight: 700,
-  fontSize: 14,
+  fontSize: uiPx(14),
 };
 
 const ARROW_BTN: React.CSSProperties = {
@@ -112,7 +113,7 @@ const ENTER_BTN: React.CSSProperties = {
   borderRadius: 5,
   gridArea: "en",
   width: "100%",
-  fontSize: 13,
+  fontSize: uiPx(13),
   gap: 4,
 };
 
@@ -154,7 +155,7 @@ const ROW: React.CSSProperties = {
   flex: 1,
 };
 
-/* ── Row definitions ── */
+/* ?? Row definitions ?? */
 interface BtnDef {
   label: React.ReactNode;
   value: string;
@@ -167,30 +168,30 @@ const ROW1: BtnDef[] = [
   { label: "/", value: "/", style: PREFIX_BTN },
   { label: "@", value: "@", style: PREFIX_BTN },
   { label: "&", value: "&", style: PREFIX_BTN },
-  { label: <><span>Esc</span><span style={{ fontSize: 8, opacity: 0.5, marginLeft: 2 }}>2x</span></>, value: "\x1b", handler: "esc" },
+  { label: <><span>Esc</span><span style={{ fontSize: uiPx(8), opacity: 0.5, marginLeft: 2 }}>2x</span></>, value: "\x1b", handler: "esc" },
   { label: "C-c", value: "\x03" },
 ];
 
 const ROW2: BtnDef[] = [
   { label: "Tab", value: "\t" },
-  { label: "⇧Tab", value: "\x1b[Z" },
+  { label: "S-Tab", value: "\x1b[Z" },
   { label: <UndoIcon />, value: "\x1f" },
   { label: "model", value: "/model", handler: "typeCommand" },
 ];
 
 const ROW3: BtnDef[] = [
-  { label: <><span>^V</span><span style={{ fontSize: 8, opacity: 0.5, marginLeft: 2 }}>paste</span></>, value: "\x16" },
-  { label: <><span>A-v</span><span style={{ fontSize: 8, opacity: 0.5, marginLeft: 2 }}>img</span></>, value: "\x1bv" },
+  { label: <><span>^V</span><span style={{ fontSize: uiPx(8), opacity: 0.5, marginLeft: 2 }}>paste</span></>, value: "\x16" },
+  { label: <><span>A-v</span><span style={{ fontSize: uiPx(8), opacity: 0.5, marginLeft: 2 }}>img</span></>, value: "\x1bv" },
   { label: "^O", value: "\x0f" },
   { label: "^L", value: "\x0c" },
 ];
 
-/* ── Haptic feedback ── */
+/* ?? Haptic feedback ?? */
 const vibrate = (ms = 8) => {
   if (navigator.vibrate) navigator.vibrate(ms);
 };
 
-/* ── Component ── */
+/* ?? Component ?? */
 export default function MobileKeyBar({ onKey }: MobileKeyBarProps) {
   const escTimeRef = useRef(0);
 
@@ -291,3 +292,4 @@ export default function MobileKeyBar({ onKey }: MobileKeyBarProps) {
     </div>
   );
 }
+

@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import FolderBrowser from "./FolderBrowser";
 import type { CliPreflightResponse } from "../types/api";
 import { apiFetch, readErrorDetail } from "../utils/api";
+import { uiPx } from "../utils/uiScale";
 
 interface NewSessionProps {
   onCreated: (sessionId: string) => void;
@@ -237,14 +238,14 @@ export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
             <h2
               style={{
                 margin: 0,
-                fontSize: 20,
+                fontSize: uiPx(20),
                 color: "#cdd6f4",
                 fontWeight: 700,
               }}
             >
               New Session
             </h2>
-            <p style={{ margin: "8px 0 0", fontSize: 13, color: "#a6adc8", lineHeight: 1.5 }}>
+            <p style={{ margin: "8px 0 0", fontSize: uiPx(13), color: "#a6adc8", lineHeight: 1.5 }}>
               Choose a workspace and the CLI that should power the session.
             </p>
           </div>
@@ -261,7 +262,7 @@ export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
               }}
             >
               <div>
-                <label style={{ display: "block", fontSize: 12, color: "#a6adc8", marginBottom: 6 }}>
+                <label style={{ display: "block", fontSize: uiPx(12), color: "#a6adc8", marginBottom: 6 }}>
                   Work Path *
                 </label>
                 <div
@@ -281,7 +282,7 @@ export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
                       width: "100%",
                       minWidth: 0,
                       padding: "11px 12px",
-                      fontSize: 14,
+                      fontSize: uiPx(14),
                       background: "#313244",
                       color: "#cdd6f4",
                       border: "1px solid #45475a",
@@ -302,7 +303,7 @@ export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
                       border: "1px solid #45475a",
                       borderRadius: 8,
                       cursor: "pointer",
-                      fontSize: 13,
+                      fontSize: uiPx(13),
                       fontWeight: 600,
                     }}
                   >
@@ -312,7 +313,7 @@ export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: 12, color: "#a6adc8", marginBottom: 6 }}>
+                <label style={{ display: "block", fontSize: uiPx(12), color: "#a6adc8", marginBottom: 6 }}>
                   Session Name
                 </label>
                 <input
@@ -323,7 +324,7 @@ export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
                   style={{
                     width: "100%",
                     padding: "11px 12px",
-                    fontSize: 14,
+                    fontSize: uiPx(14),
                     background: "#313244",
                     color: "#cdd6f4",
                     border: "1px solid #45475a",
@@ -339,7 +340,7 @@ export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
                   display: "flex",
                   alignItems: "center",
                   gap: 10,
-                  fontSize: 13,
+                  fontSize: uiPx(13),
                   color: "#cdd6f4",
                   cursor: "pointer",
                 }}
@@ -355,12 +356,12 @@ export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
 
               <div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
-                  <label style={{ fontSize: 12, color: "#a6adc8" }}>CLI Type</label>
+                  <label style={{ fontSize: uiPx(12), color: "#a6adc8" }}>CLI Type</label>
                   <span
                     style={{
                       ...badgeStyle(preflightSummary.ok, preflightSummary.loading),
                       padding: "3px 8px",
-                      fontSize: 11,
+                      fontSize: uiPx(11),
                       fontWeight: 700,
                       borderRadius: 999,
                     }}
@@ -403,9 +404,9 @@ export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
                               flexShrink: 0,
                             }}
                           />
-                          <span style={{ fontSize: 13, fontWeight: 700 }}>{option.label}</span>
+                          <span style={{ fontSize: uiPx(13), fontWeight: 700 }}>{option.label}</span>
                         </div>
-                        <div style={{ fontSize: 11, color: "#a6adc8", lineHeight: 1.45 }}>
+                        <div style={{ fontSize: uiPx(11), color: "#a6adc8", lineHeight: 1.45 }}>
                           {option.description}
                         </div>
                       </button>
@@ -414,11 +415,11 @@ export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
                 </div>
 
                 <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 10, background: "#181825" }}>
-                  <div style={{ fontSize: 12, color: preflightSummary.ok ? "#a6e3a1" : preflightSummary.loading ? "#89b4fa" : "#f9e2af", fontWeight: 600 }}>
+                  <div style={{ fontSize: uiPx(12), color: preflightSummary.ok ? "#a6e3a1" : preflightSummary.loading ? "#89b4fa" : "#f9e2af", fontWeight: 600 }}>
                     {preflightSummary.title}
                   </div>
                   {preflightSummary.detail && (
-                    <div style={{ marginTop: 4, fontSize: 11, color: "#6c7086", fontFamily: "'Cascadia Code', 'Consolas', monospace" }}>
+                    <div style={{ marginTop: 4, fontSize: uiPx(11), color: "#6c7086", fontFamily: "'Cascadia Code', 'Consolas', monospace" }}>
                       {preflightSummary.detail}
                     </div>
                   )}
@@ -428,7 +429,7 @@ export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
               {cliType === "custom" && (
                 <>
                   <div>
-                    <label style={{ display: "block", fontSize: 12, color: "#a6adc8", marginBottom: 6 }}>
+                    <label style={{ display: "block", fontSize: uiPx(12), color: "#a6adc8", marginBottom: 6 }}>
                       Command *
                     </label>
                     <input
@@ -439,7 +440,7 @@ export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
                       style={{
                         width: "100%",
                         padding: "11px 12px",
-                        fontSize: 14,
+                        fontSize: uiPx(14),
                         background: "#313244",
                         color: "#cdd6f4",
                         border: "1px solid #45475a",
@@ -450,7 +451,7 @@ export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
                     />
                   </div>
                   <div>
-                    <label style={{ display: "block", fontSize: 12, color: "#a6adc8", marginBottom: 6 }}>
+                    <label style={{ display: "block", fontSize: uiPx(12), color: "#a6adc8", marginBottom: 6 }}>
                       Exit Command
                     </label>
                     <input
@@ -461,7 +462,7 @@ export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
                       style={{
                         width: "100%",
                         padding: "11px 12px",
-                        fontSize: 14,
+                        fontSize: uiPx(14),
                         background: "#313244",
                         color: "#cdd6f4",
                         border: "1px solid #45475a",
@@ -482,7 +483,7 @@ export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
                     background: "#f38ba81a",
                     border: "1px solid #f38ba84a",
                     color: "#f38ba8",
-                    fontSize: 13,
+                    fontSize: uiPx(13),
                     lineHeight: 1.5,
                   }}
                 >
@@ -508,7 +509,7 @@ export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
                 onClick={onCancel}
                 style={{
                   padding: "10px 16px",
-                  fontSize: 13,
+                  fontSize: uiPx(13),
                   background: "transparent",
                   color: "#a6adc8",
                   border: "1px solid #45475a",
@@ -523,7 +524,7 @@ export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
                 disabled={loading || !workPath.trim() || hasBlockingPreflight}
                 style={{
                   padding: "10px 16px",
-                  fontSize: 13,
+                  fontSize: uiPx(13),
                   fontWeight: 700,
                   background: "#89b4fa",
                   color: "#1e1e2e",
@@ -553,3 +554,4 @@ export default function NewSession({ onCreated, onCancel }: NewSessionProps) {
     </>
   );
 }
+

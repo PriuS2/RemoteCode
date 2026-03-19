@@ -6,6 +6,7 @@ import { joinPath } from "../utils/pathUtils";
 import hljs from "highlight.js";
 import { apiFetch, readErrorMessage } from "../utils/api";
 import type { TextPreviewResponse } from "../types/api";
+import { uiPx } from "../utils/uiScale";
 
 interface FileEntry {
   name: string;
@@ -93,7 +94,7 @@ type PreviewMode = "text" | "image" | "audio";
 const DEFAULT_PREVIEW_LINE_COUNT = 400;
 
 function getRelativePath(rootPath: string, fullPath: string): string {
-  // Normalize both paths: backslash → forward slash, remove trailing slash
+  // Normalize both paths to forward slashes and remove a trailing slash.
   const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/$/, "");
   const root = norm(rootPath);
   const full = norm(fullPath);
@@ -102,7 +103,7 @@ function getRelativePath(rootPath: string, fullPath: string): string {
     const rel = full.slice(root.length).replace(/^\//, "");
     return rel ? `@${rel}` : "@.";
   }
-  // Outside root — use absolute (forward slashes)
+  // When outside the root, keep the absolute path with forward slashes.
   return `@${full}`;
 }
 
@@ -692,7 +693,7 @@ export default function FileExplorer({
     >
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
         <UploadIcon size={32} />
-        <span style={{ color: "#a6e3a1", fontSize: 13, fontWeight: 600 }}>Drop files to upload</span>
+        <span style={{ color: "#a6e3a1", fontSize: uiPx(13), fontWeight: 600 }}>Drop files to upload</span>
       </div>
     </div>
   );
@@ -700,14 +701,14 @@ export default function FileExplorer({
   const uploadStatus = uploadProgress && (
     <div style={{
       padding: "4px 8px",
-      fontSize: 11,
+      fontSize: uiPx(11),
       color: uploading ? "#89b4fa" : uploadProgress.includes("failed") || uploadProgress.includes("denied") || uploadProgress.includes("large") ? "#f38ba8" : "#a6e3a1",
       background: "#181825",
       borderTop: "1px solid #313244",
       textAlign: "center",
       flexShrink: 0,
     }}>
-      {uploading && "⏳ "}{uploadProgress}
+      {uploading && "Uploading... "}{uploadProgress}
     </div>
   );
 
@@ -1468,7 +1469,7 @@ function GridItem({
             border: "1px solid #45475a",
             color: "#6c7086",
             cursor: "pointer",
-            fontSize: 12,
+            fontSize: uiPx(12),
             fontWeight: 700,
             borderRadius: 4,
             padding: "2px 5px",
@@ -1616,7 +1617,7 @@ function ListItem({
             border: "1px solid #45475a",
             color: "#6c7086",
             cursor: "pointer",
-            fontSize: 12,
+            fontSize: uiPx(12),
             fontWeight: 700,
             borderRadius: 4,
             padding: "2px 6px",
@@ -1701,7 +1702,7 @@ function ContextMenu({
         minWidth: 180,
         boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
         fontFamily: "'Cascadia Code', 'Consolas', monospace",
-        fontSize: 12,
+        fontSize: uiPx(12),
       }}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -1850,14 +1851,14 @@ function DeleteConfirmDialog({
           fontFamily: "'Cascadia Code', 'Consolas', monospace",
         }}
       >
-        <div style={{ fontSize: 14, color: "#cdd6f4", marginBottom: 12, fontWeight: 600 }}>
+        <div style={{ fontSize: uiPx(14), color: "#cdd6f4", marginBottom: 12, fontWeight: 600 }}>
           Delete {entry.type === "folder" ? "Folder" : "File"}
         </div>
-        <div style={{ fontSize: 12, color: "#a6adc8", marginBottom: 20, lineHeight: 1.5 }}>
+        <div style={{ fontSize: uiPx(12), color: "#a6adc8", marginBottom: 20, lineHeight: 1.5 }}>
           Are you sure you want to delete{" "}
           <span style={{ color: "#f38ba8", fontWeight: 600 }}>"{entry.name}"</span>?
           {entry.type === "folder" && (
-            <span style={{ display: "block", marginTop: 6, color: "#f38ba8", fontSize: 11 }}>
+            <span style={{ display: "block", marginTop: 6, color: "#f38ba8", fontSize: uiPx(11) }}>
               This will delete the folder and all its contents.
             </span>
           )}
@@ -1871,7 +1872,7 @@ function DeleteConfirmDialog({
               color: "#cdd6f4",
               borderRadius: 4,
               padding: "6px 16px",
-              fontSize: 12,
+              fontSize: uiPx(12),
               cursor: "pointer",
               fontFamily: "inherit",
             }}
@@ -1888,7 +1889,7 @@ function DeleteConfirmDialog({
               color: "#1e1e2e",
               borderRadius: 4,
               padding: "6px 16px",
-              fontSize: 12,
+              fontSize: uiPx(12),
               cursor: "pointer",
               fontWeight: 600,
               fontFamily: "inherit",
@@ -2134,7 +2135,7 @@ function FilePreview({
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
-            fontSize: 11,
+            fontSize: uiPx(11),
             fontWeight: 600,
             color: "#cdd6f4",
           }}
@@ -2143,12 +2144,12 @@ function FilePreview({
           {file.name}
         </span>
         {size > 0 && (
-          <span style={{ fontSize: 10, color: "#6c7086", flexShrink: 0 }}>
+          <span style={{ fontSize: uiPx(10), color: "#6c7086", flexShrink: 0 }}>
             {formatSize(size)}
           </span>
         )}
         {truncated && (
-          <span style={{ fontSize: 10, color: "#f9e2af", flexShrink: 0 }}>
+          <span style={{ fontSize: uiPx(10), color: "#f9e2af", flexShrink: 0 }}>
             L{startLine}-{endLine} / {totalLines}
           </span>
         )}
@@ -2159,14 +2160,14 @@ function FilePreview({
             title="Decrease font size"
             style={{
               background: "none", border: "none", color: "#6c7086", cursor: "pointer",
-              fontSize: 12, fontWeight: 700, padding: "0 3px", lineHeight: 1, borderRadius: 3,
+              fontSize: uiPx(12), fontWeight: 700, padding: "0 3px", lineHeight: 1, borderRadius: 3,
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
           >
             -
           </button>
-          <span style={{ fontSize: 9, color: "#6c7086", minWidth: 20, textAlign: "center" }}>
+          <span style={{ fontSize: uiPx(9), color: "#6c7086", minWidth: 20, textAlign: "center" }}>
             {previewFontSize}
           </span>
           <button
@@ -2174,7 +2175,7 @@ function FilePreview({
             title="Increase font size"
             style={{
               background: "none", border: "none", color: "#6c7086", cursor: "pointer",
-              fontSize: 12, fontWeight: 700, padding: "0 3px", lineHeight: 1, borderRadius: 3,
+              fontSize: uiPx(12), fontWeight: 700, padding: "0 3px", lineHeight: 1, borderRadius: 3,
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
@@ -2192,7 +2193,7 @@ function FilePreview({
             color: "#a6e3a1",
             cursor: "pointer",
             padding: "1px 6px",
-            fontSize: 10,
+            fontSize: uiPx(10),
             fontWeight: 700,
             borderRadius: 3,
             flexShrink: 0,
@@ -2283,7 +2284,7 @@ function FilePreview({
           >
             Next
           </button>
-          <span style={{ fontSize: 10, color: "#6c7086" }}>
+          <span style={{ fontSize: uiPx(10), color: "#6c7086" }}>
             {matchLines.length > 0 ? `${activeMatchIndex + 1}/${matchLines.length}` : "0 matches"}
           </span>
         </div>
@@ -2331,11 +2332,11 @@ function FilePreview({
       </div>
 
       {loading ? (
-        <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: 12 }}>
+        <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: uiPx(12) }}>
           Loading...
         </div>
       ) : errorMessage ? (
-        <div style={{ padding: 20, textAlign: "center", color: "#f38ba8", fontSize: 12 }}>
+        <div style={{ padding: 20, textAlign: "center", color: "#f38ba8", fontSize: uiPx(12) }}>
           {errorMessage}
         </div>
       ) : (
@@ -2357,10 +2358,10 @@ function FilePreview({
                 backdropFilter: "blur(4px)",
               }}
             >
-              <span style={{ fontSize: 11, color: "#89b4fa" }}>
+              <span style={{ fontSize: uiPx(11), color: "#89b4fa" }}>
                 L{rangeFrom}{rangeFrom !== rangeTo ? `-${rangeTo}` : ""}
               </span>
-              <span style={{ fontSize: 10, color: "#6c7086" }}>
+              <span style={{ fontSize: uiPx(10), color: "#6c7086" }}>
                 ({rangeTo - rangeFrom + 1} lines)
               </span>
               <div style={{ flex: 1 }} />
@@ -2376,7 +2377,7 @@ function FilePreview({
                   border: "1px solid #45475a",
                   color: "#a6e3a1",
                   cursor: "pointer",
-                  fontSize: 11,
+                  fontSize: uiPx(11),
                   fontWeight: 700,
                   borderRadius: 4,
                   padding: "2px 10px",
@@ -2499,7 +2500,7 @@ function FilePreview({
             <div
               style={{
                 padding: "6px 10px",
-                fontSize: 10,
+                fontSize: uiPx(10),
                 color: "#f9e2af",
                 borderTop: "1px solid #313244",
                 background: "#181825",
@@ -2525,7 +2526,7 @@ function previewToolbarButton(disabled: boolean): React.CSSProperties {
     color: disabled ? "#585b70" : "#cdd6f4",
     borderRadius: 6,
     padding: "4px 8px",
-    fontSize: 11,
+    fontSize: uiPx(11),
     cursor: disabled ? "not-allowed" : "pointer",
   };
 }
@@ -2536,7 +2537,7 @@ const previewToolbarInput: React.CSSProperties = {
   border: "1px solid #45475a",
   background: "#313244",
   color: "#cdd6f4",
-  fontSize: 11,
+  fontSize: uiPx(11),
   outline: "none",
   boxSizing: "border-box",
 };
@@ -2721,7 +2722,7 @@ function ImagePreview({
     }
   }, []);
 
-  // Double click/tap: toggle fit ↔ 100%
+  // Double click/tap: toggle fit ??100%
   const handleDoubleClick = useCallback(() => {
     if (isFit) {
       const c = containerRef.current;
@@ -2762,7 +2763,7 @@ function ImagePreview({
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
-            fontSize: 11,
+            fontSize: uiPx(11),
             fontWeight: 600,
             color: "#cdd6f4",
           }}
@@ -2771,7 +2772,7 @@ function ImagePreview({
           {file.name}
         </span>
         {size > 0 && (
-          <span style={{ fontSize: 10, color: "#6c7086", flexShrink: 0 }}>
+          <span style={{ fontSize: uiPx(10), color: "#6c7086", flexShrink: 0 }}>
             {formatSize(size)}
           </span>
         )}
@@ -2785,14 +2786,14 @@ function ImagePreview({
             title="Zoom out"
             style={{
               background: "none", border: "none", color: "#6c7086", cursor: "pointer",
-              fontSize: 12, fontWeight: 700, padding: "0 3px", lineHeight: 1, borderRadius: 3,
+              fontSize: uiPx(12), fontWeight: 700, padding: "0 3px", lineHeight: 1, borderRadius: 3,
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
           >
             -
           </button>
-          <span style={{ fontSize: 9, color: "#6c7086", minWidth: 28, textAlign: "center" }}>
+          <span style={{ fontSize: uiPx(9), color: "#6c7086", minWidth: 28, textAlign: "center" }}>
             {zoomPercent}%
           </span>
           <button
@@ -2803,7 +2804,7 @@ function ImagePreview({
             title="Zoom in"
             style={{
               background: "none", border: "none", color: "#6c7086", cursor: "pointer",
-              fontSize: 12, fontWeight: 700, padding: "0 3px", lineHeight: 1, borderRadius: 3,
+              fontSize: uiPx(12), fontWeight: 700, padding: "0 3px", lineHeight: 1, borderRadius: 3,
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
@@ -2821,7 +2822,7 @@ function ImagePreview({
             color: "#89b4fa",
             cursor: "pointer",
             padding: "1px 6px",
-            fontSize: 10,
+            fontSize: uiPx(10),
             fontWeight: 600,
             borderRadius: 3,
             flexShrink: 0,
@@ -2846,7 +2847,7 @@ function ImagePreview({
             color: "#a6e3a1",
             cursor: "pointer",
             padding: "1px 6px",
-            fontSize: 10,
+            fontSize: uiPx(10),
             fontWeight: 700,
             borderRadius: 3,
             flexShrink: 0,
@@ -2888,11 +2889,11 @@ function ImagePreview({
 
       {/* Body */}
       {loading ? (
-        <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: 12 }}>
+        <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: uiPx(12) }}>
           Loading...
         </div>
       ) : errorMessage ? (
-        <div style={{ padding: 20, textAlign: "center", color: "#f38ba8", fontSize: 12 }}>
+        <div style={{ padding: 20, textAlign: "center", color: "#f38ba8", fontSize: uiPx(12) }}>
           {errorMessage}
         </div>
       ) : imageUrl ? (
@@ -2982,7 +2983,7 @@ function AudioPreview({
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
-            fontSize: 11,
+            fontSize: uiPx(11),
             fontWeight: 600,
             color: "#cdd6f4",
           }}
@@ -2991,7 +2992,7 @@ function AudioPreview({
           {file.name}
         </span>
         {size > 0 && (
-          <span style={{ fontSize: 10, color: "#6c7086", flexShrink: 0 }}>
+          <span style={{ fontSize: uiPx(10), color: "#6c7086", flexShrink: 0 }}>
             {formatSize(size)}
           </span>
         )}
@@ -3005,7 +3006,7 @@ function AudioPreview({
             color: "#a6e3a1",
             cursor: "pointer",
             padding: "1px 6px",
-            fontSize: 10,
+            fontSize: uiPx(10),
             fontWeight: 700,
             borderRadius: 3,
             flexShrink: 0,
@@ -3047,11 +3048,11 @@ function AudioPreview({
 
       {/* Body */}
       {loading ? (
-        <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: 12 }}>
+        <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: uiPx(12) }}>
           Loading...
         </div>
       ) : errorMessage ? (
-        <div style={{ padding: 20, textAlign: "center", color: "#f38ba8", fontSize: 12 }}>
+        <div style={{ padding: 20, textAlign: "center", color: "#f38ba8", fontSize: uiPx(12) }}>
           {errorMessage}
         </div>
       ) : audioUrl ? (
@@ -3074,7 +3075,7 @@ function AudioPreview({
             <circle cx="6" cy="18" r="3" />
             <circle cx="18" cy="16" r="3" />
           </svg>
-          <span style={{ color: "#cdd6f4", fontSize: 13, fontWeight: 500, textAlign: "center", wordBreak: "break-all" }}>
+          <span style={{ color: "#cdd6f4", fontSize: uiPx(13), fontWeight: 500, textAlign: "center", wordBreak: "break-all" }}>
             {file.name}
           </span>
           {/* Native audio player */}
@@ -3114,7 +3115,7 @@ function ParentGridItem({ onBack }: { onBack: () => void }) {
       <span
         style={{
           marginTop: 4,
-          fontSize: 10,
+          fontSize: uiPx(10),
           color: "#a6adc8",
           textAlign: "center",
         }}
@@ -3136,7 +3137,7 @@ function ParentListItem({ onBack }: { onBack: () => void }) {
         padding: "5px 6px",
         borderRadius: 4,
         cursor: "pointer",
-        fontSize: 12,
+        fontSize: uiPx(12),
         color: "#a6adc8",
       }}
       onMouseEnter={(e) => {
@@ -3318,3 +3319,4 @@ function NewFolderInlineList({
     </div>
   );
 }
+

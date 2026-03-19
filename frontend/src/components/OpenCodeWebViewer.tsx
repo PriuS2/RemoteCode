@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { apiFetch, readErrorMessage } from "../utils/api";
+import { uiPx } from "../utils/uiScale";
 
 interface OpenCodeWebViewerProps {
   onClose: () => void;
@@ -106,7 +107,7 @@ export default function OpenCodeWebViewer({ onClose }: OpenCodeWebViewerProps) {
       }}
     >
       <div>OpenCode Web was opened in a new tab.</div>
-      <div style={{ fontSize: 12, color: "#a6adc8" }}>
+      <div style={{ fontSize: uiPx(12), color: "#a6adc8" }}>
         If nothing opened, check your popup blocker and try again.
       </div>
       <button
@@ -125,3 +126,4 @@ export default function OpenCodeWebViewer({ onClose }: OpenCodeWebViewerProps) {
     </div>
   );
 }
+

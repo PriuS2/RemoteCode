@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { joinPath } from "../utils/pathUtils";
 import { apiFetch, readErrorMessage } from "../utils/api";
+import { uiPx } from "../utils/uiScale";
 
 interface FolderBrowserProps {
   initialPath?: string;
@@ -146,7 +147,7 @@ export default function FolderBrowser({
         {/* Header */}
         <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid #313244" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontSize: 15, fontWeight: 600, color: "#cdd6f4" }}>
+            <div style={{ fontSize: uiPx(15), fontWeight: 600, color: "#cdd6f4" }}>
               Select Folder
             </div>
             <button
@@ -160,7 +161,7 @@ export default function FolderBrowser({
                 alignItems: "center",
                 gap: 4,
                 padding: "4px 10px",
-                fontSize: 12,
+                fontSize: uiPx(12),
                 fontWeight: 600,
                 background: creating ? "#45475a" : "#313244",
                 color: creating ? "#cdd6f4" : "#a6e3a1",
@@ -185,7 +186,7 @@ export default function FolderBrowser({
                 padding: "6px 10px",
                 background: "#313244",
                 borderRadius: 6,
-                fontSize: 12,
+                fontSize: uiPx(12),
                 color: "#89b4fa",
                 fontFamily: "'Cascadia Code', 'Consolas', monospace",
                 wordBreak: "break-all",
@@ -221,7 +222,7 @@ export default function FolderBrowser({
                 background: "#313244",
                 border: "1px solid #89b4fa",
                 borderRadius: 6,
-                fontSize: 12,
+                fontSize: uiPx(12),
                 color: "#89b4fa",
                 fontFamily: "'Cascadia Code', 'Consolas', monospace",
                 outline: "none",
@@ -249,7 +250,7 @@ export default function FolderBrowser({
                   flex: 1,
                   minWidth: 0,
                   padding: "8px 10px",
-                  fontSize: 13,
+                  fontSize: uiPx(13),
                   background: "#313244",
                   color: "#cdd6f4",
                   border: "1px solid #45475a",
@@ -262,7 +263,7 @@ export default function FolderBrowser({
                 disabled={!newName.trim()}
                 style={{
                   padding: "8px 14px",
-                  fontSize: 12,
+                  fontSize: uiPx(12),
                   fontWeight: 600,
                   background: "#a6e3a1",
                   color: "#1e1e2e",
@@ -277,7 +278,7 @@ export default function FolderBrowser({
               </button>
             </div>
             {createError && (
-              <div style={{ color: "#f38ba8", fontSize: 12, marginTop: 4 }}>{createError}</div>
+              <div style={{ color: "#f38ba8", fontSize: uiPx(12), marginTop: 4 }}>{createError}</div>
             )}
           </div>
         )}
@@ -300,7 +301,7 @@ export default function FolderBrowser({
                   onClick={() => browse(drive)}
                   style={{
                     padding: "4px 10px",
-                    fontSize: 11,
+                    fontSize: uiPx(11),
                     fontWeight: 600,
                     background: active ? "#89b4fa" : "#313244",
                     color: active ? "#1e1e2e" : "#a6adc8",
@@ -335,7 +336,7 @@ export default function FolderBrowser({
                   onClick={() => browse(uf.path)}
                   style={{
                     padding: "4px 10px",
-                    fontSize: 11,
+                    fontSize: uiPx(11),
                     fontWeight: 600,
                     background: active ? "#f9e2af" : "#313244",
                     color: active ? "#1e1e2e" : "#a6adc8",
@@ -368,7 +369,7 @@ export default function FolderBrowser({
           )}
 
           {error && (
-            <div style={{ padding: 12, color: "#f38ba8", fontSize: 13 }}>{error}</div>
+            <div style={{ padding: 12, color: "#f38ba8", fontSize: uiPx(13) }}>{error}</div>
           )}
 
           {!loading && data && (
@@ -377,7 +378,7 @@ export default function FolderBrowser({
                 <FolderRow icon={<IconUp />} name=".." onClick={() => browse(data.parent!)} />
               )}
               {data.folders.length === 0 && !data.parent && (
-                <div style={{ padding: 20, color: "#6c7086", fontSize: 13, textAlign: "center" }}>
+                <div style={{ padding: 20, color: "#6c7086", fontSize: uiPx(13), textAlign: "center" }}>
                   Empty
                 </div>
               )}
@@ -409,7 +410,7 @@ export default function FolderBrowser({
             onClick={onCancel}
             style={{
               padding: "10px 16px",
-              fontSize: 13,
+              fontSize: uiPx(13),
               background: "transparent",
               color: "#a6adc8",
               border: "1px solid #45475a",
@@ -424,7 +425,7 @@ export default function FolderBrowser({
             disabled={!data}
             style={{
               padding: "10px 16px",
-              fontSize: 13,
+              fontSize: uiPx(13),
               fontWeight: 600,
               background: "#89b4fa",
               color: "#1e1e2e",
@@ -460,7 +461,7 @@ function FolderRow({
         padding: "9px 10px",
         borderRadius: 6,
         cursor: "pointer",
-        fontSize: 13,
+        fontSize: uiPx(13),
         color: "#cdd6f4",
       }}
       onMouseEnter={(e) => {
@@ -483,3 +484,4 @@ function FolderRow({
     </div>
   );
 }
+

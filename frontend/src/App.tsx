@@ -123,6 +123,7 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem("webFontSize", String(webFontSize));
+    document.documentElement.style.setProperty("--web-scale", String(webFontSize / 14));
     document.documentElement.style.setProperty("--web-fs", webFontSize + "px");
     document.documentElement.style.setProperty("--web-fs-sm", webFontSize - 1 + "px");
     document.documentElement.style.setProperty("--web-fs-xs", webFontSize - 3 + "px");
