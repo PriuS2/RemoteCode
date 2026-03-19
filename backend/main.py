@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import mimetypes
 import os
 import platform
 import string
@@ -41,6 +42,7 @@ logger = logging.getLogger(__name__)
 _drive_cache: list[str] = []
 _drive_cache_time: float = 0
 _DRIVE_CACHE_TTL = 30.0
+_VIDEO_EXTENSIONS = {".mp4", ".webm", ".ogv", ".ogg", ".m4v", ".mov"}
 
 
 def _get_drives() -> list[str]:
@@ -497,6 +499,26 @@ async def raw_file(
     except PermissionError:
         raise HTTPException(status_code=403, detail=f"Access denied: {path}")
     return FileResponse(path)
+
+
+@app.get("/api/video-stream")
+async def video_stream(
+    path: str, _user: str = Depends(get_current_user)
+):
+    path = os.path.abspath(path)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=400, detail=f"Not a file: {path}")
+
+    extension = os.path.splitext(path)[1].lower()
+    if extension not in _VIDEO_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Unsupported video format")
+
+    try:
+        media_type, _ = mimetypes.guess_type(path)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail=f"Access denied: {path}")
+
+    return FileResponse(path, media_type=media_type or "application/octet-stream")
 
 
 def _validate_name(name: str) -> None:

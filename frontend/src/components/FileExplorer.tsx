@@ -86,13 +86,30 @@ function isAudioFile(ext: string | null): boolean {
   return ext !== null && AUDIO_EXTENSIONS.has(ext.toLowerCase());
 }
 
+const VIDEO_EXTENSIONS = new Set([
+  ".mp4", ".webm", ".ogv", ".ogg", ".m4v", ".mov",
+]);
+
+function isVideoFile(ext: string | null): boolean {
+  return ext !== null && VIDEO_EXTENSIONS.has(ext.toLowerCase());
+}
+
+const PDF_EXTENSIONS = new Set([
+  ".pdf",
+]);
+
+function isPdfFile(ext: string | null): boolean {
+  return ext !== null && PDF_EXTENSIONS.has(ext.toLowerCase());
+}
+
 interface PreviewFile {
   name: string;
   path: string;
   extension: string | null;
+  size?: number | null;
 }
 
-type PreviewMode = "text" | "image" | "audio";
+type PreviewMode = "text" | "image" | "audio" | "video" | "pdf";
 const DEFAULT_PREVIEW_LINE_COUNT = 400;
 
 function getRelativePath(rootPath: string, fullPath: string): string {
@@ -107,6 +124,10 @@ function getRelativePath(rootPath: string, fullPath: string): string {
   }
   // When outside the root, keep the absolute path with forward slashes.
   return `@${full}`;
+}
+
+function getRawFileUrl(path: string): string {
+  return `/api/file-raw?path=${encodeURIComponent(path)}`;
 }
 
 function formatSize(bytes: number | null): string {
@@ -155,7 +176,7 @@ export default function FileExplorer({
   const [previewTruncated, setPreviewTruncated] = useState(false);
   const [previewSize, setPreviewSize] = useState(0);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [previewMediaUrl, setPreviewMediaUrl] = useState<string | null>(null);
+  const [previewMediaSrc, setPreviewMediaSrc] = useState<string | null>(null);
   const [previewStartLine, setPreviewStartLine] = useState(1);
   const [previewEndLine, setPreviewEndLine] = useState(1);
   const [previewTotalLines, setPreviewTotalLines] = useState(1);
@@ -176,16 +197,16 @@ export default function FileExplorer({
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const imageUrlRef = useRef<string | null>(null);
+  const previewBlobUrlRef = useRef<string | null>(null);
 
-  const setImageUrl = useCallback((url: string | null) => {
-    if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current);
-    imageUrlRef.current = url;
-    setPreviewMediaUrl(url);
+  const setPreviewBlobUrl = useCallback((url: string | null) => {
+    if (previewBlobUrlRef.current) URL.revokeObjectURL(previewBlobUrlRef.current);
+    previewBlobUrlRef.current = url;
+    setPreviewMediaSrc(url);
   }, []);
 
   useEffect(() => {
-    return () => { if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current); };
+    return () => { if (previewBlobUrlRef.current) URL.revokeObjectURL(previewBlobUrlRef.current); };
   }, []);
 
   const isLocal = (() => {
@@ -268,13 +289,23 @@ export default function FileExplorer({
 
   const handleFileClick = (entry: FileEntry) => {
     const fullPath = joinPath(currentPath, entry.name);
+    const previewFile = {
+      name: entry.name,
+      path: fullPath,
+      extension: entry.extension,
+      size: entry.size,
+    };
 
     if (isTextFile(entry.extension, entry.name)) {
-      openTextPreview({ name: entry.name, path: fullPath, extension: entry.extension }, 1);
+      openTextPreview(previewFile, 1);
     } else if (isImageFile(entry.extension)) {
-      openImagePreview({ name: entry.name, path: fullPath, extension: entry.extension });
+      openImagePreview(previewFile);
+    } else if (isVideoFile(entry.extension)) {
+      openVideoPreview(previewFile);
     } else if (isAudioFile(entry.extension)) {
-      openAudioPreview({ name: entry.name, path: fullPath, extension: entry.extension });
+      openAudioPreview(previewFile);
+    } else if (isPdfFile(entry.extension)) {
+      openPdfPreview(previewFile);
     } else {
       const rel = getRelativePath(rootPath, fullPath);
       onInsertPath(rel);
@@ -287,7 +318,8 @@ export default function FileExplorer({
     setPreviewLoading(true);
     setPreviewContent("");
     setPreviewError(null);
-    setImageUrl(null);
+    setPreviewBlobUrl(null);
+    setPreviewMediaSrc(null);
     setPreviewSize(0);
     try {
       const res = await apiFetch(
@@ -310,15 +342,16 @@ export default function FileExplorer({
     } finally {
       setPreviewLoading(false);
     }
-  }, [setImageUrl]);
+  }, [setPreviewBlobUrl]);
 
   const openImagePreview = useCallback(async (file: PreviewFile) => {
-    setImageUrl(null);
+    setPreviewBlobUrl(null);
     setPreviewFile(file);
     setPreviewMode("image");
     setPreviewLoading(true);
     setPreviewContent("");
     setPreviewError(null);
+    setPreviewMediaSrc(null);
     setPreviewTruncated(false);
     setPreviewSize(0);
     setPreviewStartLine(1);
@@ -327,25 +360,26 @@ export default function FileExplorer({
     setPreviewHasPrev(false);
     setPreviewHasNext(false);
     try {
-      const res = await apiFetch(`/api/file-raw?path=${encodeURIComponent(file.path)}`);
+      const res = await apiFetch(getRawFileUrl(file.path));
       if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to load image"));
       const blob = await res.blob();
-      setImageUrl(URL.createObjectURL(blob));
+      setPreviewBlobUrl(URL.createObjectURL(blob));
       setPreviewSize(blob.size);
     } catch (e: unknown) {
       setPreviewError(e instanceof Error ? e.message : "Failed to load image");
     } finally {
       setPreviewLoading(false);
     }
-  }, [setImageUrl]);
+  }, [setPreviewBlobUrl]);
 
   const openAudioPreview = useCallback(async (file: PreviewFile) => {
-    setImageUrl(null);
+    setPreviewBlobUrl(null);
     setPreviewFile(file);
     setPreviewMode("audio");
     setPreviewLoading(true);
     setPreviewContent("");
     setPreviewError(null);
+    setPreviewMediaSrc(null);
     setPreviewTruncated(false);
     setPreviewSize(0);
     setPreviewStartLine(1);
@@ -354,17 +388,62 @@ export default function FileExplorer({
     setPreviewHasPrev(false);
     setPreviewHasNext(false);
     try {
-      const res = await apiFetch(`/api/file-raw?path=${encodeURIComponent(file.path)}`);
+      const res = await apiFetch(getRawFileUrl(file.path));
       if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to load audio"));
       const blob = await res.blob();
-      setImageUrl(URL.createObjectURL(blob));
+      setPreviewBlobUrl(URL.createObjectURL(blob));
       setPreviewSize(blob.size);
     } catch (e: unknown) {
       setPreviewError(e instanceof Error ? e.message : "Failed to load audio");
     } finally {
       setPreviewLoading(false);
     }
-  }, [setImageUrl]);
+  }, [setPreviewBlobUrl]);
+
+  const openVideoPreview = useCallback((file: PreviewFile) => {
+    setPreviewBlobUrl(null);
+    setPreviewFile(file);
+    setPreviewMode("video");
+    setPreviewLoading(false);
+    setPreviewContent("");
+    setPreviewError(null);
+    setPreviewMediaSrc(`/api/video-stream?path=${encodeURIComponent(file.path)}`);
+    setPreviewTruncated(false);
+    setPreviewSize(file.size ?? 0);
+    setPreviewStartLine(1);
+    setPreviewEndLine(1);
+    setPreviewTotalLines(1);
+    setPreviewHasPrev(false);
+    setPreviewHasNext(false);
+  }, [setPreviewBlobUrl]);
+
+  const openPdfPreview = useCallback(async (file: PreviewFile) => {
+    setPreviewBlobUrl(null);
+    setPreviewFile(file);
+    setPreviewMode("pdf");
+    setPreviewLoading(true);
+    setPreviewContent("");
+    setPreviewError(null);
+    setPreviewMediaSrc(null);
+    setPreviewTruncated(false);
+    setPreviewSize(0);
+    setPreviewStartLine(1);
+    setPreviewEndLine(1);
+    setPreviewTotalLines(1);
+    setPreviewHasPrev(false);
+    setPreviewHasNext(false);
+    try {
+      const res = await apiFetch(getRawFileUrl(file.path));
+      if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to load PDF"));
+      const blob = await res.blob();
+      setPreviewBlobUrl(URL.createObjectURL(blob));
+      setPreviewSize(blob.size);
+    } catch (e: unknown) {
+      setPreviewError(e instanceof Error ? e.message : "Failed to load PDF");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [setPreviewBlobUrl]);
 
   const handleInsertEntry = (entry: FileEntry) => {
     const fullPath = joinPath(currentPath, entry.name);
@@ -404,7 +483,13 @@ export default function FileExplorer({
   }, []);
 
   const canPreview = useCallback((entry: FileEntry) => {
-    return isTextFile(entry.extension, entry.name) || isImageFile(entry.extension) || isAudioFile(entry.extension);
+    return (
+      isTextFile(entry.extension, entry.name)
+      || isImageFile(entry.extension)
+      || isAudioFile(entry.extension)
+      || isVideoFile(entry.extension)
+      || isPdfFile(entry.extension)
+    );
   }, []);
 
   const startRename = useCallback((entry: FileEntry) => {
@@ -598,10 +683,11 @@ export default function FileExplorer({
   };
 
   const closePreview = useCallback(() => {
-    setImageUrl(null);
+    setPreviewBlobUrl(null);
     setPreviewFile(null);
     setPreviewContent("");
     setPreviewError(null);
+    setPreviewMediaSrc(null);
     setPreviewTruncated(false);
     setPreviewSize(0);
     setPreviewStartLine(1);
@@ -609,16 +695,18 @@ export default function FileExplorer({
     setPreviewTotalLines(1);
     setPreviewHasPrev(false);
     setPreviewHasNext(false);
-  }, [setImageUrl]);
+  }, [setPreviewBlobUrl]);
 
   const isImagePreview = previewFile !== null && previewMode === "image";
   const isAudioPreview = previewFile !== null && previewMode === "audio";
+  const isVideoPreview = previewFile !== null && previewMode === "video";
+  const isPdfPreview = previewFile !== null && previewMode === "pdf";
 
   const bodyOrPreview = previewFile ? (
     isImagePreview ? (
       <ImagePreview
         file={previewFile}
-        imageUrl={previewMediaUrl}
+        imageUrl={previewMediaSrc}
         loading={previewLoading}
         size={previewSize}
         errorMessage={previewError}
@@ -628,7 +716,29 @@ export default function FileExplorer({
     ) : isAudioPreview ? (
       <AudioPreview
         file={previewFile}
-        audioUrl={previewMediaUrl}
+        audioUrl={previewMediaSrc}
+        loading={previewLoading}
+        size={previewSize}
+        errorMessage={previewError}
+        onClose={closePreview}
+        onInsertPath={handleInsertPreviewPath}
+      />
+    ) : isVideoPreview ? (
+      <VideoPreview
+        file={previewFile}
+        videoSrc={previewMediaSrc}
+        loading={previewLoading}
+        size={previewSize}
+        errorMessage={previewError}
+        onClose={closePreview}
+        onInsertPath={handleInsertPreviewPath}
+        onPlayerError={() => setPreviewError("브라우저가 이 영상 포맷 또는 코덱을 재생하지 못합니다.")}
+      />
+    ) : isPdfPreview ? (
+      <PdfPreview
+        file={previewFile}
+        pdfUrl={previewMediaSrc}
+        openUrl={getRawFileUrl(previewFile.path)}
         loading={previewLoading}
         size={previewSize}
         errorMessage={previewError}
@@ -2952,6 +3062,219 @@ function ImagePreview({
   );
 }
 
+/* ---- PDF Preview ---- */
+
+function PdfPreview({
+  file,
+  pdfUrl,
+  openUrl,
+  loading,
+  size,
+  errorMessage,
+  onClose,
+  onInsertPath,
+}: {
+  file: PreviewFile;
+  pdfUrl: string | null;
+  openUrl: string;
+  loading: boolean;
+  size: number;
+  errorMessage: string | null;
+  onClose: () => void;
+  onInsertPath: () => void;
+}) {
+  const headerButtonStyle: React.CSSProperties = {
+    background: "none",
+    border: "1px solid #45475a",
+    color: "#89b4fa",
+    cursor: "pointer",
+    padding: "1px 6px",
+    fontSize: uiPx(10),
+    fontWeight: 600,
+    borderRadius: 3,
+    flexShrink: 0,
+    lineHeight: "16px",
+  };
+
+  const linkButtonStyle: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 88,
+    padding: "8px 12px",
+    borderRadius: 6,
+    border: "1px solid #45475a",
+    background: "#181825",
+    color: "#cdd6f4",
+    textDecoration: "none",
+    fontSize: uiPx(12),
+    fontWeight: 600,
+  };
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "4px 8px",
+          borderBottom: "1px solid #313244",
+          flexShrink: 0,
+          background: "#181825",
+        }}
+      >
+        <FileIcon extension={file.extension} size={16} />
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontSize: uiPx(11),
+            fontWeight: 600,
+            color: "#cdd6f4",
+          }}
+          title={file.name}
+        >
+          {file.name}
+        </span>
+        {size > 0 && (
+          <span style={{ fontSize: uiPx(10), color: "#6c7086", flexShrink: 0 }}>
+            {formatSize(size)}
+          </span>
+        )}
+        <button
+          onClick={onInsertPath}
+          title="Insert @path"
+          style={{
+            ...headerButtonStyle,
+            color: "#a6e3a1",
+            fontWeight: 700,
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "#a6e3a118";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "none";
+          }}
+        >
+          @
+        </button>
+        <button
+          onClick={() => window.open(openUrl, "_blank", "noopener,noreferrer")}
+          title="Open in new tab"
+          style={headerButtonStyle}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "#89b4fa18";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "none";
+          }}
+        >
+          Open
+        </button>
+        <button
+          onClick={onClose}
+          title="Close preview"
+          style={{
+            background: "none",
+            border: "none",
+            color: "#6c7086",
+            cursor: "pointer",
+            padding: "2px 4px",
+            display: "flex",
+            alignItems: "center",
+            borderRadius: 3,
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <line x1="3" y1="3" x2="9" y2="9" />
+            <line x1="9" y1="3" x2="3" y2="9" />
+          </svg>
+        </button>
+      </div>
+
+      {loading ? (
+        <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: uiPx(12) }}>
+          Loading...
+        </div>
+      ) : errorMessage ? (
+        <div style={{ padding: 20, textAlign: "center", color: "#f38ba8", fontSize: uiPx(12) }}>
+          {errorMessage}
+        </div>
+      ) : pdfUrl ? (
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            backgroundColor: "#11111b",
+            padding: 12,
+          }}
+        >
+          <object
+            data={pdfUrl}
+            type="application/pdf"
+            width="100%"
+            height="100%"
+            style={{
+              display: "block",
+              width: "100%",
+              height: "100%",
+              border: "1px solid #313244",
+              borderRadius: 8,
+              background: "#0b0d12",
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                minHeight: 240,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 12,
+                color: "#cdd6f4",
+                textAlign: "center",
+                padding: 24,
+              }}
+            >
+              <div style={{ fontSize: uiPx(14), fontWeight: 600 }}>
+                PDF 미리보기를 사용할 수 없습니다.
+              </div>
+              <div style={{ fontSize: uiPx(12), color: "#a6adc8", maxWidth: 360, lineHeight: 1.5 }}>
+                현재 브라우저에서 내장 PDF 뷰어를 지원하지 않거나 비활성화되어 있습니다. 새 탭에서 열거나 다운로드해 확인하세요.
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+                <a
+                  href={openUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={linkButtonStyle}
+                >
+                  새 탭 열기
+                </a>
+                <a
+                  href={openUrl}
+                  download={file.name}
+                  style={linkButtonStyle}
+                >
+                  다운로드
+                </a>
+              </div>
+            </div>
+          </object>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /* ---- Audio Preview ---- */
 
 function AudioPreview({
@@ -3093,6 +3416,150 @@ function AudioPreview({
             controls
             src={audioUrl}
             style={{ width: "100%", maxWidth: 400 }}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* ---- Video Preview ---- */
+
+function VideoPreview({
+  file,
+  videoSrc,
+  loading,
+  size,
+  errorMessage,
+  onClose,
+  onInsertPath,
+  onPlayerError,
+}: {
+  file: PreviewFile;
+  videoSrc: string | null;
+  loading: boolean;
+  size: number;
+  errorMessage: string | null;
+  onClose: () => void;
+  onInsertPath: () => void;
+  onPlayerError: () => void;
+}) {
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "4px 8px",
+          borderBottom: "1px solid #313244",
+          flexShrink: 0,
+          background: "#181825",
+        }}
+      >
+        <FileIcon extension={file.extension} size={16} />
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontSize: uiPx(11),
+            fontWeight: 600,
+            color: "#cdd6f4",
+          }}
+          title={file.name}
+        >
+          {file.name}
+        </span>
+        {size > 0 && (
+          <span style={{ fontSize: uiPx(10), color: "#6c7086", flexShrink: 0 }}>
+            {formatSize(size)}
+          </span>
+        )}
+        <button
+          onClick={onInsertPath}
+          title="Insert @path"
+          style={{
+            background: "none",
+            border: "1px solid #45475a",
+            color: "#a6e3a1",
+            cursor: "pointer",
+            padding: "1px 6px",
+            fontSize: uiPx(10),
+            fontWeight: 700,
+            borderRadius: 3,
+            flexShrink: 0,
+            lineHeight: "16px",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "#a6e3a118";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "none";
+          }}
+        >
+          @
+        </button>
+        <button
+          onClick={onClose}
+          title="Close preview"
+          style={{
+            background: "none",
+            border: "none",
+            color: "#6c7086",
+            cursor: "pointer",
+            padding: "2px 4px",
+            display: "flex",
+            alignItems: "center",
+            borderRadius: 3,
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <line x1="3" y1="3" x2="9" y2="9" />
+            <line x1="9" y1="3" x2="3" y2="9" />
+          </svg>
+        </button>
+      </div>
+
+      {loading ? (
+        <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: uiPx(12) }}>
+          Loading...
+        </div>
+      ) : errorMessage ? (
+        <div style={{ padding: 20, textAlign: "center", color: "#f38ba8", fontSize: uiPx(12) }}>
+          {errorMessage}
+        </div>
+      ) : videoSrc ? (
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "#11111b",
+            padding: 12,
+          }}
+        >
+          <video
+            controls
+            playsInline
+            preload="metadata"
+            src={videoSrc}
+            style={{
+              width: "100%",
+              height: "100%",
+              maxWidth: "100%",
+              maxHeight: "100%",
+              backgroundColor: "#000000",
+              borderRadius: 8,
+            }}
+            onError={onPlayerError}
           />
         </div>
       ) : null}
