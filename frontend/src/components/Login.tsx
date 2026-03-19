@@ -36,65 +36,39 @@ export default function Login({ onLogin }: LoginProps) {
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        height: "100vh",
-        background: "#1e1e2e",
-        color: "#cdd6f4",
-      }}
-    >
-      <h1 style={{ marginBottom: 32, fontSize: 28 }}>Remote Code</h1>
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 16,
-          width: 320,
-        }}
-      >
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password"
-          autoFocus
-          style={{
-            padding: "12px 16px",
-            fontSize: 16,
-            background: "#313244",
-            color: "#cdd6f4",
-            border: "1px solid #45475a",
-            borderRadius: 8,
-            outline: "none",
-          }}
-        />
-        <button
-          type="submit"
-          disabled={loading || !password}
-          style={{
-            padding: "12px 24px",
-            fontSize: 16,
-            background: "#89b4fa",
-            color: "#1e1e2e",
-            border: "none",
-            borderRadius: 8,
-            cursor: loading ? "wait" : "pointer",
-            fontWeight: 600,
-          }}
-        >
-          {loading ? "Logging in..." : "Login"}
-        </button>
-        {error && (
-          <p style={{ color: "#f38ba8", textAlign: "center", margin: 0 }}>
-            {error}
-          </p>
-        )}
-      </form>
+    <div className="login-screen">
+      <div className="login-card">
+        <div className="login-eyebrow">Remote Access</div>
+        <h1 className="login-title">Remote Code</h1>
+        <p className="login-copy">
+          Sign in to open the console workbench, browse sessions, and resume active terminal contexts.
+        </p>
+
+        <form onSubmit={handleSubmit} className="login-form">
+          <div className="login-field">
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              className="ui-input"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter password"
+              autoFocus
+            />
+          </div>
+
+          <button
+            className="primary-button login-submit"
+            type="submit"
+            disabled={loading || !password}
+          >
+            {loading ? "Logging in..." : "Enter Workbench"}
+          </button>
+
+          {error && <p className="ui-error">{error}</p>}
+        </form>
+      </div>
     </div>
   );
 }

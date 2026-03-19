@@ -51,14 +51,14 @@ export default function App() {
   const terminalAreaRef = useRef<HTMLElement>(null);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
 
-  // Track visual viewport to handle mobile keyboard
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
     const onResize = () => {
-      // Only apply on mobile-sized screens
-      if (window.innerWidth > 768) { setViewportHeight(null); return; }
-      // If viewport is significantly smaller than window, keyboard is open
+      if (window.innerWidth > 768) {
+        setViewportHeight(null);
+        return;
+      }
       const diff = window.innerHeight - vv.height;
       setViewportHeight(diff > 50 ? vv.height : null);
     };
@@ -74,7 +74,7 @@ export default function App() {
 
     const onMove = (ev: MouseEvent) => {
       if (!draggingRef.current) return;
-      const newWidth = Math.max(180, Math.min(ev.clientX, 500));
+      const newWidth = Math.max(220, Math.min(ev.clientX, 520));
       setSidebarWidth(newWidth);
     };
     const onUp = () => {
@@ -121,13 +121,12 @@ export default function App() {
     }
   }, [authenticated, resetClientState]);
 
-  // Persist font sizes
   useEffect(() => {
     localStorage.setItem("webFontSize", String(webFontSize));
     document.documentElement.style.setProperty("--web-fs", webFontSize + "px");
-    document.documentElement.style.setProperty("--web-fs-sm", (webFontSize - 1) + "px");
-    document.documentElement.style.setProperty("--web-fs-xs", (webFontSize - 3) + "px");
-    document.documentElement.style.setProperty("--web-fs-xxs", (webFontSize - 4) + "px");
+    document.documentElement.style.setProperty("--web-fs-sm", webFontSize - 1 + "px");
+    document.documentElement.style.setProperty("--web-fs-xs", webFontSize - 3 + "px");
+    document.documentElement.style.setProperty("--web-fs-xxs", webFontSize - 4 + "px");
   }, [webFontSize]);
 
   useEffect(() => {
@@ -143,6 +142,7 @@ export default function App() {
     splitDragging.current = true;
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
+
     const onMove = (ev: MouseEvent) => {
       if (!splitDragging.current || !terminalAreaRef.current) return;
       const rect = terminalAreaRef.current.getBoundingClientRect();
@@ -161,7 +161,6 @@ export default function App() {
     document.addEventListener("mouseup", onUp);
   }, []);
 
-  // Close settings when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
@@ -174,7 +173,6 @@ export default function App() {
     }
   }, [showSettings]);
 
-  // Request notification permission on login
   useEffect(() => {
     if (authenticated === true) {
       requestNotificationPermission();
@@ -213,7 +211,6 @@ export default function App() {
     };
   }, []);
 
-  // 5s polling
   useEffect(() => {
     if (authenticated !== true) return;
     void fetchSessions();
@@ -247,28 +244,23 @@ export default function App() {
     const forceSingle = isMobile() ? true : !split;
 
     if (forceSingle) {
-      // Single mode
       setActiveSessions([id]);
       setFocusedIndex(0);
     } else {
-      // Split mode
       setActiveSessions((prev) => {
         if (prev.length < 2) {
-          if (prev.includes(id)) return prev; // already shown
+          if (prev.includes(id)) return prev;
           return [...prev, id];
-        } else {
-          // Replace focused panel
-          const newArr = [...prev];
-          newArr[focusedIndex] = id;
-          return newArr;
         }
+        const newArr = [...prev];
+        newArr[focusedIndex] = id;
+        return newArr;
       });
       if (activeSessions.length < 2) {
         setFocusedIndex(1);
       }
     }
 
-    // Clear "done" badge when viewing
     setSessionActivity((prev) => {
       if (prev[id] === "done") {
         return { ...prev, [id]: "idle" };
@@ -278,15 +270,11 @@ export default function App() {
     if (!mountedSessions.includes(id)) {
       setMountedSessions((prev) => [...prev, id]);
     }
-    // Auto-close sidebar on mobile
     if (isMobile()) setSidebarOpen(false);
   };
 
   const closeSplitPanel = (index: number) => {
-    setActiveSessions((prev) => {
-      const remaining = prev.filter((_, i) => i !== index);
-      return remaining;
-    });
+    setActiveSessions((prev) => prev.filter((_, i) => i !== index));
     setFocusedIndex(0);
   };
 
@@ -295,14 +283,12 @@ export default function App() {
       const isViewing = activeSessionsRef.current.includes(sessionId);
 
       setSessionActivity((prev) => {
-        // If user is currently viewing this session and it's "done", set idle instead
         if (state === "done" && isViewing) {
           return { ...prev, [sessionId]: "idle" };
         }
         return { ...prev, [sessionId]: state };
       });
 
-      // Notify when done and not viewing that session
       if (state === "done" && !isViewing) {
         const session = sessionsRef.current.find((s) => s.id === sessionId);
         const name = session?.name || "Session";
@@ -310,13 +296,13 @@ export default function App() {
         sendBrowserNotification("Remote Code", `${name} - Task completed`);
       }
     },
-    []
+    [],
   );
 
   const handleSessionCreated = (id: string) => {
     setShowNewSession(false);
     selectSession(id);
-    fetchSessions();
+    void fetchSessions();
   };
 
   const removeFromActiveSessions = (id: string) => {
@@ -340,7 +326,7 @@ export default function App() {
         delete next[id];
         return next;
       });
-      fetchSessions();
+      void fetchSessions();
     } catch (e) {
       console.error("Failed to suspend session:", e);
     }
@@ -354,7 +340,7 @@ export default function App() {
       if (res.ok) {
         selectSession(id);
       }
-      fetchSessions();
+      void fetchSessions();
     } catch (e) {
       console.error("Failed to resume session:", e);
     }
@@ -376,7 +362,7 @@ export default function App() {
         delete next[id];
         return next;
       });
-      fetchSessions();
+      void fetchSessions();
     } catch (e) {
       console.error("Failed to terminate session:", e);
       throw e;
@@ -399,7 +385,7 @@ export default function App() {
         delete next[id];
         return next;
       });
-      fetchSessions();
+      void fetchSessions();
     } catch (e) {
       console.error("Failed to delete session:", e);
       throw e;
@@ -417,7 +403,7 @@ export default function App() {
         const detail = await readErrorDetail(res, "Failed to rename session.");
         throw new Error(detail.message);
       }
-      fetchSessions();
+      void fetchSessions();
     } catch (e) {
       console.error("Failed to rename session:", e);
       throw e;
@@ -431,7 +417,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ordered_ids: orderedIds }),
       });
-      fetchSessions();
+      void fetchSessions();
     } catch (e) {
       console.error("Failed to reorder sessions:", e);
     }
@@ -447,21 +433,30 @@ export default function App() {
 
   return (
     <div className="app-container" style={viewportHeight ? { height: viewportHeight } : undefined}>
-      {/* Header */}
-      <header className="app-header">
+      <header className="app-header workbench-card">
         <div className="header-left">
           <button
-            className="sidebar-toggle"
+            className="chrome-btn sidebar-toggle"
             onClick={() => setSidebarOpen(!sidebarOpen)}
             title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
           >
             {"\u2630"}
           </button>
-          <span className="app-title">Remote Code</span>
+          <div className="app-brand">
+            <div className="app-brand-mark">RC</div>
+            <div className="app-brand-copy">
+              <span className="app-title">Remote Code</span>
+              <span className="app-subtitle">Console Workbench</span>
+            </div>
+          </div>
         </div>
         <div className="header-right" ref={settingsRef}>
+          <div className="header-badge">
+            <strong>{sessions.length}</strong>
+            <span>sessions</span>
+          </div>
           <button
-            className="settings-btn"
+            className="chrome-btn settings-btn"
             onClick={() => setShowSettings(!showSettings)}
             title="Settings"
           >
@@ -472,19 +467,17 @@ export default function App() {
               <div className="settings-section">
                 <label className="settings-label">Web Font Size</label>
                 <div className="settings-control">
-                  <button
-                    className="size-btn"
-                    onClick={() => setWebFontSize((s) => Math.max(10, s - 1))}
-                  >
-                    −
-                  </button>
+                  <button className="size-btn" onClick={() => setWebFontSize((s) => Math.max(10, s - 1))}>-</button>
                   <span className="size-value">{webFontSize}px</span>
-                  <button
-                    className="size-btn"
-                    onClick={() => setWebFontSize((s) => Math.min(24, s + 1))}
-                  >
-                    +
-                  </button>
+                  <button className="size-btn" onClick={() => setWebFontSize((s) => Math.min(24, s + 1))}>+</button>
+                </div>
+              </div>
+              <div className="settings-section">
+                <label className="settings-label">Terminal Font Size</label>
+                <div className="settings-control">
+                  <button className="size-btn" onClick={() => setTerminalFontSize((s) => Math.max(8, s - 1))}>-</button>
+                  <span className="size-value">{terminalFontSize}px</span>
+                  <button className="size-btn" onClick={() => setTerminalFontSize((s) => Math.min(28, s + 1))}>+</button>
                 </div>
               </div>
               <div className="settings-divider" />
@@ -497,15 +490,13 @@ export default function App() {
       </header>
 
       <div className="app-body">
-        {/* Sidebar backdrop (mobile) */}
         {sidebarOpen && (
           <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
         )}
 
-        {/* Sidebar */}
         {sidebarOpen && (
           <>
-            <aside className="sidebar" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
+            <aside className="sidebar workbench-card" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
               <SessionList
                 sessions={sessions}
                 activeSessions={activeSessions}
@@ -525,15 +516,16 @@ export default function App() {
           </>
         )}
 
-        {/* Terminal Area */}
-        <main className="terminal-area" ref={terminalAreaRef}>
+        <main className="terminal-area workbench-card" ref={terminalAreaRef}>
           {mountedSessions.length === 0 && (
             <div className="empty-state">
-              <p>No active session</p>
-              <button
-                className="create-btn"
-                onClick={() => setShowNewSession(true)}
-              >
+              <span className="empty-state__eyebrow">Workbench Ready</span>
+              <h1 className="empty-state__title">Open a session to start working</h1>
+              <p className="empty-state__body">
+                Sessions stay docked in the left rail while the terminal remains the primary workspace.
+                Create a new session when you need a fresh console context.
+              </p>
+              <button className="primary-button" onClick={() => setShowNewSession(true)}>
                 Create Session
               </button>
             </div>
@@ -571,18 +563,23 @@ export default function App() {
                 splitMode={splitMode}
                 splitRatio={splitRatio}
                 isFocused={isVisible && panelIndex === focusedIndex}
-                onFocus={() => { if (panelIndex !== -1) setFocusedIndex(panelIndex); }}
+                onFocus={() => {
+                  if (panelIndex !== -1) setFocusedIndex(panelIndex);
+                }}
                 sessionName={sessionName}
                 workPath={sessionWorkPath}
-                onClosePanel={() => { if (panelIndex !== -1) closeSplitPanel(panelIndex); }}
+                onClosePanel={() => {
+                  if (panelIndex !== -1) closeSplitPanel(panelIndex);
+                }}
                 onSuspend={() => handleSuspend(sid)}
                 onMaximize={() => selectSession(sid)}
-                onTerminate={() => { void handleTerminate(sid).catch(() => {}); }}
+                onTerminate={() => {
+                  void handleTerminate(sid).catch(() => {});
+                }}
               />
             );
           })}
 
-          {/* Split divider handle */}
           {activeSessions.length === 2 && (
             <div
               onMouseDown={handleSplitDragStart}
@@ -597,21 +594,23 @@ export default function App() {
                 zIndex: 10,
               }}
             >
-              <div style={{
-                position: "absolute",
-                top: 0,
-                bottom: 0,
-                left: 2,
-                width: 2,
-                background: splitDragging.current ? "#89b4fa" : "#313244",
-                transition: "background 0.15s",
-              }} />
+              <div
+                style={{
+                  position: "absolute",
+                  top: 18,
+                  bottom: 18,
+                  left: 2,
+                  width: 2,
+                  borderRadius: 999,
+                  background: splitDragging.current ? "var(--accent)" : "rgba(148, 163, 184, 0.2)",
+                  transition: "background 0.15s",
+                }}
+              />
             </div>
           )}
         </main>
       </div>
 
-      {/* New Session Modal */}
       {showNewSession && (
         <NewSession
           onCreated={handleSessionCreated}

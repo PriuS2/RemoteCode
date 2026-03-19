@@ -33,50 +33,19 @@ function BaseDialog({
   }, []);
 
   return createPortal(
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0, 0, 0, 0.65)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-        zIndex: 9999,
-      }}
-      onMouseDown={onClose}
-    >
+    <div className="dialog-overlay" onMouseDown={onClose}>
       <div
         role="dialog"
         aria-modal="true"
+        className="dialog-panel"
         onMouseDown={(event) => event.stopPropagation()}
-        style={{
-          width: "100%",
-          maxWidth,
-          background: "#1e1e2e",
-          border: "1px solid #313244",
-          borderRadius: 12,
-          boxShadow: "0 20px 60px rgba(0, 0, 0, 0.45)",
-          overflow: "hidden",
-        }}
+        style={{ maxWidth }}
       >
-        <div style={{ padding: "16px 18px 12px", borderBottom: "1px solid #313244" }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#cdd6f4" }}>{title}</div>
+        <div className="dialog-header">
+          <div className="dialog-title">{title}</div>
         </div>
-        <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 12 }}>
-          {children}
-        </div>
-        <div
-          style={{
-            padding: "12px 18px 18px",
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: 8,
-            borderTop: "1px solid #313244",
-          }}
-        >
-          {footer}
-        </div>
+        <div className="dialog-body">{children}</div>
+        <div className="dialog-footer">{footer}</div>
       </div>
       <button
         ref={firstFocusableRef}
@@ -104,36 +73,12 @@ function DialogButton({
   primary?: boolean;
   disabled?: boolean;
 }) {
-  let background = "transparent";
-  let color = "#a6adc8";
-  let border = "1px solid #45475a";
-
-  if (primary) {
-    background = "#89b4fa";
-    color = "#1e1e2e";
-    border = "none";
-  } else if (danger) {
-    background = "#f38ba8";
-    color = "#11111b";
-    border = "none";
-  }
-
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      style={{
-        padding: "9px 14px",
-        borderRadius: 8,
-        border,
-        background,
-        color,
-        fontSize: 13,
-        fontWeight: 600,
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.55 : 1,
-      }}
+      className={`dialog-button${primary ? " is-primary" : ""}${danger ? " is-danger" : ""}`}
     >
       {label}
     </button>
@@ -155,7 +100,7 @@ export function MessageDialog({
       onClose={onClose}
       footer={<DialogButton label="Close" primary onClick={onClose} />}
     >
-      <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: "#cdd6f4" }}>{message}</p>
+      <p className="dialog-copy">{message}</p>
     </BaseDialog>
   );
 }
@@ -198,8 +143,8 @@ export function ConfirmDialog({
         </>
       )}
     >
-      <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: "#cdd6f4" }}>{description}</p>
-      {error && <p style={{ margin: 0, fontSize: 12, color: "#f38ba8" }}>{error}</p>}
+      <p className="dialog-copy">{description}</p>
+      {error && <p className="ui-error">{error}</p>}
     </BaseDialog>
   );
 }
@@ -256,11 +201,12 @@ export function PromptDialog({
         </>
       )}
     >
-      <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <span style={{ fontSize: 12, color: "#a6adc8" }}>{label}</span>
+      <label className="dialog-label">
+        <span>{label}</span>
         <input
           ref={inputRef}
           type="text"
+          className="ui-input"
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
@@ -270,19 +216,9 @@ export function PromptDialog({
             }
           }}
           placeholder={placeholder}
-          style={{
-            width: "100%",
-            padding: "10px 12px",
-            borderRadius: 8,
-            border: "1px solid #45475a",
-            background: "#313244",
-            color: "#cdd6f4",
-            outline: "none",
-            boxSizing: "border-box",
-          }}
         />
       </label>
-      {error && <p style={{ margin: 0, fontSize: 12, color: "#f38ba8" }}>{error}</p>}
+      {error && <p className="ui-error">{error}</p>}
     </BaseDialog>
   );
 }

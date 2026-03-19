@@ -593,16 +593,22 @@ export default function Terminal({
                 : status === "disconnected"
                   ? "Disconnected."
                   : "";
+  const statusToneClass =
+    status === "connecting" || status === "reconnecting"
+      ? "status-info"
+      : status === "taken_over" || status === "closed"
+        ? "status-warn"
+        : "status-danger";
 
   // Compute position style
   const positionStyle: React.CSSProperties = splitMode
-    ? {
+      ? {
         position: "absolute",
         top: 0,
         bottom: 0,
         width: panelIndex === 0 ? `${splitRatio * 100}%` : `${(1 - splitRatio) * 100}%`,
         left: panelIndex === 0 ? 0 : `${splitRatio * 100}%`,
-        borderLeft: panelIndex === 1 ? "1px solid #313244" : undefined,
+        borderLeft: panelIndex === 1 ? "1px solid var(--border-subtle)" : undefined,
       }
     : {
         position: "absolute",
@@ -616,6 +622,7 @@ export default function Terminal({
 
   return (
     <div
+      className="terminal-panel"
       style={{
         ...positionStyle,
         display: visible ? "flex" : "none",
@@ -623,49 +630,32 @@ export default function Terminal({
       }}
       onMouseDown={onFocus}
     >
-      {/* Terminal title bar */}
       <div
+        className={`terminal-toolbar${isFocused ? " is-focused" : ""}`}
         style={{
-          height: fontSize * 2,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: `0 ${Math.round(fontSize * 0.7)}px`,
-          fontSize: Math.round(fontSize * 0.8),
-          fontWeight: 600,
-          color: "#cdd6f4",
-          background: splitMode
-            ? (isFocused ? "#313244" : "#1e1e2e")
-            : "#181825",
-          borderBottom: splitMode
-            ? `2px solid ${isFocused ? "#89b4fa" : "#313244"}`
-            : "1px solid #313244",
-          flexShrink: 0,
-          userSelect: "none",
+          minHeight: 58,
+          padding: `10px ${Math.max(14, Math.round(fontSize * 0.7))}px`,
         }}
       >
-        <span
-          style={{
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            flex: 1,
-            minWidth: 0,
-          }}
-        >
-          {sessionName}
-        </span>
-        <div style={{ display: "flex", gap: 2, marginLeft: 8, flexShrink: 0, alignItems: "center" }}>
-          {/* Font size controls */}
+        <div className="terminal-toolbar__meta">
+          <span className="terminal-toolbar__eyebrow">
+            {splitMode ? `Split ${panelIndex + 1}` : "Primary Terminal"}
+          </span>
+          <div className="terminal-toolbar__title-row">
+            <span className="terminal-toolbar__title">{sessionName}</span>
+          </div>
+          <span className="terminal-toolbar__path" title={workPath}>
+            {workPath || "No work path"}
+          </span>
+        </div>
+        <div className="terminal-toolbar__actions">
           {onFontSizeChange && (
-            <>
-              <FontSizeBtn label="−" title="Font Size −" fontSize={fontSize} onClick={(e) => { e.stopPropagation(); onFontSizeChange(-1); }} />
-              <span style={{ fontSize: Math.round(fontSize * 0.7), color: "#a6adc8", minWidth: Math.round(fontSize * 1.4), textAlign: "center", lineHeight: 1 }}>{fontSize}</span>
+            <div className="terminal-font-controls">
+              <FontSizeBtn label="-" title="Font Size -" fontSize={fontSize} onClick={(e) => { e.stopPropagation(); onFontSizeChange(-1); }} />
+              <span className="terminal-font-value">{fontSize}</span>
               <FontSizeBtn label="+" title="Font Size +" fontSize={fontSize} onClick={(e) => { e.stopPropagation(); onFontSizeChange(1); }} />
-              <div style={{ width: 1, height: fontSize, background: "#45475a", margin: `0 ${Math.round(fontSize * 0.3)}px` }} />
-            </>
+            </div>
           )}
-          {/* File Explorer toggle */}
           <TitleBarBtn
             icon={<FolderIcon size={iconSize} />}
             title="File Explorer"
@@ -674,7 +664,6 @@ export default function Terminal({
             fontSize={fontSize}
             onClick={(e) => { e.stopPropagation(); setExplorerOpen((o) => { if (!o) setGitPanelOpen(false); return !o; }); }}
           />
-          {/* Git Panel toggle */}
           <TitleBarBtn
             icon={<GitIcon size={iconSize} />}
             title="Git"
@@ -683,7 +672,6 @@ export default function Terminal({
             fontSize={fontSize}
             onClick={(e) => { e.stopPropagation(); setGitPanelOpen((o) => { if (!o) setExplorerOpen(false); return !o; }); }}
           />
-          {/* Refresh terminal */}
           <TitleBarBtn
             icon={<RefreshIcon size={iconSize} />}
             title="Refresh"
@@ -698,7 +686,6 @@ export default function Terminal({
               } catch { /* ignore */ }
             }}
           />
-          {/* Minimize = Suspend */}
           <TitleBarBtn
             icon={<MinimizeIcon size={iconSize} />}
             title="Suspend"
@@ -706,7 +693,6 @@ export default function Terminal({
             fontSize={fontSize}
             onClick={(e) => { e.stopPropagation(); onSuspend(); }}
           />
-          {/* Maximize = single mode (split only) */}
           {splitMode && (
             <TitleBarBtn
               icon={<MaximizeIcon size={iconSize} />}
@@ -716,7 +702,6 @@ export default function Terminal({
               onClick={(e) => { e.stopPropagation(); onMaximize(); }}
             />
           )}
-          {/* Close = Kill */}
           <TitleBarBtn
             icon={<CloseIcon size={iconSize} />}
             title="Kill"
@@ -728,15 +713,7 @@ export default function Terminal({
       </div>
 
       {showBanner && (
-        <div
-          style={{
-            padding: "4px 12px",
-            fontSize: 12,
-            fontWeight: 600,
-            textAlign: "center",
-            ...(STATUS_STYLE[status] || {}),
-          }}
-        >
+        <div className={`terminal-statusbar ${statusToneClass}`} style={STATUS_STYLE[status] || undefined}>
           {statusLabel}
         </div>
       )}
@@ -814,31 +791,14 @@ export default function Terminal({
 function FontSizeBtn({ label, title, fontSize = 14, onClick }: { label: string; title: string; fontSize?: number; onClick: (e: React.MouseEvent) => void }) {
   return (
     <button
+      className="terminal-tool-button"
       onClick={onClick}
       title={title}
       style={{
-        background: "none",
-        border: "none",
-        color: "#6c7086",
-        cursor: "pointer",
         padding: `${Math.round(fontSize * 0.07)}px ${Math.round(fontSize * 0.2)}px`,
-        borderRadius: 3,
         fontSize: Math.round(fontSize * 0.86),
         fontWeight: 700,
         lineHeight: 1,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-      onMouseEnter={(e) => {
-        const btn = e.currentTarget as HTMLButtonElement;
-        btn.style.color = "#cdd6f4";
-        btn.style.background = "#45475a";
-      }}
-      onMouseLeave={(e) => {
-        const btn = e.currentTarget as HTMLButtonElement;
-        btn.style.color = "#6c7086";
-        btn.style.background = "none";
       }}
     >
       {label}
@@ -863,18 +823,13 @@ function TitleBarBtn({
 }) {
   return (
     <button
+      className={`terminal-tool-button${active ? " is-active" : ""}`}
       onClick={onClick}
       title={title}
       style={{
         background: active ? `${hoverColor}18` : "none",
-        border: "none",
         color: active ? hoverColor : "#6c7086",
-        cursor: "pointer",
         padding: `${Math.round(fontSize * 0.14)}px ${Math.round(fontSize * 0.29)}px`,
-        borderRadius: 3,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
         lineHeight: 1,
       }}
       onMouseEnter={(e) => {
