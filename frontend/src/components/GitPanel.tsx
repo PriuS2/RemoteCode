@@ -82,6 +82,9 @@ interface GitPanelProps {
   workPath: string;
   onClose: () => void;
   isMobile: boolean;
+  embedded?: boolean;
+  showHeaderTitle?: boolean;
+  showWindowControls?: boolean;
 }
 
 /* =========================================================
@@ -132,7 +135,14 @@ function basename(p: string) {
    Main Component
    ========================================================= */
 
-export default function GitPanel({ workPath, onClose, isMobile }: GitPanelProps) {
+export default function GitPanel({
+  workPath,
+  onClose,
+  isMobile,
+  embedded = false,
+  showHeaderTitle = true,
+  showWindowControls = true,
+}: GitPanelProps) {
   const [isGitRepo, setIsGitRepo] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<"status" | "log">("status");
   const [status, setStatus] = useState<GitStatusResponse | null>(null);
@@ -493,6 +503,8 @@ export default function GitPanel({ workPath, onClose, isMobile }: GitPanelProps)
           loading={loading}
           gitFontSize={gitFontSize}
           onFontSizeChange={setGitFontSize}
+          showTitle={showHeaderTitle}
+          showWindowControls={showWindowControls}
         />
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center" }}>
           <div>
@@ -502,7 +514,7 @@ export default function GitPanel({ workPath, onClose, isMobile }: GitPanelProps)
         </div>
       </div>
     );
-    if (isMobile) return createPortal(<div style={{ position: "fixed", top: 44, left: 0, right: 0, bottom: 0, zIndex: 60, background: "#181825" }}>{inner}</div>, document.body);
+    if (isMobile && !embedded) return createPortal(<div style={{ position: "fixed", top: 44, left: 0, right: 0, bottom: 0, zIndex: 60, background: "#181825" }}>{inner}</div>, document.body);
     return inner;
   }
 
@@ -520,13 +532,15 @@ export default function GitPanel({ workPath, onClose, isMobile }: GitPanelProps)
           loading={true}
           gitFontSize={gitFontSize}
           onFontSizeChange={setGitFontSize}
+          showTitle={showHeaderTitle}
+          showWindowControls={showWindowControls}
         />
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span style={{ color: "#6c7086" }}>Loading...</span>
         </div>
       </div>
     );
-    if (isMobile) return createPortal(<div style={{ position: "fixed", top: 44, left: 0, right: 0, bottom: 0, zIndex: 60, background: "#181825" }}>{inner}</div>, document.body);
+    if (isMobile && !embedded) return createPortal(<div style={{ position: "fixed", top: 44, left: 0, right: 0, bottom: 0, zIndex: 60, background: "#181825" }}>{inner}</div>, document.body);
     return inner;
   }
 
@@ -537,9 +551,18 @@ export default function GitPanel({ workPath, onClose, isMobile }: GitPanelProps)
   const hasStagedChanges = status ? status.staged.length > 0 : false;
 
   const panelContent = (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#181825", color: "#cdd6f4", minWidth: 0, borderRight: isMobile ? undefined : "1px solid #313244", fontSize: gitFontSize }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#181825", color: "#cdd6f4", minWidth: 0, borderRight: isMobile || embedded ? undefined : "1px solid #313244", fontSize: gitFontSize }}>
       {/* Header */}
-      <PanelHeader title="Git" onClose={onClose} onRefresh={handleRefresh} loading={loading} gitFontSize={gitFontSize} onFontSizeChange={setGitFontSize}>
+      <PanelHeader
+        title="Git"
+        onClose={onClose}
+        onRefresh={handleRefresh}
+        loading={loading}
+        gitFontSize={gitFontSize}
+        onFontSizeChange={setGitFontSize}
+        showTitle={showHeaderTitle}
+        showWindowControls={showWindowControls}
+      >
         {/* Tab switcher */}
         <div style={{ display: "flex", gap: 0, marginLeft: 8 }}>
           <TabBtn label="Status" active={activeTab === "status"} onClick={() => setActiveTab("status")} gitFontSize={gitFontSize} />
@@ -763,7 +786,7 @@ export default function GitPanel({ workPath, onClose, isMobile }: GitPanelProps)
     </div>
   );
 
-  if (isMobile) {
+  if (isMobile && !embedded) {
     return createPortal(
       <div style={{ position: "fixed", top: 44, left: 0, right: 0, bottom: 0, zIndex: 60, background: "#181825" }}>
         {panelContent}
@@ -778,15 +801,15 @@ export default function GitPanel({ workPath, onClose, isMobile }: GitPanelProps)
    Sub-components
    ========================================================= */
 
-function PanelHeader({ title, onClose, onRefresh, loading, children, gitFontSize, onFontSizeChange }: {
-  title: string; onClose: () => void; onRefresh: () => void; loading: boolean; children?: React.ReactNode; gitFontSize: number; onFontSizeChange: (fn: (s: number) => number) => void;
+function PanelHeader({ title, onClose, onRefresh, loading, children, gitFontSize, onFontSizeChange, showTitle = true, showWindowControls = true }: {
+  title: string; onClose: () => void; onRefresh: () => void; loading: boolean; children?: React.ReactNode; gitFontSize: number; onFontSizeChange: (fn: (s: number) => number) => void; showTitle?: boolean; showWindowControls?: boolean;
 }) {
   return (
     <div style={{
       display: "flex", alignItems: "center", height: 28, padding: "0 8px",
       background: "#181825", borderBottom: "1px solid #313244", flexShrink: 0, userSelect: "none",
     }}>
-      <span style={{ fontWeight: 700, fontSize: gitFontSize, color: "#cdd6f4" }}>{title}</span>
+      {showTitle && <span style={{ fontWeight: 700, fontSize: gitFontSize, color: "#cdd6f4" }}>{title}</span>}
       {children}
       <div style={{ flex: 1 }} />
       {/* Font size controls */}
@@ -815,12 +838,16 @@ function PanelHeader({ title, onClose, onRefresh, loading, children, gitFontSize
           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
         >+</button>
       </div>
-      <HeaderBtn title="Refresh" onClick={onRefresh} disabled={loading}>
-        <RefreshIcon size={gitFontSize} spinning={loading} />
-      </HeaderBtn>
-      <HeaderBtn title="Close" onClick={onClose}>
-        <CloseIcon size={gitFontSize} />
-      </HeaderBtn>
+      {showWindowControls && (
+        <>
+          <HeaderBtn title="Refresh" onClick={onRefresh} disabled={loading}>
+            <RefreshIcon size={gitFontSize} spinning={loading} />
+          </HeaderBtn>
+          <HeaderBtn title="Close" onClick={onClose}>
+            <CloseIcon size={gitFontSize} />
+          </HeaderBtn>
+        </>
+      )}
     </div>
   );
 }

@@ -5,21 +5,32 @@ import re
 import shlex
 import shutil
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 from .config import settings
 from .database import (
+    create_project as db_create_project,
     create_session as db_create_session,
+    delete_project_record as db_delete_project_record,
     delete_session as db_delete_session,
+    get_project as db_get_project,
     get_session as db_get_session,
+    list_project_sessions as db_list_project_sessions,
+    list_projects as db_list_projects,
     list_sessions as db_list_sessions,
     update_last_accessed,
+    update_project as db_update_project,
+    update_project_order as db_update_project_order,
+    update_project_session_order as db_update_project_session_order,
     update_session as db_update_session,
-    update_session_order as db_update_session_order,
 )
 from .pty_manager import PtyInstance, pty_manager
 
 logger = logging.getLogger(__name__)
+
+NON_PTY_CLI_TYPES = {"folder", "git"}
+SUPPORTED_CLI_TYPES = {"claude", "opencode", "terminal", "custom", "folder", "git"}
 
 
 class SessionValidationError(ValueError):
@@ -30,7 +41,12 @@ class SessionValidationError(ValueError):
 
 
 class SessionManager:
+    def _validate_cli_type(self, cli_type: str) -> None:
+        if cli_type not in SUPPORTED_CLI_TYPES:
+            raise SessionValidationError("invalid_command", f"Unsupported session type: {cli_type}")
+
     def _default_command(self, cli_type: str, custom_command: Optional[str] = None) -> Optional[str]:
+        self._validate_cli_type(cli_type)
         if cli_type == "opencode":
             return settings.opencode_command
         if cli_type == "terminal":
@@ -44,7 +60,7 @@ class SessionManager:
                     "Custom command is required for Custom CLI.",
                 )
             return custom_command.strip()
-        if cli_type == "opencode-web":
+        if cli_type in NON_PTY_CLI_TYPES:
             return None
         return settings.claude_command
 
@@ -127,10 +143,14 @@ class SessionManager:
         command = self._default_command(cli_type, custom_command)
 
         if command is None:
+            ready_messages = {
+                "folder": "Folder session is ready.",
+                "git": "Git session is ready.",
+            }
             return {
                 "ok": True,
                 "code": "ok",
-                "message": "OpenCode Web session is ready.",
+                "message": ready_messages.get(cli_type, "Session is ready."),
                 "resolved_command": None,
                 "work_path": validated_path,
             }
@@ -145,31 +165,91 @@ class SessionManager:
             "work_path": validated_path,
         }
 
-    async def create_session(
+    async def create_project(
         self,
         work_path: str,
         name: Optional[str] = None,
         create_folder: bool = False,
+    ) -> dict:
+        validated_path = self._validate_work_path(work_path, create_folder)
+        if create_folder and not os.path.exists(validated_path):
+            os.makedirs(validated_path, exist_ok=True)
+
+        if not os.path.isdir(validated_path):
+            raise SessionValidationError("directory_not_found", f"Directory does not exist: {validated_path}")
+
+        display_name = name or os.path.basename(validated_path)
+        project = await db_create_project(display_name, validated_path)
+        logger.info(f"Project created: {project['id']} ({display_name}) at {validated_path}")
+        return project
+
+    async def list_projects(self) -> list[dict]:
+        projects = await db_list_projects()
+        for project in projects:
+            project["sessions"] = [
+                session for session in project.get("sessions", [])
+                if session.get("cli_type") in SUPPORTED_CLI_TYPES
+            ]
+        return projects
+
+    async def rename_project(self, project_id: str, name: str) -> dict:
+        project = await db_get_project(project_id)
+        if not project:
+            raise ValueError(f"Project not found: {project_id}")
+        await db_update_project(project_id, name=name.strip(), updated_at=self._timestamp())
+        return await db_get_project(project_id)
+
+    async def delete_project(self, project_id: str) -> None:
+        project = await db_get_project(project_id)
+        if not project:
+            raise ValueError(f"Project not found: {project_id}")
+
+        sessions = await db_list_project_sessions(project_id)
+        for session in sessions:
+            if session.get("cli_type", "claude") not in NON_PTY_CLI_TYPES:
+                pty_manager.remove(session["id"])
+
+        await db_delete_project_record(project_id)
+        logger.info(f"Project deleted: {project_id}")
+
+    async def update_project_order(self, ordered_ids: list[str]) -> None:
+        await db_update_project_order(ordered_ids)
+
+    async def update_project_session_order(self, project_id: str, ordered_ids: list[str]) -> None:
+        project = await db_get_project(project_id)
+        if not project:
+            raise ValueError(f"Project not found: {project_id}")
+        await db_update_project_session_order(project_id, ordered_ids)
+
+    def _timestamp(self) -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    async def create_session(
+        self,
+        project_id: str,
+        name: Optional[str] = None,
         cli_type: str = "claude",
         custom_command: Optional[str] = None,
         custom_exit_command: Optional[str] = None,
     ) -> dict:
+        project = await db_get_project(project_id)
+        if not project:
+            raise ValueError(f"Project not found: {project_id}")
+
+        work_path = project["work_path"]
         preflight = self.preflight_session(
             work_path=work_path,
-            create_folder=create_folder,
+            create_folder=False,
             cli_type=cli_type,
             custom_command=custom_command,
         )
         work_path = preflight["work_path"]
 
-        if create_folder and not os.path.exists(work_path):
-            os.makedirs(work_path, exist_ok=True)
-
         if not os.path.isdir(work_path):
             raise SessionValidationError("directory_not_found", f"Directory does not exist: {work_path}")
 
         session_id = str(uuid.uuid4())
-        display_name = name or os.path.basename(work_path)
+        display_name = name or f"{project['name']} Session"
 
         command = self._default_command(cli_type, custom_command)
         command_args: list[str] = []
@@ -180,12 +260,18 @@ class SessionManager:
 
         # DB에 세션 생성
         session = await db_create_session(
-            session_id, display_name, work_path, cli_type, custom_command, custom_exit_command
+            session_id,
+            project_id,
+            display_name,
+            work_path,
+            cli_type,
+            custom_command,
+            custom_exit_command,
         )
 
-        # opencode-web 타입은 PTY 생성 안 함
-        if cli_type == "opencode-web":
-            logger.info(f"Session created: {session_id} ({display_name}) at {work_path} (OpenCode Web, no PTY)")
+        # Non-PTY session types only persist state and render dedicated UI panels.
+        if cli_type in NON_PTY_CLI_TYPES:
+            logger.info(f"Session created: {session_id} ({display_name}) at {work_path} ({cli_type}, no PTY)")
             return session
 
         # PTY 생성 (10초 타임아웃)
@@ -208,7 +294,10 @@ class SessionManager:
         return session
 
     async def list_sessions(self) -> list[dict]:
-        return await db_list_sessions()
+        return [
+            session for session in await db_list_sessions()
+            if session.get("cli_type") in SUPPORTED_CLI_TYPES
+        ]
 
     async def get_session(self, session_id: str) -> Optional[dict]:
         return await db_get_session(session_id)
@@ -222,7 +311,7 @@ class SessionManager:
 
         cli_type = session.get("cli_type", "claude")
 
-        if cli_type == "opencode-web":
+        if cli_type in NON_PTY_CLI_TYPES:
             await db_update_session(session_id, status="suspended")
             return await db_get_session(session_id)
 
@@ -294,10 +383,10 @@ class SessionManager:
 
         cli_type = session.get("cli_type", "claude")
 
-        if cli_type == "opencode-web":
+        if cli_type in NON_PTY_CLI_TYPES:
             await db_update_session(session_id, status="active")
             await update_last_accessed(session_id)
-            logger.info(f"Session resumed: {session_id} (OpenCode Web)")
+            logger.info(f"Session resumed: {session_id} ({cli_type})")
             return await db_get_session(session_id)
 
         # 기존 PTY 정리
@@ -364,7 +453,7 @@ class SessionManager:
 
         cli_type = session.get("cli_type", "claude")
 
-        if cli_type != "opencode-web":
+        if cli_type not in NON_PTY_CLI_TYPES:
             pty_manager.remove(session_id)
 
         await db_update_session(session_id, status="closed")
@@ -378,14 +467,10 @@ class SessionManager:
 
         cli_type = session.get("cli_type", "claude")
 
-        if cli_type != "opencode-web":
+        if cli_type not in NON_PTY_CLI_TYPES:
             pty_manager.remove(session_id)
 
         await db_delete_session(session_id)
         logger.info(f"Session deleted: {session_id}")
-
-    async def update_session_order(self, ordered_ids: list[str]) -> None:
-        """Update the order of sessions."""
-        await db_update_session_order(ordered_ids)
 
 session_manager = SessionManager()

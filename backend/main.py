@@ -1,5 +1,4 @@
 import asyncio
-import httpx
 import logging
 import os
 import platform
@@ -19,7 +18,7 @@ from pydantic import BaseModel
 
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse
 
 from .auth import (
     AUTH_COOKIE_NAME,
@@ -30,7 +29,6 @@ from .auth import (
 )
 from .config import _INSECURE_JWT_SECRET, settings
 from .database import close_db, init_db, mark_all_active_as_suspended
-from .opencode_web_manager import opencode_web_manager
 from .pty_manager import pty_manager
 from .session_manager import SessionValidationError, session_manager
 from .git_utils import GitError, run_git, is_git_repo
@@ -85,7 +83,6 @@ async def lifespan(app: FastAPI):
     await mark_all_active_as_suspended()
     logger.info("Server started")
     yield
-    opencode_web_manager.stop()
     pty_manager.terminate_all()
     await close_db()
     logger.info("Server stopped")
@@ -149,27 +146,6 @@ def _clear_auth_cookie(response: JSONResponse, request: Request) -> None:
     )
 
 
-def _rewrite_proxy_url(value: str, target_port: int) -> str:
-    proxy_prefix = "/api/opencode-web/proxy"
-    if not value or value.startswith(("#", "data:", "javascript:", "mailto:", "tel:")):
-        return value
-    if value.startswith(proxy_prefix):
-        return value
-    if value.startswith("//"):
-        return value
-    if value.startswith(("http://", "https://")):
-        parsed = httpx.URL(value)
-        if parsed.host in {"localhost", "127.0.0.1"} and parsed.port == target_port:
-            rewritten = f"{proxy_prefix}{parsed.path or '/'}"
-            if parsed.query:
-                rewritten += f"?{parsed.query.decode()}"
-            return rewritten
-        return value
-    if value.startswith("/"):
-        return f"{proxy_prefix}{value}"
-    return f"{proxy_prefix}/{value.lstrip('/')}"
-
-
 # --- Request/Response Models ---
 
 class LoginRequest(BaseModel):
@@ -180,16 +156,31 @@ class AuthSessionResponse(BaseModel):
     authenticated: bool
 
 
-class CreateSessionRequest(BaseModel):
+class CreateProjectRequest(BaseModel):
     work_path: str
     name: str | None = None
     create_folder: bool = False
+
+
+class SessionPreflightRequest(BaseModel):
+    work_path: str
+    create_folder: bool = False
+    cli_type: str = "claude"
+    custom_command: str | None = None
+    
+
+class CreateProjectSessionRequest(BaseModel):
+    name: str | None = None
     cli_type: str = "claude"
     custom_command: str | None = None
     custom_exit_command: str | None = None
 
 
 class RenameSessionRequest(BaseModel):
+    name: str
+
+
+class RenameProjectRequest(BaseModel):
     name: str
 
 
@@ -207,6 +198,7 @@ class SessionPreflightResponse(BaseModel):
 
 class SessionResponse(BaseModel):
     id: str
+    project_id: str
     claude_session_id: str | None = None
     cli_type: str
     name: str
@@ -216,6 +208,17 @@ class SessionResponse(BaseModel):
     status: str
     custom_command: str | None = None
     custom_exit_command: str | None = None
+    order_index: int
+
+
+class ProjectResponse(BaseModel):
+    id: str
+    name: str
+    work_path: str
+    created_at: str
+    updated_at: str
+    order_index: int
+    sessions: list[SessionResponse]
 
 
 # --- Auth API (인증 불필요) ---
@@ -687,7 +690,7 @@ async def upload_files(
 
 @app.post("/api/sessions/preflight", response_model=SessionPreflightResponse)
 async def preflight_session(
-    req: CreateSessionRequest, _user: str = Depends(get_current_user)
+    req: SessionPreflightRequest, _user: str = Depends(get_current_user)
 ):
     try:
         result = session_manager.preflight_session(
@@ -705,26 +708,22 @@ async def preflight_session(
             resolved_command=None,
         )
 
-@app.get("/api/sessions", response_model=list[SessionResponse])
-async def list_sessions(_user: str = Depends(get_current_user)):
-    sessions = await session_manager.list_sessions()
-    return sessions
+@app.get("/api/projects", response_model=list[ProjectResponse])
+async def list_projects(_user: str = Depends(get_current_user)):
+    return await session_manager.list_projects()
 
 
-@app.post("/api/sessions", response_model=SessionResponse)
-async def create_session(
-    req: CreateSessionRequest, _user: str = Depends(get_current_user)
+@app.post("/api/projects", response_model=ProjectResponse)
+async def create_project(
+    req: CreateProjectRequest, _user: str = Depends(get_current_user)
 ):
     try:
-        session = await session_manager.create_session(
+        project = await session_manager.create_project(
             work_path=req.work_path,
             name=req.name,
             create_folder=req.create_folder,
-            cli_type=req.cli_type,
-            custom_command=req.custom_command,
-            custom_exit_command=req.custom_exit_command,
         )
-        return session
+        return project
     except SessionValidationError as e:
         raise HTTPException(
             status_code=400,
@@ -736,11 +735,116 @@ async def create_session(
             detail=ApiErrorDetail(code="invalid_request", message=str(e)).model_dump(),
         )
     except Exception as e:
-        logger.error(f"create_session unexpected error: {type(e).__name__}: {e}")
+        logger.error(f"create_project unexpected error: {type(e).__name__}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=ApiErrorDetail(code="project_create_failed", message="Failed to create project").model_dump(),
+        )
+
+
+@app.patch("/api/projects/{project_id}", response_model=ProjectResponse)
+async def rename_project(
+    project_id: str, req: RenameProjectRequest, _user: str = Depends(get_current_user)
+):
+    try:
+        name = req.name.strip()
+        if not name:
+            raise HTTPException(
+                status_code=400,
+                detail=ApiErrorDetail(code="invalid_request", message="Name cannot be empty").model_dump(),
+            )
+        return await session_manager.rename_project(project_id, name)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code="invalid_request", message=str(e)).model_dump(),
+        )
+
+
+@app.delete("/api/projects/{project_id}")
+async def delete_project(
+    project_id: str, _user: str = Depends(get_current_user)
+):
+    try:
+        await session_manager.delete_project(project_id)
+        return {"detail": "Project deleted"}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code="invalid_request", message=str(e)).model_dump(),
+        )
+
+
+class UpdateProjectOrderRequest(BaseModel):
+    ordered_ids: list[str]
+
+
+@app.post("/api/projects/reorder")
+async def reorder_projects(
+    req: UpdateProjectOrderRequest, _user: str = Depends(get_current_user)
+):
+    try:
+        await session_manager.update_project_order(req.ordered_ids)
+        return {"detail": "Project order updated"}
+    except Exception as e:
+        logger.error(f"reorder_projects error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update project order")
+
+
+@app.post("/api/projects/{project_id}/sessions", response_model=SessionResponse)
+async def create_project_session(
+    project_id: str,
+    req: CreateProjectSessionRequest,
+    _user: str = Depends(get_current_user),
+):
+    try:
+        return await session_manager.create_session(
+            project_id=project_id,
+            name=req.name,
+            cli_type=req.cli_type,
+            custom_command=req.custom_command,
+            custom_exit_command=req.custom_exit_command,
+        )
+    except SessionValidationError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code=e.code, message=e.message).model_dump(),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code="invalid_request", message=str(e)).model_dump(),
+        )
+    except Exception as e:
+        logger.error(f"create_project_session unexpected error: {type(e).__name__}: {e}")
         raise HTTPException(
             status_code=500,
             detail=ApiErrorDetail(code="spawn_failed", message="Failed to create session").model_dump(),
         )
+
+
+class UpdateProjectSessionOrderRequest(BaseModel):
+    ordered_ids: list[str]
+
+
+@app.post("/api/projects/{project_id}/sessions/reorder")
+async def reorder_project_sessions(
+    project_id: str,
+    req: UpdateProjectSessionOrderRequest,
+    _user: str = Depends(get_current_user),
+):
+    try:
+        await session_manager.update_project_session_order(project_id, req.ordered_ids)
+        return {"detail": "Project session order updated"}
+    except Exception as e:
+        logger.error(f"reorder_project_sessions error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update project session order")
+
+
+@app.get("/api/sessions", response_model=list[SessionResponse])
+async def list_sessions(_user: str = Depends(get_current_user)):
+    sessions = await session_manager.list_sessions()
+    return sessions
 
 
 @app.post("/api/sessions/{session_id}/suspend", response_model=SessionResponse)
@@ -796,22 +900,6 @@ async def terminate_or_delete_session(
             return session
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-
-class UpdateSessionOrderRequest(BaseModel):
-    ordered_ids: list[str]
-
-
-@app.post("/api/sessions/reorder")
-async def reorder_sessions(
-    req: UpdateSessionOrderRequest, _user: str = Depends(get_current_user)
-):
-    try:
-        await session_manager.update_session_order(req.ordered_ids)
-        return {"detail": "Session order updated"}
-    except Exception as e:
-        logger.error(f"reorder_sessions error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to update session order")
 
 
 # --- WebSocket (토큰 쿼리 파라미터로 인증) ---
@@ -1610,165 +1698,6 @@ async def git_stash_drop(req: GitPullPushRequest, _user: str = Depends(get_curre
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# --- OpenCode Web API ---
-
-import httpx
-
-
-class OpenCodeWebStatusResponse(BaseModel):
-    running: bool
-    port: int | None
-
-
-@app.get("/api/opencode-web/status", response_model=OpenCodeWebStatusResponse)
-async def opencode_web_status(_user: str = Depends(get_current_user)):
-    status = opencode_web_manager.get_status()
-    return OpenCodeWebStatusResponse(**status)
-
-
-class OpenCodeWebStartResponse(BaseModel):
-    port: int
-
-
-@app.post("/api/opencode-web/start", response_model=OpenCodeWebStartResponse)
-async def opencode_web_start(_user: str = Depends(get_current_user)):
-    try:
-        port = opencode_web_manager.start()
-        return OpenCodeWebStartResponse(port=port)
-    except Exception as e:
-        logger.error(f"Failed to start OpenCode Web server: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/opencode-web/stop")
-async def opencode_web_stop(_user: str = Depends(get_current_user)):
-    try:
-        opencode_web_manager.stop()
-        return {"success": True}
-    except Exception as e:
-        logger.error(f"Failed to stop OpenCode Web server: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.api_route("/api/opencode-web/proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
-@app.api_route("/api/opencode-web/proxy", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
-async def opencode_web_proxy(
-    request: Request,
-    path: str = "",
-    _user: str = Depends(get_current_user),
-):
-    status = opencode_web_manager.get_status()
-    if not status["running"] or status["port"] is None:
-        raise HTTPException(status_code=503, detail="OpenCode Web server is not running")
-
-    target_port = status["port"]
-    
-    # 경로 정리: 여러 개의 /를 하나로
-    if not path:
-        target_url = f"http://127.0.0.1:{target_port}/"
-    else:
-        # 경로 정리
-        clean_path = "/" + path.strip("/")
-        target_url = f"http://127.0.0.1:{target_port}{clean_path}"
-
-    if request.url.query:
-        target_url += f"?{request.url.query}"
-
-    allowed_request_headers = {
-        "accept",
-        "accept-encoding",
-        "accept-language",
-        "cache-control",
-        "content-type",
-        "origin",
-        "referer",
-        "user-agent",
-        "x-requested-with",
-    }
-    headers = {
-        key: value
-        for key, value in request.headers.items()
-        if key.lower() in allowed_request_headers
-    }
-
-    body = None
-    if request.method in ["POST", "PUT", "PATCH"]:
-        body = await request.body()
-
-    try:
-        async with httpx.AsyncClient(timeout=60.0, follow_redirects=False) as client:
-            response = await client.request(
-                method=request.method,
-                url=target_url,
-                headers=headers,
-                content=body,
-            )
-
-        # 응답 헤더 처리
-        response_headers = dict(response.headers)
-        response_headers.pop("access-control-allow_origin", None)
-        response_headers.pop("Access-Control-Allow-Origin", None)
-        response_headers.pop("transfer-encoding", None)
-        response_headers.pop("Transfer-Encoding", None)
-        response_headers.pop("content-security-policy", None)
-        response_headers.pop("Content-Security-Policy", None)
-
-        # 바이너리 파일은 그대로 반환 (폰트, 이미지 등)
-        content_type = response.headers.get("content-type", "")
-        if "text/html" in content_type:
-            try:
-                content = response.content.decode("utf-8", errors="replace")
-                
-                import re
-                
-                # src와 href 속성값 변환
-                def replace_src_href(m):
-                    attr = m.group(1)
-                    path_val = m.group(2)
-                    rewritten = _rewrite_proxy_url(path_val, target_port)
-                    return f'{attr}="{rewritten}"'
-                
-                content = re.sub(r'(src|href)=["\']([^"\']+)["\']', replace_src_href, content)
-                
-                response_headers["content-length"] = str(len(content.encode("utf-8")))
-                return Response(content=content, status_code=response.status_code, headers=response_headers)
-            except Exception as e:
-                logger.error(f"HTML rewrite error: {e}")
-        
-        # CSS url() 변환
-        if "text/css" in content_type:
-            try:
-                content = response.content.decode("utf-8", errors="replace")
-                
-                import re
-                
-                # url() 함수 변환
-                def replace_url(m):
-                    url_val = m.group(1)
-                    rewritten = _rewrite_proxy_url(url_val, target_port)
-                    return f'url("{rewritten}")'
-                
-                content = re.sub(r'url\(["\']?([^"\')\s]+)["\']?\)', replace_url, content)
-                
-                response_headers["content-length"] = str(len(content.encode("utf-8")))
-                return Response(content=content, status_code=response.status_code, headers=response_headers)
-            except Exception as e:
-                logger.error(f"CSS rewrite error: {e}")
-
-        # Redirect 응답
-        if response.status_code in (301, 302, 303, 307, 308):
-            location = response.headers.get("location")
-            if location:
-                response_headers["location"] = _rewrite_proxy_url(location, target_port)
-
-        return Response(
-            content=response.content,
-            status_code=response.status_code,
-            headers=response_headers,
-        )
-    except Exception as e:
-        logger.error(f"Proxy error: {e}")
-        raise HTTPException(status_code=502, detail=f"Proxy error: {str(e)}")
 
 
 # --- Static Files & SPA Catch-All ---

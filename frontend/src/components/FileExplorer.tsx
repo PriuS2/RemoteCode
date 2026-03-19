@@ -28,6 +28,8 @@ interface FileExplorerProps {
   onInsertPath: (text: string) => void;
   onClose: () => void;
   isMobile: boolean;
+  embedded?: boolean;
+  showCloseButton?: boolean;
 }
 
 type ViewMode = "grid" | "list";
@@ -126,6 +128,8 @@ export default function FileExplorer({
   onInsertPath,
   onClose,
   isMobile,
+  embedded = false,
+  showCloseButton = true,
 }: FileExplorerProps) {
   const [currentPath, setCurrentPath] = useState(rootPath);
   const [entries, setEntries] = useState<FileEntry[]>([]);
@@ -729,7 +733,7 @@ export default function FileExplorer({
   );
 
   // Mobile: full-screen overlay
-  if (isMobile) {
+  if (isMobile && !embedded) {
     return (
       <div
         onDrop={handleDrop}
@@ -770,6 +774,7 @@ export default function FileExplorer({
           isPreview={!!previewFile}
           explorerFontSize={explorerFontSize}
           onFontSizeChange={setExplorerFontSize}
+          showCloseButton={showCloseButton}
         />
         {bodyOrPreview}
         {uploadStatus}
@@ -825,7 +830,7 @@ export default function FileExplorer({
         minWidth: 0,
         height: "100%",
         background: "#181825",
-        borderRight: "1px solid #313244",
+        borderRight: embedded ? undefined : "1px solid #313244",
         position: "relative",
         fontSize: explorerFontSize,
       } as React.CSSProperties}
@@ -852,6 +857,7 @@ export default function FileExplorer({
         isPreview={!!previewFile}
         explorerFontSize={explorerFontSize}
         onFontSizeChange={setExplorerFontSize}
+        showCloseButton={showCloseButton}
       />
       {bodyOrPreview}
       {uploadStatus}
@@ -918,6 +924,7 @@ function ExplorerHeader({
   isPreview,
   explorerFontSize,
   onFontSizeChange,
+  showCloseButton = true,
 }: {
   displayPath: string;
   viewMode: ViewMode;
@@ -939,6 +946,7 @@ function ExplorerHeader({
   isPreview?: boolean;
   explorerFontSize: number;
   onFontSizeChange: (fn: (s: number) => number) => void;
+  showCloseButton?: boolean;
 }) {
   return (
     <div
@@ -1147,26 +1155,28 @@ function ExplorerHeader({
           </div>
         )}
 
-        <button
-          onClick={onClose}
-          title="Close"
-          style={{
-            background: "none",
-            border: "none",
-            color: "#6c7086",
-            cursor: "pointer",
-            padding: "0.15em 0.3em",
-            display: "flex",
-            alignItems: "center",
-            borderRadius: 3,
-            flexShrink: 0,
-          }}
-        >
-          <svg width="1em" height="1em" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <line x1="3" y1="3" x2="9" y2="9" />
-            <line x1="9" y1="3" x2="3" y2="9" />
-          </svg>
-        </button>
+        {showCloseButton && (
+          <button
+            onClick={onClose}
+            title="Close"
+            style={{
+              background: "none",
+              border: "none",
+              color: "#6c7086",
+              cursor: "pointer",
+              padding: "0.15em 0.3em",
+              display: "flex",
+              alignItems: "center",
+              borderRadius: 3,
+              flexShrink: 0,
+            }}
+          >
+            <svg width="1em" height="1em" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <line x1="3" y1="3" x2="9" y2="9" />
+              <line x1="9" y1="3" x2="3" y2="9" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {!isPreview && (
