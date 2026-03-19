@@ -542,10 +542,13 @@ export default function SessionList({
         {visibleProjects.map((project) => {
           const expanded = normalizedQuery ? true : expandedProjects.includes(project.id);
           const projectDragOver = dragOverKey === `project:${project.id}`;
+          const activeCliCount = project.sessions.filter((session) => {
+            return isProcessSession(session) && session.status === "active";
+          }).length;
           return (
             <div key={project.id} className="project-group">
               <div
-                className={`project-row${expanded ? " is-expanded" : ""}${projectDragOver ? " is-drag-over" : ""}`}
+                className={`project-row${expanded ? " is-expanded" : ""}${projectDragOver ? " is-drag-over" : ""}${activeCliCount > 0 ? " has-active-cli" : ""}`}
                 draggable={reorderEnabled}
                 onClick={() => toggleExpanded(project.id)}
                 onContextMenu={(event) => openContextMenu(event, {
@@ -579,6 +582,15 @@ export default function SessionList({
                 <div className="project-row__top">
                   <span className="project-row__toggle">{expanded ? "▾" : "▸"}</span>
                   <span className="project-row__name">{project.name}</span>
+                  {activeCliCount > 0 && (
+                    <span
+                      className="project-row__indicator"
+                      title={`${activeCliCount} active CLI session${activeCliCount === 1 ? "" : "s"}`}
+                    >
+                      <span className="project-row__indicator-dot" />
+                      {activeCliCount} Active
+                    </span>
+                  )}
                   <button
                     type="button"
                     className="ghost-button project-row__add"
