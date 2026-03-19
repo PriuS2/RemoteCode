@@ -41,7 +41,7 @@ export default function Login({ onLogin }: LoginProps) {
         <div className="login-eyebrow">Remote Access</div>
         <h1 className="login-title">Remote Code</h1>
         <p className="login-copy">
-          Sign in to open the console workbench, browse sessions, and resume active terminal contexts.
+          Sign in to open the console workbench, browse projects, and continue terminal work across their sessions.
         </p>
 
         <form onSubmit={handleSubmit} className="login-form">

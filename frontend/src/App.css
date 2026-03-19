@@ -571,6 +571,95 @@ button {
   color: var(--text-muted);
 }
 
+.project-group {
+  margin-bottom: 10px;
+}
+
+.project-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: rgba(20, 26, 37, 0.72);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.project-row:hover {
+  background: rgba(24, 31, 44, 0.92);
+}
+
+.project-row.is-expanded {
+  border-color: var(--border-subtle);
+  background: rgba(25, 33, 47, 0.95);
+}
+
+.project-row.is-drag-over {
+  border-color: var(--border-accent);
+}
+
+.project-row__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-row__toggle {
+  width: 14px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.project-row__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(13px * var(--web-scale));
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.project-row__add {
+  flex-shrink: 0;
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: calc(11px * var(--web-scale));
+}
+
+.project-row__path,
+.project-row__meta {
+  padding-left: 22px;
+  font-size: calc(11px * var(--web-scale));
+}
+
+.project-row__path {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-row__meta {
+  color: var(--text-muted);
+}
+
+.project-children {
+  margin-top: 8px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(94, 112, 140, 0.18);
+}
+
+.project-children__empty {
+  padding: 10px 0 10px 18px;
+  font-size: calc(11px * var(--web-scale));
+  color: var(--text-muted);
+}
+
 .session-row {
   position: relative;
   display: flex;
@@ -628,6 +717,12 @@ button {
 
 .session-row.is-drag-over {
   border-color: var(--border-accent);
+}
+
+.session-row--nested {
+  margin-bottom: 8px;
+  margin-left: 10px;
+  background: rgba(18, 24, 34, 0.7);
 }
 
 .session-row__top,

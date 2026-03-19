@@ -180,16 +180,31 @@ class AuthSessionResponse(BaseModel):
     authenticated: bool
 
 
-class CreateSessionRequest(BaseModel):
+class CreateProjectRequest(BaseModel):
     work_path: str
     name: str | None = None
     create_folder: bool = False
+
+
+class SessionPreflightRequest(BaseModel):
+    work_path: str
+    create_folder: bool = False
+    cli_type: str = "claude"
+    custom_command: str | None = None
+    
+
+class CreateProjectSessionRequest(BaseModel):
+    name: str | None = None
     cli_type: str = "claude"
     custom_command: str | None = None
     custom_exit_command: str | None = None
 
 
 class RenameSessionRequest(BaseModel):
+    name: str
+
+
+class RenameProjectRequest(BaseModel):
     name: str
 
 
@@ -207,6 +222,7 @@ class SessionPreflightResponse(BaseModel):
 
 class SessionResponse(BaseModel):
     id: str
+    project_id: str
     claude_session_id: str | None = None
     cli_type: str
     name: str
@@ -216,6 +232,17 @@ class SessionResponse(BaseModel):
     status: str
     custom_command: str | None = None
     custom_exit_command: str | None = None
+    order_index: int
+
+
+class ProjectResponse(BaseModel):
+    id: str
+    name: str
+    work_path: str
+    created_at: str
+    updated_at: str
+    order_index: int
+    sessions: list[SessionResponse]
 
 
 # --- Auth API (인증 불필요) ---
@@ -687,7 +714,7 @@ async def upload_files(
 
 @app.post("/api/sessions/preflight", response_model=SessionPreflightResponse)
 async def preflight_session(
-    req: CreateSessionRequest, _user: str = Depends(get_current_user)
+    req: SessionPreflightRequest, _user: str = Depends(get_current_user)
 ):
     try:
         result = session_manager.preflight_session(
@@ -705,26 +732,22 @@ async def preflight_session(
             resolved_command=None,
         )
 
-@app.get("/api/sessions", response_model=list[SessionResponse])
-async def list_sessions(_user: str = Depends(get_current_user)):
-    sessions = await session_manager.list_sessions()
-    return sessions
+@app.get("/api/projects", response_model=list[ProjectResponse])
+async def list_projects(_user: str = Depends(get_current_user)):
+    return await session_manager.list_projects()
 
 
-@app.post("/api/sessions", response_model=SessionResponse)
-async def create_session(
-    req: CreateSessionRequest, _user: str = Depends(get_current_user)
+@app.post("/api/projects", response_model=ProjectResponse)
+async def create_project(
+    req: CreateProjectRequest, _user: str = Depends(get_current_user)
 ):
     try:
-        session = await session_manager.create_session(
+        project = await session_manager.create_project(
             work_path=req.work_path,
             name=req.name,
             create_folder=req.create_folder,
-            cli_type=req.cli_type,
-            custom_command=req.custom_command,
-            custom_exit_command=req.custom_exit_command,
         )
-        return session
+        return project
     except SessionValidationError as e:
         raise HTTPException(
             status_code=400,
@@ -736,11 +759,116 @@ async def create_session(
             detail=ApiErrorDetail(code="invalid_request", message=str(e)).model_dump(),
         )
     except Exception as e:
-        logger.error(f"create_session unexpected error: {type(e).__name__}: {e}")
+        logger.error(f"create_project unexpected error: {type(e).__name__}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=ApiErrorDetail(code="project_create_failed", message="Failed to create project").model_dump(),
+        )
+
+
+@app.patch("/api/projects/{project_id}", response_model=ProjectResponse)
+async def rename_project(
+    project_id: str, req: RenameProjectRequest, _user: str = Depends(get_current_user)
+):
+    try:
+        name = req.name.strip()
+        if not name:
+            raise HTTPException(
+                status_code=400,
+                detail=ApiErrorDetail(code="invalid_request", message="Name cannot be empty").model_dump(),
+            )
+        return await session_manager.rename_project(project_id, name)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code="invalid_request", message=str(e)).model_dump(),
+        )
+
+
+@app.delete("/api/projects/{project_id}")
+async def delete_project(
+    project_id: str, _user: str = Depends(get_current_user)
+):
+    try:
+        await session_manager.delete_project(project_id)
+        return {"detail": "Project deleted"}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code="invalid_request", message=str(e)).model_dump(),
+        )
+
+
+class UpdateProjectOrderRequest(BaseModel):
+    ordered_ids: list[str]
+
+
+@app.post("/api/projects/reorder")
+async def reorder_projects(
+    req: UpdateProjectOrderRequest, _user: str = Depends(get_current_user)
+):
+    try:
+        await session_manager.update_project_order(req.ordered_ids)
+        return {"detail": "Project order updated"}
+    except Exception as e:
+        logger.error(f"reorder_projects error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update project order")
+
+
+@app.post("/api/projects/{project_id}/sessions", response_model=SessionResponse)
+async def create_project_session(
+    project_id: str,
+    req: CreateProjectSessionRequest,
+    _user: str = Depends(get_current_user),
+):
+    try:
+        return await session_manager.create_session(
+            project_id=project_id,
+            name=req.name,
+            cli_type=req.cli_type,
+            custom_command=req.custom_command,
+            custom_exit_command=req.custom_exit_command,
+        )
+    except SessionValidationError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code=e.code, message=e.message).model_dump(),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code="invalid_request", message=str(e)).model_dump(),
+        )
+    except Exception as e:
+        logger.error(f"create_project_session unexpected error: {type(e).__name__}: {e}")
         raise HTTPException(
             status_code=500,
             detail=ApiErrorDetail(code="spawn_failed", message="Failed to create session").model_dump(),
         )
+
+
+class UpdateProjectSessionOrderRequest(BaseModel):
+    ordered_ids: list[str]
+
+
+@app.post("/api/projects/{project_id}/sessions/reorder")
+async def reorder_project_sessions(
+    project_id: str,
+    req: UpdateProjectSessionOrderRequest,
+    _user: str = Depends(get_current_user),
+):
+    try:
+        await session_manager.update_project_session_order(project_id, req.ordered_ids)
+        return {"detail": "Project session order updated"}
+    except Exception as e:
+        logger.error(f"reorder_project_sessions error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update project session order")
+
+
+@app.get("/api/sessions", response_model=list[SessionResponse])
+async def list_sessions(_user: str = Depends(get_current_user)):
+    sessions = await session_manager.list_sessions()
+    return sessions
 
 
 @app.post("/api/sessions/{session_id}/suspend", response_model=SessionResponse)
@@ -796,22 +924,6 @@ async def terminate_or_delete_session(
             return session
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-
-class UpdateSessionOrderRequest(BaseModel):
-    ordered_ids: list[str]
-
-
-@app.post("/api/sessions/reorder")
-async def reorder_sessions(
-    req: UpdateSessionOrderRequest, _user: str = Depends(get_current_user)
-):
-    try:
-        await session_manager.update_session_order(req.ordered_ids)
-        return {"detail": "Session order updated"}
-    except Exception as e:
-        logger.error(f"reorder_sessions error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to update session order")
 
 
 # --- WebSocket (토큰 쿼리 파라미터로 인증) ---

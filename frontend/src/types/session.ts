@@ -1,5 +1,6 @@
 export interface Session {
   id: string;
+  project_id: string;
   name: string;
   work_path: string;
   status: string;

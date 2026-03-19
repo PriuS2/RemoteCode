@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Login from "./components/Login";
 import SessionList from "./components/SessionList";
-import NewSession from "./components/NewSession";
+import NewProject from "./components/NewSession";
+import AddSessionModal from "./components/AddSessionModal";
 import Terminal from "./components/Terminal";
 import OpenCodeWebViewer from "./components/OpenCodeWebViewer";
 import type { ActivityState } from "./components/Terminal";
@@ -11,8 +12,25 @@ import {
   sendBrowserNotification,
 } from "./utils/notify";
 import { apiFetch, onAuthExpired, readErrorDetail } from "./utils/api";
+import type { Project } from "./types/project";
 import type { Session } from "./types/session";
 import "./App.css";
+
+function flattenProjects(projects: Project[]): Session[] {
+  return projects.flatMap((project) => project.sessions);
+}
+
+function findSession(projects: Project[], sessionId: string): Session | undefined {
+  for (const project of projects) {
+    const session = project.sessions.find((item) => item.id === sessionId);
+    if (session) return session;
+  }
+  return undefined;
+}
+
+function findProject(projects: Project[], projectId: string): Project | undefined {
+  return projects.find((project) => project.id === projectId);
+}
 
 function getStoredFontSize(key: string, fallback: number): number {
   const v = localStorage.getItem(key);
@@ -21,10 +39,11 @@ function getStoredFontSize(key: string, fallback: number): number {
 
 export default function App() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [activeSessions, setActiveSessions] = useState<string[]>([]);
   const [focusedIndex, setFocusedIndex] = useState(0);
-  const [showNewSession, setShowNewSession] = useState(false);
+  const [showNewProject, setShowNewProject] = useState(false);
+  const [newSessionProjectId, setNewSessionProjectId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const stored = localStorage.getItem("sidebarWidth");
@@ -35,21 +54,22 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [webFontSize, setWebFontSize] = useState(() => getStoredFontSize("webFontSize", 14));
   const [terminalFontSize, setTerminalFontSize] = useState(() => getStoredFontSize("terminalFontSize", 14));
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const activeSessionsRef = useRef(activeSessions);
-  activeSessionsRef.current = activeSessions;
-  const focusedSessionId = activeSessions[focusedIndex] ?? null;
-  const sessionsRef = useRef(sessions);
-  sessionsRef.current = sessions;
   const settingsRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
+  const activeSessionsRef = useRef(activeSessions);
+  activeSessionsRef.current = activeSessions;
+  const sessions = flattenProjects(projects);
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
+  const focusedSessionId = activeSessions[focusedIndex] ?? null;
   const [splitRatio, setSplitRatio] = useState(() => {
     const v = localStorage.getItem("splitRatio");
     return v ? Number(v) : 0.5;
   });
   const splitDragging = useRef(false);
   const terminalAreaRef = useRef<HTMLElement>(null);
-  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
 
   useEffect(() => {
     const vv = window.visualViewport;
@@ -96,25 +116,27 @@ export default function App() {
   const resetClientState = useCallback((isAuthenticated: boolean) => {
     localStorage.removeItem("token");
     setAuthenticated(isAuthenticated);
-    setSessions([]);
+    setProjects([]);
     setActiveSessions([]);
     setFocusedIndex(0);
     setMountedSessions([]);
     setSessionActivity({});
+    setShowNewProject(false);
+    setNewSessionProjectId(null);
   }, []);
 
-  const fetchSessions = useCallback(async () => {
+  const fetchProjects = useCallback(async () => {
     if (authenticated !== true) return;
     try {
-      const res = await apiFetch("/api/sessions");
+      const res = await apiFetch("/api/projects");
       if (res.status === 401) {
         resetClientState(false);
         return;
       }
       if (res.ok) {
-        const data: Session[] = await res.json();
+        const data: Project[] = await res.json();
         setAuthenticated(true);
-        setSessions(data);
+        setProjects(data);
       }
     } catch {
       // ignore
@@ -137,30 +159,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("splitRatio", String(splitRatio));
   }, [splitRatio]);
-
-  const handleSplitDragStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    splitDragging.current = true;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-
-    const onMove = (ev: MouseEvent) => {
-      if (!splitDragging.current || !terminalAreaRef.current) return;
-      const rect = terminalAreaRef.current.getBoundingClientRect();
-      const ratio = (ev.clientX - rect.left) / rect.width;
-      setSplitRatio(Math.max(0.2, Math.min(0.8, ratio)));
-    };
-    const onUp = () => {
-      splitDragging.current = false;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      window.dispatchEvent(new Event("panel-resize-end"));
-    };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -214,17 +212,37 @@ export default function App() {
 
   useEffect(() => {
     if (authenticated !== true) return;
-    void fetchSessions();
-    pollRef.current = setInterval(fetchSessions, 5000);
+    void fetchProjects();
+    pollRef.current = setInterval(fetchProjects, 5000);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [authenticated, fetchSessions]);
+  }, [authenticated, fetchProjects]);
+
+  useEffect(() => {
+    const validIds = new Set(sessions.map((session) => session.id));
+    setActiveSessions((prev) => prev.filter((sessionId) => validIds.has(sessionId)));
+    setMountedSessions((prev) => prev.filter((sessionId) => validIds.has(sessionId)));
+    setSessionActivity((prev) => {
+      const next: Record<string, ActivityState> = {};
+      Object.entries(prev).forEach(([sessionId, state]) => {
+        if (validIds.has(sessionId)) next[sessionId] = state;
+      });
+      return next;
+    });
+  }, [sessions]);
+
+  useEffect(() => {
+    setFocusedIndex((prev) => {
+      if (activeSessions.length === 0) return 0;
+      return Math.min(prev, activeSessions.length - 1);
+    });
+  }, [activeSessions.length]);
 
   const handleLogin = useCallback(() => {
     setAuthenticated(true);
-    void fetchSessions();
-  }, [fetchSessions]);
+    void fetchProjects();
+  }, [fetchProjects]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -291,7 +309,7 @@ export default function App() {
       });
 
       if (state === "done" && !isViewing) {
-        const session = sessionsRef.current.find((s) => s.id === sessionId);
+        const session = sessionsRef.current.find((item) => item.id === sessionId);
         const name = session?.name || "Session";
         playNotificationSound();
         sendBrowserNotification("Remote Code", `${name} - Task completed`);
@@ -300,34 +318,41 @@ export default function App() {
     [],
   );
 
-  const handleSessionCreated = (id: string) => {
-    setShowNewSession(false);
-    selectSession(id);
-    void fetchSessions();
+  const handleProjectCreated = (projectId: string) => {
+    setShowNewProject(false);
+    void projectId;
+    void fetchProjects();
+  };
+
+  const handleSessionCreated = (sessionId: string) => {
+    setNewSessionProjectId(null);
+    selectSession(sessionId);
+    void fetchProjects();
   };
 
   const removeFromActiveSessions = (id: string) => {
-    setActiveSessions((prev) => {
-      const next = prev.filter((sid) => sid !== id);
-      if (next.length === 0) setFocusedIndex(0);
-      else setFocusedIndex((fi) => Math.min(fi, next.length - 1));
+    setActiveSessions((prev) => prev.filter((sid) => sid !== id));
+  };
+
+  const removeManySessions = useCallback((sessionIds: string[]) => {
+    if (sessionIds.length === 0) return;
+    const removed = new Set(sessionIds);
+    setActiveSessions((prev) => prev.filter((sid) => !removed.has(sid)));
+    setMountedSessions((prev) => prev.filter((sid) => !removed.has(sid)));
+    setSessionActivity((prev) => {
+      const next = { ...prev };
+      sessionIds.forEach((id) => delete next[id]);
       return next;
     });
-  };
+  }, []);
 
   const handleSuspend = async (id: string) => {
     try {
       await apiFetch(`/api/sessions/${id}/suspend`, {
         method: "POST",
       });
-      removeFromActiveSessions(id);
-      setMountedSessions((prev) => prev.filter((sid) => sid !== id));
-      setSessionActivity((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      void fetchSessions();
+      removeManySessions([id]);
+      void fetchProjects();
     } catch (e) {
       console.error("Failed to suspend session:", e);
     }
@@ -341,7 +366,7 @@ export default function App() {
       if (res.ok) {
         selectSession(id);
       }
-      void fetchSessions();
+      void fetchProjects();
     } catch (e) {
       console.error("Failed to resume session:", e);
     }
@@ -356,14 +381,8 @@ export default function App() {
         const detail = await readErrorDetail(res, "Failed to kill session.");
         throw new Error(detail.message);
       }
-      removeFromActiveSessions(id);
-      setMountedSessions((prev) => prev.filter((sid) => sid !== id));
-      setSessionActivity((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      void fetchSessions();
+      removeManySessions([id]);
+      void fetchProjects();
     } catch (e) {
       console.error("Failed to terminate session:", e);
       throw e;
@@ -379,14 +398,8 @@ export default function App() {
         const detail = await readErrorDetail(res, "Failed to delete session.");
         throw new Error(detail.message);
       }
-      removeFromActiveSessions(id);
-      setMountedSessions((prev) => prev.filter((sid) => sid !== id));
-      setSessionActivity((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      void fetchSessions();
+      removeManySessions([id]);
+      void fetchProjects();
     } catch (e) {
       console.error("Failed to delete session:", e);
       throw e;
@@ -404,24 +417,81 @@ export default function App() {
         const detail = await readErrorDetail(res, "Failed to rename session.");
         throw new Error(detail.message);
       }
-      void fetchSessions();
+      void fetchProjects();
     } catch (e) {
       console.error("Failed to rename session:", e);
       throw e;
     }
   };
 
-  const handleReorder = async (orderedIds: string[]) => {
+  const handleRenameProject = async (id: string, newName: string) => {
     try {
-      await apiFetch("/api/sessions/reorder", {
+      const res = await apiFetch(`/api/projects/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName }),
+      });
+      if (!res.ok) {
+        const detail = await readErrorDetail(res, "Failed to rename project.");
+        throw new Error(detail.message);
+      }
+      void fetchProjects();
+    } catch (e) {
+      console.error("Failed to rename project:", e);
+      throw e;
+    }
+  };
+
+  const handleDeleteProject = async (id: string) => {
+    const project = findProject(projects, id);
+    const projectSessionIds = project?.sessions.map((session) => session.id) ?? [];
+    try {
+      const res = await apiFetch(`/api/projects/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const detail = await readErrorDetail(res, "Failed to delete project.");
+        throw new Error(detail.message);
+      }
+      removeManySessions(projectSessionIds);
+      if (newSessionProjectId === id) {
+        setNewSessionProjectId(null);
+      }
+      void fetchProjects();
+    } catch (e) {
+      console.error("Failed to delete project:", e);
+      throw e;
+    }
+  };
+
+  const handleReorderProjects = async (orderedIds: string[]) => {
+    try {
+      await apiFetch("/api/projects/reorder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ordered_ids: orderedIds }),
       });
-      void fetchSessions();
+      void fetchProjects();
     } catch (e) {
-      console.error("Failed to reorder sessions:", e);
+      console.error("Failed to reorder projects:", e);
     }
+  };
+
+  const handleReorderProjectSessions = async (projectId: string, orderedIds: string[]) => {
+    try {
+      await apiFetch(`/api/projects/${projectId}/sessions/reorder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ordered_ids: orderedIds }),
+      });
+      void fetchProjects();
+    } catch (e) {
+      console.error("Failed to reorder project sessions:", e);
+    }
+  };
+
+  const handleAddSession = (project: Project) => {
+    setNewSessionProjectId(project.id);
   };
 
   if (authenticated === null) {
@@ -431,6 +501,8 @@ export default function App() {
   if (!authenticated) {
     return <Login onLogin={handleLogin} />;
   }
+
+  const newSessionProject = newSessionProjectId ? findProject(projects, newSessionProjectId) ?? null : null;
 
   return (
     <div className="app-container" style={viewportHeight ? { height: viewportHeight } : undefined}>
@@ -453,8 +525,8 @@ export default function App() {
         </div>
         <div className="header-right" ref={settingsRef}>
           <div className="header-badge">
-            <strong>{sessions.length}</strong>
-            <span>sessions</span>
+            <strong>{projects.length}</strong>
+            <span>projects</span>
           </div>
           <button
             className="chrome-btn settings-btn"
@@ -499,18 +571,22 @@ export default function App() {
           <>
             <aside className="sidebar workbench-card" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
               <SessionList
-                sessions={sessions}
+                projects={projects}
                 activeSessions={activeSessions}
                 focusedSessionId={focusedSessionId}
                 sessionActivity={sessionActivity}
                 onSelect={selectSession}
                 onResume={handleResume}
-                onNewSession={() => setShowNewSession(true)}
-                onDelete={handleDelete}
-                onRename={handleRename}
-                onSuspend={handleSuspend}
-                onTerminate={handleTerminate}
-                onReorder={handleReorder}
+                onNewProject={() => setShowNewProject(true)}
+                onAddSession={handleAddSession}
+                onDeleteSession={handleDelete}
+                onRenameSession={handleRename}
+                onSuspendSession={handleSuspend}
+                onTerminateSession={handleTerminate}
+                onDeleteProject={handleDeleteProject}
+                onRenameProject={handleRenameProject}
+                onReorderProjects={handleReorderProjects}
+                onReorderProjectSessions={handleReorderProjectSessions}
               />
             </aside>
             <div className="sidebar-resize" onMouseDown={handleSidebarDragStart} />
@@ -521,13 +597,16 @@ export default function App() {
           {mountedSessions.length === 0 && (
             <div className="empty-state">
               <span className="empty-state__eyebrow">Workbench Ready</span>
-              <h1 className="empty-state__title">Open a session to start working</h1>
+              <h1 className="empty-state__title">
+                {projects.length === 0 ? "Create a project to start working" : "Open a session to start working"}
+              </h1>
               <p className="empty-state__body">
-                Sessions stay docked in the left rail while the terminal remains the primary workspace.
-                Create a new session when you need a fresh console context.
+                {projects.length === 0
+                  ? "Projects live in the left rail and own the workspace path. Add sessions under a project when you need terminal contexts."
+                  : "Projects stay docked in the left rail while the terminal remains the primary workspace. Add or open a session from a project to continue."}
               </p>
-              <button className="primary-button" onClick={() => setShowNewSession(true)}>
-                Create Session
+              <button className="primary-button" onClick={() => setShowNewProject(true)}>
+                Create Project
               </button>
             </div>
           )}
@@ -536,7 +615,7 @@ export default function App() {
             const panelIndex = activeSessions.indexOf(sid);
             const isVisible = panelIndex !== -1;
             const splitMode = activeSessions.length === 2;
-            const session = sessions.find((s) => s.id === sid);
+            const session = findSession(projects, sid);
             const sessionName = session?.name || "Session";
             const sessionWorkPath = session?.work_path || "";
 
@@ -545,7 +624,7 @@ export default function App() {
                 <OpenCodeWebViewer
                   key={sid}
                   onClose={() => {
-                    setActiveSessions((prev) => prev.filter((s) => s !== sid));
+                    removeFromActiveSessions(sid);
                     setMountedSessions((prev) => prev.filter((s) => s !== sid));
                   }}
                 />
@@ -583,7 +662,29 @@ export default function App() {
 
           {activeSessions.length === 2 && (
             <div
-              onMouseDown={handleSplitDragStart}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                splitDragging.current = true;
+                document.body.style.cursor = "col-resize";
+                document.body.style.userSelect = "none";
+
+                const onMove = (ev: MouseEvent) => {
+                  if (!splitDragging.current || !terminalAreaRef.current) return;
+                  const rect = terminalAreaRef.current.getBoundingClientRect();
+                  const ratio = (ev.clientX - rect.left) / rect.width;
+                  setSplitRatio(Math.max(0.2, Math.min(0.8, ratio)));
+                };
+                const onUp = () => {
+                  splitDragging.current = false;
+                  document.body.style.cursor = "";
+                  document.body.style.userSelect = "";
+                  document.removeEventListener("mousemove", onMove);
+                  document.removeEventListener("mouseup", onUp);
+                  window.dispatchEvent(new Event("panel-resize-end"));
+                };
+                document.addEventListener("mousemove", onMove);
+                document.addEventListener("mouseup", onUp);
+              }}
               style={{
                 position: "absolute",
                 top: 0,
@@ -612,10 +713,20 @@ export default function App() {
         </main>
       </div>
 
-      {showNewSession && (
-        <NewSession
+      {showNewProject && (
+        <NewProject
+          onCreated={handleProjectCreated}
+          onCancel={() => setShowNewProject(false)}
+        />
+      )}
+
+      {newSessionProject && (
+        <AddSessionModal
+          projectId={newSessionProject.id}
+          projectName={newSessionProject.name}
+          workPath={newSessionProject.work_path}
           onCreated={handleSessionCreated}
-          onCancel={() => setShowNewSession(false)}
+          onCancel={() => setNewSessionProjectId(null)}
         />
       )}
     </div>
