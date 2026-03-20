@@ -39,40 +39,6 @@ const STATUS_META: Record<string, { label: string; color: string; chipClass: str
   closed: { label: "Closed", color: "var(--text-muted)", chipClass: "session-chip--closed" },
 };
 
-const Spinner = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 14 14"
-    style={{ animation: "ccr-spin 1s linear infinite", flexShrink: 0 }}
-  >
-    <circle
-      cx="7"
-      cy="7"
-      r="5.5"
-      fill="none"
-      stroke="var(--accent)"
-      strokeWidth="2"
-      strokeDasharray="20 12"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-const DoneBadge = () => (
-  <span
-    style={{
-      width: 8,
-      height: 8,
-      borderRadius: "50%",
-      background: "var(--success)",
-      boxShadow: "0 0 10px rgba(120, 215, 167, 0.8)",
-      flexShrink: 0,
-      animation: "ccr-pulse 1.5s ease-in-out infinite",
-    }}
-  />
-);
-
 function getCliMeta(cliType: string) {
   return getCliTone(cliType);
 }
@@ -262,6 +228,11 @@ export default function SessionList({
       })
       .filter((project): project is Project => Boolean(project));
   }, [localProjects, normalizedQuery]);
+  const allProjectIds = useMemo(() => localProjects.map((project) => project.id), [localProjects]);
+  const hasExpandedProjects = useMemo(() => {
+    const projectIdSet = new Set(allProjectIds);
+    return expandedProjects.some((id) => projectIdSet.has(id));
+  }, [allProjectIds, expandedProjects]);
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
@@ -273,6 +244,10 @@ export default function SessionList({
       return [...prev, projectId];
     });
   }, []);
+
+  const toggleAllProjects = useCallback(() => {
+    setExpandedProjects(hasExpandedProjects ? [] : allProjectIds);
+  }, [allProjectIds, hasExpandedProjects]);
 
   const openContextMenu = useCallback((event: React.MouseEvent | React.TouchEvent, state: ContextMenuState) => {
     event.preventDefault();
@@ -511,7 +486,17 @@ export default function SessionList({
         <div className="session-list__eyebrow">Project Explorer</div>
         <div className="session-list__title-row">
           <div className="session-list__title">Projects</div>
-          <div className="session-list__count">{projectCountLabel}</div>
+          <div className="session-list__title-actions">
+            <div className="session-list__count">{projectCountLabel}</div>
+            <button
+              type="button"
+              className="ghost-button session-list__collapse"
+              onClick={toggleAllProjects}
+              disabled={projects.length === 0}
+            >
+              {hasExpandedProjects ? "Collapse all" : "Expand all"}
+            </button>
+          </div>
         </div>
         <div className="session-list__search-wrap">
           <input
@@ -541,6 +526,8 @@ export default function SessionList({
           const activeCliCount = project.sessions.filter((session) => {
             return isProcessSession(session) && session.status === "active";
           }).length;
+          const activeCliLabel = `${activeCliCount} active`;
+          const sessionCountLabel = `${project.sessions.length} session${project.sessions.length === 1 ? "" : "s"}`;
           return (
             <div key={project.id} className="project-group">
               <div
@@ -578,28 +565,26 @@ export default function SessionList({
                 <div className="project-row__top">
                   <span className="project-row__toggle">{expanded ? "▾" : "▸"}</span>
                   <span className="project-row__name">{project.name}</span>
-                  {activeCliCount > 0 && (
-                    <span
-                      className="project-row__indicator"
-                      title={`${activeCliCount} active CLI session${activeCliCount === 1 ? "" : "s"}`}
-                    >
-                      <span className="project-row__indicator-dot" />
-                      {activeCliCount} Active
+                  <div className="project-row__actions">
+                    <span className="project-row__stat" title={`${activeCliCount} active terminal sessions`}>
+                      {activeCliLabel}
                     </span>
-                  )}
-                  <button
-                    type="button"
-                    className="ghost-button project-row__add"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onAddSession(project);
-                    }}
-                  >
-                    + Session
-                  </button>
+                    <button
+                      type="button"
+                      className="ghost-button project-row__add"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onAddSession(project);
+                      }}
+                    >
+                      + Session
+                    </button>
+                  </div>
                 </div>
-                <div className="project-row__path">{project.work_path}</div>
-                <div className="project-row__meta">{project.sessions.length} sessions</div>
+                <div className="project-row__bottom">
+                  <div className="project-row__path">{project.work_path}</div>
+                  <div className="project-row__meta">{sessionCountLabel}</div>
+                </div>
               </div>
 
               {expanded && (
@@ -611,7 +596,6 @@ export default function SessionList({
                     const isFocused = session.id === focusedSessionId;
                     const isActiveNotFocused = !isFocused && activeSessions.includes(session.id);
                     const isActive = isFocused || isActiveNotFocused;
-                    const activity = sessionActivity[session.id];
                     const statusMeta = STATUS_META[session.status] ?? STATUS_META.closed;
                     const cliMeta = getCliMeta(session.cli_type);
                     const sessionDragOver = dragOverKey === `session:${project.id}:${session.id}`;
@@ -628,7 +612,6 @@ export default function SessionList({
                         key={session.id}
                         className={rowClassName}
                         draggable={reorderEnabled}
-                        style={{ "--row-accent": statusMeta.color } as React.CSSProperties}
                         onClick={(event) => {
                           if (session.status === "active") onSelect(session.id, event.shiftKey);
                           if (session.status === "closed" || session.status === "suspended") {
@@ -676,30 +659,24 @@ export default function SessionList({
                           handleSessionDrop(project.id, session.id);
                         }}
                       >
-                        <div className="session-row__top">
-                          <span className="session-row__dot" style={{ background: statusMeta.color }} />
+                        <div className="session-row__main">
                           <span className="session-row__name">{session.name}</span>
-                          {activity === "processing" && <Spinner />}
-                          {activity === "done" && <DoneBadge />}
-                        </div>
-
-                        <div className="session-row__path">{session.work_path}</div>
-
-                        <div className="session-row__bottom">
-                          <span className={`session-chip session-chip--status ${statusMeta.chipClass}`}>
-                            {statusMeta.label}
-                          </span>
-                          <span
-                            className="session-chip session-chip--cli"
-                            title={cliMeta.label}
-                            style={{
-                              background: cliMeta.solid,
-                              borderColor: cliMeta.border,
-                              color: cliMeta.text,
-                            }}
-                          >
-                            {cliMeta.label}
-                          </span>
+                          <div className="session-row__meta-group">
+                            <span className={`session-chip session-chip--status ${statusMeta.chipClass}`}>
+                              {statusMeta.label}
+                            </span>
+                            <span
+                              className="session-chip session-chip--cli"
+                              title={cliMeta.label}
+                              style={{
+                                background: cliMeta.solid,
+                                borderColor: cliMeta.border,
+                                color: cliMeta.text,
+                              }}
+                            >
+                              {cliMeta.label}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     );

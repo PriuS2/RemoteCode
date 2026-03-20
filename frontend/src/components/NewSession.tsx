@@ -62,62 +62,32 @@ export default function NewProject({ onCreated, onCancel }: NewProjectProps) {
   return (
     <>
       <div
+        className="sheet-overlay"
         style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0, 0, 0, 0.7)",
-          display: "flex",
           alignItems: isMobile ? "flex-end" : "center",
-          justifyContent: "center",
-          zIndex: 100,
           padding: isMobile ? 0 : 16,
         }}
         onClick={onCancel}
       >
         <div
+          className={`sheet-panel${isMobile ? " is-mobile" : ""}`}
           style={{
-            background: "#1e1e2e",
-            border: "1px solid #313244",
-            borderRadius: isMobile ? "18px 18px 0 0" : 16,
-            width: "100%",
             maxWidth: isMobile ? "100%" : 540,
             maxHeight: isMobile ? "calc(100vh - 24px)" : "min(90vh, 640px)",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            boxShadow: "0 20px 60px rgba(0, 0, 0, 0.35)",
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div style={{ padding: "20px 22px 16px", borderBottom: "1px solid #313244" }}>
-            <h2
-              style={{
-                margin: 0,
-                fontSize: uiPx(20),
-                color: "#cdd6f4",
-                fontWeight: 700,
-              }}
-            >
-              New Project
-            </h2>
-            <p style={{ margin: "8px 0 0", fontSize: uiPx(13), color: "#a6adc8", lineHeight: 1.5 }}>
+          <div className="sheet-header">
+            <h2 className="sheet-title" style={{ fontSize: uiPx(20) }}>New Project</h2>
+            <p className="sheet-copy" style={{ fontSize: uiPx(13) }}>
               Create a project container with a fixed workspace path. Sessions will be added under it later.
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 18,
-                padding: "18px 22px 22px",
-                overflowY: "auto",
-                minHeight: 0,
-              }}
-            >
-              <div>
-                <label style={{ display: "block", fontSize: uiPx(12), color: "#a6adc8", marginBottom: 6 }}>
+          <form onSubmit={handleSubmit} className="sheet-form">
+            <div className="sheet-body">
+              <div className="sheet-field">
+                <label className="sheet-label" style={{ fontSize: uiPx(12) }}>
                   Project Path *
                 </label>
                 <div
@@ -133,42 +103,23 @@ export default function NewProject({ onCreated, onCancel }: NewProjectProps) {
                     onChange={(e) => setWorkPath(e.target.value)}
                     placeholder="C:\\Users\\..."
                     autoFocus
-                    style={{
-                      width: "100%",
-                      minWidth: 0,
-                      padding: "11px 12px",
-                      fontSize: uiPx(14),
-                      background: "#313244",
-                      color: "#cdd6f4",
-                      border: "1px solid #45475a",
-                      borderRadius: 8,
-                      outline: "none",
-                      boxSizing: "border-box",
-                    }}
+                    className="ui-input"
+                    style={{ width: "100%", minWidth: 0, fontSize: uiPx(14) }}
                   />
                   <button
                     type="button"
                     onClick={() => setShowBrowser(true)}
                     title="Browse folders on the server"
-                    style={{
-                      padding: "0 14px",
-                      minHeight: 42,
-                      background: "#313244",
-                      color: "#cdd6f4",
-                      border: "1px solid #45475a",
-                      borderRadius: 8,
-                      cursor: "pointer",
-                      fontSize: uiPx(13),
-                      fontWeight: 600,
-                    }}
+                    className="secondary-button"
+                    style={{ padding: "0 14px", minHeight: 42, fontSize: uiPx(13), fontWeight: 600 }}
                   >
                     Browse Server Folder
                   </button>
                 </div>
               </div>
 
-              <div>
-                <label style={{ display: "block", fontSize: uiPx(12), color: "#a6adc8", marginBottom: 6 }}>
+              <div className="sheet-field">
+                <label className="sheet-label" style={{ fontSize: uiPx(12) }}>
                   Project Name
                 </label>
                 <input
@@ -176,78 +127,31 @@ export default function NewProject({ onCreated, onCancel }: NewProjectProps) {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Folder name will be used if left empty"
-                  style={{
-                    width: "100%",
-                    padding: "11px 12px",
-                    fontSize: uiPx(14),
-                    background: "#313244",
-                    color: "#cdd6f4",
-                    border: "1px solid #45475a",
-                    borderRadius: 8,
-                    outline: "none",
-                    boxSizing: "border-box",
-                  }}
+                  className="ui-input"
+                  style={{ width: "100%", fontSize: uiPx(14) }}
                 />
               </div>
 
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  fontSize: uiPx(13),
-                  color: "#cdd6f4",
-                  cursor: "pointer",
-                }}
-              >
+              <label className="sheet-checkbox" style={{ fontSize: uiPx(13) }}>
                 <input
                   type="checkbox"
                   checked={createFolder}
                   onChange={(e) => setCreateFolder(e.target.checked)}
-                  style={{ accentColor: "var(--cta-primary)" }}
+                  style={{ accentColor: "var(--accent)" }}
                 />
                 Create the folder if it does not exist
               </label>
 
-              <div
-                style={{
-                  padding: "12px 14px",
-                  borderRadius: 12,
-                  background: "var(--cta-primary-soft)",
-                  border: "1px solid var(--cta-primary-border)",
-                  color: "#a6adc8",
-                  fontSize: uiPx(12),
-                  lineHeight: 1.6,
-                }}
-              >
+              <div className="ui-note" style={{ fontSize: uiPx(12) }}>
                 Projects own the workspace path. Sessions created under this project will reuse the same path.
               </div>
 
-              {error && (
-                <div
-                  style={{
-                    padding: "11px 12px",
-                    borderRadius: 10,
-                    background: "#f38ba81a",
-                    border: "1px solid #f38ba84a",
-                    color: "#f38ba8",
-                    fontSize: uiPx(13),
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {error}
-                </div>
-              )}
+              {error && <div className="ui-error ui-error--block" style={{ fontSize: uiPx(13) }}>{error}</div>}
             </div>
 
             <div
+              className="sheet-footer"
               style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 8,
-                padding: "14px 22px 18px",
-                borderTop: "1px solid #313244",
-                background: "#1e1e2e",
                 position: isMobile ? "sticky" : "static",
                 bottom: 0,
               }}
@@ -255,32 +159,16 @@ export default function NewProject({ onCreated, onCancel }: NewProjectProps) {
               <button
                 type="button"
                 onClick={onCancel}
-                style={{
-                  padding: "10px 16px",
-                  fontSize: uiPx(13),
-                  background: "transparent",
-                  color: "#a6adc8",
-                  border: "1px solid #45475a",
-                  borderRadius: 8,
-                  cursor: "pointer",
-                }}
+                className="secondary-button"
+                style={{ padding: "10px 16px", fontSize: uiPx(13) }}
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading || !workPath.trim()}
-                style={{
-                  padding: "10px 16px",
-                  fontSize: uiPx(13),
-                  fontWeight: 700,
-                  background: "linear-gradient(180deg, var(--cta-primary), var(--cta-primary-strong))",
-                  color: "var(--cta-primary-text)",
-                  border: "none",
-                  borderRadius: 8,
-                  cursor: loading ? "wait" : "pointer",
-                  opacity: loading || !workPath.trim() ? 0.5 : 1,
-                }}
+                className="primary-button"
+                style={{ padding: "10px 16px", fontSize: uiPx(13), opacity: loading || !workPath.trim() ? 0.5 : 1 }}
               >
                 {loading ? "Creating..." : "Create Project"}
               </button>

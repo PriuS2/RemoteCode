@@ -118,36 +118,24 @@ export default function FolderBrowser({
 
   return (
     <div
+      className="sheet-overlay"
       style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0, 0, 0, 0.7)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 200,
         padding: 12,
       }}
       onClick={onCancel}
     >
       <div
+        className="sheet-panel folder-browser-panel"
         style={{
-          background: "#1e1e2e",
-          border: "1px solid #313244",
-          borderRadius: 12,
-          width: 520,
           maxWidth: "100%",
           maxHeight: "80vh",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid #313244" }}>
+        <div className="sheet-header" style={{ padding: "16px 16px 12px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontSize: uiPx(15), fontWeight: 600, color: "#cdd6f4" }}>
+            <div style={{ fontSize: uiPx(15), fontWeight: 600, color: "var(--text-primary)" }}>
               Select Folder
             </div>
             <button
@@ -156,6 +144,7 @@ export default function FolderBrowser({
                 setNewName("");
                 setCreateError(null);
               }}
+              className="secondary-button"
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -163,11 +152,7 @@ export default function FolderBrowser({
                 padding: "4px 10px",
                 fontSize: uiPx(12),
                 fontWeight: 600,
-                background: creating ? "#45475a" : "#313244",
-                color: creating ? "#cdd6f4" : "#a6e3a1",
-                border: "none",
-                borderRadius: 4,
-                cursor: "pointer",
+                color: creating ? "var(--text-primary)" : "var(--success)",
               }}
             >
               <IconPlus />
@@ -184,10 +169,10 @@ export default function FolderBrowser({
               style={{
                 marginTop: 8,
                 padding: "6px 10px",
-                background: "#313244",
+                background: "var(--surface-2)",
                 borderRadius: 6,
                 fontSize: uiPx(12),
-                color: "#89b4fa",
+                color: "var(--accent)",
                 fontFamily: "'Cascadia Code', 'Consolas', monospace",
                 wordBreak: "break-all",
                 lineHeight: 1.4,
@@ -219,11 +204,11 @@ export default function FolderBrowser({
                 marginTop: 8,
                 width: "100%",
                 padding: "6px 10px",
-                background: "#313244",
-                border: "1px solid #89b4fa",
+                background: "var(--surface-2)",
+                border: "1px solid var(--accent)",
                 borderRadius: 6,
                 fontSize: uiPx(12),
-                color: "#89b4fa",
+                color: "var(--accent)",
                 fontFamily: "'Cascadia Code', 'Consolas', monospace",
                 outline: "none",
                 boxSizing: "border-box",
@@ -246,39 +231,20 @@ export default function FolderBrowser({
                   if (e.key === "Escape") setCreating(false);
                 }}
                 placeholder="Folder name"
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  padding: "8px 10px",
-                  fontSize: uiPx(13),
-                  background: "#313244",
-                  color: "#cdd6f4",
-                  border: "1px solid #45475a",
-                  borderRadius: 6,
-                  outline: "none",
-                }}
+                className="ui-input"
+                style={{ flex: 1, minWidth: 0, fontSize: uiPx(13) }}
               />
               <button
                 onClick={handleCreate}
                 disabled={!newName.trim()}
-                style={{
-                  padding: "8px 14px",
-                  fontSize: uiPx(12),
-                  fontWeight: 600,
-                  background: "#a6e3a1",
-                  color: "#1e1e2e",
-                  border: "none",
-                  borderRadius: 6,
-                  cursor: "pointer",
-                  opacity: newName.trim() ? 1 : 0.4,
-                  flexShrink: 0,
-                }}
+                className="primary-button"
+                style={{ padding: "8px 14px", fontSize: uiPx(12), opacity: newName.trim() ? 1 : 0.4, flexShrink: 0 }}
               >
                 Create
               </button>
             </div>
             {createError && (
-              <div style={{ color: "#f38ba8", fontSize: uiPx(12), marginTop: 4 }}>{createError}</div>
+              <div className="ui-error" style={{ fontSize: uiPx(12), marginTop: 4 }}>{createError}</div>
             )}
           </div>
         )}
@@ -303,8 +269,8 @@ export default function FolderBrowser({
                     padding: "4px 10px",
                     fontSize: uiPx(11),
                     fontWeight: 600,
-                    background: active ? "#89b4fa" : "#313244",
-                    color: active ? "#1e1e2e" : "#a6adc8",
+                    background: active ? "var(--accent)" : "var(--surface-2)",
+                    color: active ? "var(--accent-contrast)" : "var(--text-secondary)",
                     border: "none",
                     borderRadius: 4,
                     cursor: "pointer",
