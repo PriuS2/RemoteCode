@@ -68,6 +68,7 @@ export default function App() {
   });
   const [mountedSessions, setMountedSessions] = useState<string[]>([]);
   const [sessionActivity, setSessionActivity] = useState<Record<string, ActivityState>>({});
+  const [sessionRefreshNonce, setSessionRefreshNonce] = useState<Record<string, number>>({});
   const [showSettings, setShowSettings] = useState(false);
   const [showThemeNotice, setShowThemeNotice] = useState(false);
   const [webFontSize, setWebFontSize] = useState(() => getStoredFontSize("webFontSize", 14));
@@ -139,6 +140,7 @@ export default function App() {
     setFocusedIndex(0);
     setMountedSessions([]);
     setSessionActivity({});
+    setSessionRefreshNonce({});
     setShowNewProject(false);
     setNewSessionProjectId(null);
   }, []);
@@ -268,6 +270,21 @@ export default function App() {
       }
       return next;
     });
+    setSessionRefreshNonce((prev) => {
+      const next: Record<string, number> = {};
+      Object.entries(prev).forEach(([sessionId, nonce]) => {
+        if (validIds.has(sessionId)) next[sessionId] = nonce;
+      });
+      const prevEntries = Object.entries(prev);
+      const nextEntries = Object.entries(next);
+      if (
+        prevEntries.length === nextEntries.length &&
+        prevEntries.every(([sessionId, nonce]) => next[sessionId] === nonce)
+      ) {
+        return prev;
+      }
+      return next;
+    });
   }, [sessions]);
 
   useEffect(() => {
@@ -311,23 +328,36 @@ export default function App() {
 
   const selectSession = (id: string, split = false) => {
     const forceSingle = isMobile() ? true : !split;
+    const existingIndex = activeSessions.indexOf(id);
+    const shouldRefreshExistingSelection =
+      (forceSingle && activeSessions.length === 1 && existingIndex === 0) ||
+      (!forceSingle && existingIndex !== -1);
 
     if (forceSingle) {
       setActiveSessions([id]);
       setFocusedIndex(0);
     } else {
       setActiveSessions((prev) => {
+        if (prev.includes(id)) return prev;
         if (prev.length < 2) {
-          if (prev.includes(id)) return prev;
           return [...prev, id];
         }
         const newArr = [...prev];
         newArr[focusedIndex] = id;
         return newArr;
       });
-      if (activeSessions.length < 2) {
+      if (existingIndex !== -1) {
+        setFocusedIndex(existingIndex);
+      } else if (activeSessions.length < 2) {
         setFocusedIndex(1);
       }
+    }
+
+    if (shouldRefreshExistingSelection) {
+      setSessionRefreshNonce((prev) => ({
+        ...prev,
+        [id]: (prev[id] ?? 0) + 1,
+      }));
     }
 
     setSessionActivity((prev) => {
@@ -788,6 +818,7 @@ export default function App() {
                 panelIndex={panelIndex}
                 splitMode={splitMode}
                 splitRatio={splitRatio}
+                refreshNonce={sessionRefreshNonce[sid] ?? 0}
                 isFocused={isVisible && panelIndex === focusedIndex}
                 onFocus={() => {
                   if (panelIndex !== -1) setFocusedIndex(panelIndex);

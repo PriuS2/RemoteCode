@@ -36,6 +36,7 @@ interface TerminalProps {
   panelIndex: number;
   splitMode: boolean;
   splitRatio?: number;
+  refreshNonce: number;
   isFocused: boolean;
   onFocus: () => void;
   theme: ThemeMode;
@@ -138,6 +139,7 @@ export default function Terminal({
   panelIndex,
   splitMode,
   splitRatio = 0.5,
+  refreshNonce,
   isFocused,
   onFocus,
   theme,
@@ -174,10 +176,73 @@ export default function Terminal({
   });
   const explorerDragRef = useRef(false);
   const gitPanelDragRef = useRef(false);
+  const nudgeFramesRef = useRef<number[]>([]);
   const isMobileDevice = () => window.innerWidth <= 768;
   const isMobile = isMobileDevice;
   const [scrollThumb, setScrollThumb] = useState<{ top: number; height: number } | null>(null);
   const [scrollbarActive, setScrollbarActive] = useState(false);
+  const [layoutNudgeOffset, setLayoutNudgeOffset] = useState(0);
+
+  const refitAndRefresh = useCallback(() => {
+    const term = termRef.current;
+    const fitAddon = fitAddonRef.current;
+    if (!term || !fitAddon) return;
+
+    try {
+      fitAddon.fit();
+    } catch {
+      // ignore
+    }
+
+    try {
+      term.refresh(0, Math.max(term.rows - 1, 0));
+    } catch {
+      // ignore
+    }
+
+    sendResizeRef.current?.(term.cols, term.rows);
+  }, []);
+
+  const cancelScheduledLayoutNudge = useCallback(() => {
+    nudgeFramesRef.current.forEach((frame) => cancelAnimationFrame(frame));
+    nudgeFramesRef.current = [];
+    setLayoutNudgeOffset(0);
+  }, []);
+
+  const scheduleLayoutNudge = useCallback(() => {
+    if (!visible || !termRef.current || !fitAddonRef.current) return;
+
+    cancelScheduledLayoutNudge();
+    const offsets = [50, 0, 50, 0, 50];
+    const frameIds: number[] = [];
+
+    const runStep = (index: number) => {
+      const frameId = requestAnimationFrame(() => {
+        setLayoutNudgeOffset(offsets[index]);
+        if (index + 1 < offsets.length) {
+          runStep(index + 1);
+          return;
+        }
+
+        const resetFrameId = requestAnimationFrame(() => {
+          setLayoutNudgeOffset(0);
+          const refreshFrameId = requestAnimationFrame(() => {
+            refitAndRefresh();
+            nudgeFramesRef.current = [];
+          });
+          frameIds.push(refreshFrameId);
+          nudgeFramesRef.current = [...frameIds];
+        });
+        frameIds.push(resetFrameId);
+        nudgeFramesRef.current = [...frameIds];
+      });
+
+      frameIds.push(frameId);
+      nudgeFramesRef.current = [...frameIds];
+    };
+
+    runStep(0);
+  }, [cancelScheduledLayoutNudge, refitAndRefresh, visible]);
 
   const wsUrl = sessionId ? getWsUrl(sessionId) : null;
 
@@ -439,6 +504,12 @@ export default function Terminal({
   }, [sendInput, sendResize, sendMouse]);
 
   useEffect(() => {
+    return () => {
+      cancelScheduledLayoutNudge();
+    };
+  }, [cancelScheduledLayoutNudge]);
+
+  useEffect(() => {
     const term = termRef.current;
     const fitAddon = fitAddonRef.current;
     const container = innerRef.current;
@@ -463,35 +534,17 @@ export default function Terminal({
       } catch {
         // ignore renderer-specific failures
       }
-
-      try {
-        fitAddon.fit();
-      } catch {
-        // ignore
-      }
-
-      try {
-        term.refresh(0, Math.max(term.rows - 1, 0));
-      } catch {
-        // ignore
-      }
-
-      sendResizeRef.current?.(term.cols, term.rows);
+      refitAndRefresh();
     });
-  }, [theme]);
+  }, [refitAndRefresh, theme]);
 
   // fontSize change -> update terminal
   useEffect(() => {
     if (termRef.current && fitAddonRef.current) {
       termRef.current.options.fontSize = fontSize;
-      try {
-        fitAddonRef.current.fit();
-        // termRef.current.scrollToBottom();
-      } catch {
-        // ignore
-      }
+      refitAndRefresh();
     }
-  }, [fontSize]);
+  }, [fontSize, refitAndRefresh]);
 
   // visible / splitMode / panelIndex / explorerOpen -> refit + refresh
   useEffect(() => {
@@ -502,18 +555,17 @@ export default function Terminal({
         if (cancelled) return;
         requestAnimationFrame(() => {
           if (cancelled) return;
-          try {
-            fitAddonRef.current?.fit();
-            termRef.current?.refresh(0, termRef.current.rows - 1);
-            // termRef.current?.scrollToBottom();
-          } catch {
-            // ignore
-          }
+          refitAndRefresh();
         });
       });
       return () => { cancelled = true; };
     }
-  }, [visible, splitMode, splitRatio, panelIndex, explorerOpen, explorerWidth, gitPanelOpen, gitPanelWidth]);
+  }, [explorerOpen, explorerWidth, gitPanelOpen, gitPanelWidth, panelIndex, refitAndRefresh, splitMode, splitRatio, visible]);
+
+  useEffect(() => {
+    if (!visible || !termRef.current || !fitAddonRef.current) return;
+    scheduleLayoutNudge();
+  }, [refreshNonce, scheduleLayoutNudge, visible]);
 
   // Mobile custom scrollbar — track viewport scroll position
   useEffect(() => {
@@ -548,19 +600,11 @@ export default function Terminal({
   // Refit terminal when any panel resize drag ends
   useEffect(() => {
     const handleResizeEnd = () => {
-      if (!visible || !termRef.current || !fitAddonRef.current) return;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          try {
-            fitAddonRef.current?.fit();
-            termRef.current?.refresh(0, (termRef.current?.rows ?? 1) - 1);
-          } catch { /* ignore */ }
-        });
-      });
+      scheduleLayoutNudge();
     };
     window.addEventListener("panel-resize-end", handleResizeEnd);
     return () => window.removeEventListener("panel-resize-end", handleResizeEnd);
-  }, [visible]);
+  }, [scheduleLayoutNudge]);
 
   // Focus management
   useEffect(() => {
@@ -759,11 +803,7 @@ export default function Terminal({
             fontSize={fontSize}
             onClick={(e) => {
               e.stopPropagation();
-              try {
-                fitAddonRef.current?.fit();
-                termRef.current?.refresh(0, (termRef.current?.rows ?? 1) - 1);
-                // termRef.current?.scrollToBottom();
-              } catch { /* ignore */ }
+              scheduleLayoutNudge();
             }}
           />
           {canSuspend && (
@@ -832,7 +872,9 @@ export default function Terminal({
           />
         )}
         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-          <div ref={innerRef} style={{ width: "100%", height: "100%" }} />
+          <div style={{ width: layoutNudgeOffset > 0 ? `calc(100% - ${layoutNudgeOffset}px)` : "100%", height: "100%" }}>
+            <div ref={innerRef} style={{ width: "100%", height: "100%" }} />
+          </div>
           {/* Mobile custom scrollbar */}
           {scrollThumb && isMobile() && (
             <div
