@@ -397,10 +397,10 @@ button {
 }
 
 .sidebar-resize {
-  width: 12px;
+  width: 8px;
   flex-shrink: 0;
-  margin-left: -3px;
-  margin-right: -3px;
+  margin-left: -2px;
+  margin-right: -2px;
   cursor: col-resize;
   position: relative;
   z-index: 10;
@@ -1774,7 +1774,7 @@ body {
 }
 
 .app-body {
-  gap: 12px;
+  gap: 4px;
 }
 
 .sidebar {
