@@ -870,7 +870,7 @@ button {
   min-width: 180px;
   padding: 6px;
   border-radius: 16px;
-  background: linear-gradient(180deg, rgba(24, 30, 41, 0.99), rgba(17, 21, 30, 0.99));
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), transparent), var(--surface-1);
   border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow-floating);
 }
@@ -899,7 +899,7 @@ button {
 }
 
 .context-menu__item:hover {
-  background: rgba(34, 42, 57, 0.86);
+  background: var(--surface-2);
 }
 
 .context-menu__item--warn {
