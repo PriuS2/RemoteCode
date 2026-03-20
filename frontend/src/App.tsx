@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Login from "./components/Login";
 import SessionList from "./components/SessionList";
 import NewProject from "./components/NewSession";
@@ -17,6 +17,8 @@ import { apiFetch, onAuthExpired, readErrorDetail } from "./utils/api";
 import type { Project } from "./types/project";
 import type { Session } from "./types/session";
 import "./App.css";
+
+type ThemeMode = "light" | "dark";
 
 function flattenProjects(projects: Project[]): Session[] {
   return projects.flatMap((project) => project.sessions);
@@ -43,8 +45,17 @@ function getStoredFontSize(key: string, fallback: number): number {
   return v ? Number(v) : fallback;
 }
 
+function getStoredTheme(): ThemeMode {
+  return localStorage.getItem("theme") === "dark" ? "dark" : "light";
+}
+
+function areListsEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
 export default function App() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  const [theme, setTheme] = useState<ThemeMode>(() => getStoredTheme());
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeSessions, setActiveSessions] = useState<string[]>([]);
   const [focusedIndex, setFocusedIndex] = useState(0);
@@ -58,6 +69,7 @@ export default function App() {
   const [mountedSessions, setMountedSessions] = useState<string[]>([]);
   const [sessionActivity, setSessionActivity] = useState<Record<string, ActivityState>>({});
   const [showSettings, setShowSettings] = useState(false);
+  const [showThemeNotice, setShowThemeNotice] = useState(false);
   const [webFontSize, setWebFontSize] = useState(() => getStoredFontSize("webFontSize", 14));
   const [terminalFontSize, setTerminalFontSize] = useState(() => getStoredFontSize("terminalFontSize", 14));
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
@@ -66,7 +78,7 @@ export default function App() {
   const draggingRef = useRef(false);
   const activeSessionsRef = useRef(activeSessions);
   activeSessionsRef.current = activeSessions;
-  const sessions = flattenProjects(projects);
+  const sessions = useMemo(() => flattenProjects(projects), [projects]);
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
   const focusedSessionId = activeSessions[focusedIndex] ?? null;
@@ -163,6 +175,12 @@ export default function App() {
   }, [terminalFontSize]);
 
   useEffect(() => {
+    localStorage.setItem("theme", theme);
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+  }, [theme]);
+
+  useEffect(() => {
     localStorage.setItem("splitRatio", String(splitRatio));
   }, [splitRatio]);
 
@@ -227,13 +245,27 @@ export default function App() {
 
   useEffect(() => {
     const validIds = new Set(sessions.map((session) => session.id));
-    setActiveSessions((prev) => prev.filter((sessionId) => validIds.has(sessionId)));
-    setMountedSessions((prev) => prev.filter((sessionId) => validIds.has(sessionId)));
+    setActiveSessions((prev) => {
+      const next = prev.filter((sessionId) => validIds.has(sessionId));
+      return areListsEqual(prev, next) ? prev : next;
+    });
+    setMountedSessions((prev) => {
+      const next = prev.filter((sessionId) => validIds.has(sessionId));
+      return areListsEqual(prev, next) ? prev : next;
+    });
     setSessionActivity((prev) => {
       const next: Record<string, ActivityState> = {};
       Object.entries(prev).forEach(([sessionId, state]) => {
         if (validIds.has(sessionId)) next[sessionId] = state;
       });
+      const prevEntries = Object.entries(prev);
+      const nextEntries = Object.entries(next);
+      if (
+        prevEntries.length === nextEntries.length &&
+        prevEntries.every(([sessionId, state]) => next[sessionId] === state)
+      ) {
+        return prev;
+      }
       return next;
     });
   }, [sessions]);
@@ -249,6 +281,18 @@ export default function App() {
     setAuthenticated(true);
     void fetchProjects();
   }, [fetchProjects]);
+
+  const applyTheme = useCallback((nextTheme: ThemeMode) => {
+    if (nextTheme === theme) return;
+    setTheme(nextTheme);
+    if (mountedSessions.length > 0) {
+      setShowThemeNotice(true);
+    }
+  }, [mountedSessions.length, theme]);
+
+  const toggleTheme = useCallback(() => {
+    applyTheme(theme === "light" ? "dark" : "light");
+  }, [applyTheme, theme]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -517,9 +561,11 @@ export default function App() {
   }
 
   const newSessionProject = newSessionProjectId ? findProject(projects, newSessionProjectId) ?? null : null;
+  const activeProjectCount = projects.filter((project) => project.sessions.some((session) => session.status === "active")).length;
+  const activeSessionCount = sessions.filter((session) => session.status === "active").length;
 
   return (
-    <div className="app-container" style={viewportHeight ? { height: viewportHeight } : undefined}>
+    <div className="app-container" data-theme={theme} style={viewportHeight ? { height: viewportHeight } : undefined}>
       <header className="app-header workbench-card">
         <div className="header-left">
           <button
@@ -542,6 +588,18 @@ export default function App() {
             <strong>{projects.length}</strong>
             <span>projects</span>
           </div>
+          <div className="header-badge">
+            <strong>{activeSessionCount}</strong>
+            <span>active sessions</span>
+          </div>
+          <button
+            className="chrome-btn theme-toggle"
+            onClick={toggleTheme}
+            title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+            aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+          >
+            {theme === "light" ? "◐" : "◑"}
+          </button>
           <button
             className="chrome-btn settings-btn"
             onClick={() => setShowSettings(!showSettings)}
@@ -551,6 +609,23 @@ export default function App() {
           </button>
           {showSettings && (
             <div className="settings-panel">
+              <div className="settings-section">
+                <label className="settings-label">Theme</label>
+                <div className="theme-toggle-group">
+                  <button
+                    className={`theme-chip${theme === "light" ? " is-active" : ""}`}
+                    onClick={() => applyTheme("light")}
+                  >
+                    Light
+                  </button>
+                  <button
+                    className={`theme-chip${theme === "dark" ? " is-active" : ""}`}
+                    onClick={() => applyTheme("dark")}
+                  >
+                    Dark
+                  </button>
+                </div>
+              </div>
               <div className="settings-section">
                 <label className="settings-label">Web Font Size</label>
                 <div className="settings-control">
@@ -575,6 +650,22 @@ export default function App() {
           )}
         </div>
       </header>
+
+      {showThemeNotice && (
+        <div className="theme-notice workbench-card" role="status" aria-live="polite">
+          <div className="theme-notice__copy">
+            <strong>테마 변경 안내</strong>
+            <span>터미널 테마는 열린 세션에 즉시 적용되지 않습니다. 세션을 다시 열면 새 테마가 적용됩니다.</span>
+          </div>
+          <button
+            className="theme-notice__close"
+            onClick={() => setShowThemeNotice(false)}
+            aria-label="테마 안내 닫기"
+          >
+            {"\u00d7"}
+          </button>
+        </div>
+      )}
 
       <div className="app-body">
         {sidebarOpen && (
@@ -619,6 +710,11 @@ export default function App() {
                   ? "Projects live in the left rail and own the workspace path. Add sessions under a project when you need terminal contexts."
                   : "Projects stay docked in the left rail while the terminal remains the primary workspace. Add or open a session from a project to continue."}
               </p>
+              <div className="empty-state__meta">
+                <span>{projects.length} projects</span>
+                <span>{activeProjectCount} active projects</span>
+                <span>{activeSessionCount} active sessions</span>
+              </div>
               <button className="primary-button" onClick={() => setShowNewProject(true)}>
                 Create Project
               </button>
@@ -696,6 +792,7 @@ export default function App() {
                 onFocus={() => {
                   if (panelIndex !== -1) setFocusedIndex(panelIndex);
                 }}
+                theme={theme}
                 sessionName={sessionName}
                 workPath={sessionWorkPath}
                 onClosePanel={() => {

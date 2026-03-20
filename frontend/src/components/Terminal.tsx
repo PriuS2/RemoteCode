@@ -25,6 +25,7 @@ interface MouseEventData {
 }
 
 export type ActivityState = "idle" | "processing" | "done";
+type ThemeMode = "light" | "dark";
 
 interface TerminalProps {
   sessionId: string;
@@ -37,6 +38,7 @@ interface TerminalProps {
   splitRatio?: number;
   isFocused: boolean;
   onFocus: () => void;
+  theme: ThemeMode;
   sessionName: string;
   workPath: string;
   onClosePanel: () => void;
@@ -48,34 +50,84 @@ interface TerminalProps {
 
 const STATUS_STYLE: Record<string, React.CSSProperties> = {
   connecting: {
-    background: "#f9e2af",
-    color: "#1e1e2e",
+    background: "var(--terminal-status-connecting-bg)",
+    color: "var(--terminal-status-connecting-text)",
   },
   reconnecting: {
-    background: "#fab387",
-    color: "#1e1e2e",
+    background: "var(--terminal-status-reconnecting-bg)",
+    color: "var(--terminal-status-reconnecting-text)",
   },
   disconnected: {
-    background: "#f38ba8",
-    color: "#1e1e2e",
+    background: "var(--terminal-status-disconnected-bg)",
+    color: "var(--terminal-status-disconnected-text)",
   },
   auth_failed: {
-    background: "#f38ba8",
-    color: "#1e1e2e",
+    background: "var(--terminal-status-disconnected-bg)",
+    color: "var(--terminal-status-disconnected-text)",
   },
   taken_over: {
-    background: "#cba6f7",
-    color: "#11111b",
+    background: "var(--terminal-status-takenover-bg)",
+    color: "var(--terminal-status-takenover-text)",
   },
   not_found: {
-    background: "#f38ba8",
-    color: "#1e1e2e",
+    background: "var(--terminal-status-disconnected-bg)",
+    color: "var(--terminal-status-disconnected-text)",
   },
   closed: {
-    background: "#6c7086",
-    color: "#f5e0dc",
+    background: "var(--terminal-status-closed-bg)",
+    color: "var(--terminal-status-closed-text)",
   },
 };
+
+function getTerminalPalette(theme: ThemeMode) {
+  if (theme === "light") {
+    return {
+      background: "#f5efe0",
+      foreground: "#18202b",
+      cursor: "#18202b",
+      selectionBackground: "#d8deea",
+      black: "#303845",
+      red: "#b85b63",
+      green: "#507c63",
+      yellow: "#9b7331",
+      blue: "#5175a6",
+      magenta: "#8e628f",
+      cyan: "#4d8280",
+      white: "#d9e0eb",
+      brightBlack: "#5a6678",
+      brightRed: "#c36d74",
+      brightGreen: "#649177",
+      brightYellow: "#b58841",
+      brightBlue: "#6289bb",
+      brightMagenta: "#a377a5",
+      brightCyan: "#5c9794",
+      brightWhite: "#f5f7fb",
+    };
+  }
+
+  return {
+    background: "#161a21",
+    foreground: "#d9e1ee",
+    cursor: "#f2f5f8",
+    selectionBackground: "#404c60",
+    black: "#394555",
+    red: "#ef8ca2",
+    green: "#9ed7b0",
+    yellow: "#f1cd86",
+    blue: "#91bfff",
+    magenta: "#d7b0ef",
+    cyan: "#97ddd9",
+    white: "#c2d0e1",
+    brightBlack: "#576477",
+    brightRed: "#f4a0b2",
+    brightGreen: "#b2e6c2",
+    brightYellow: "#f5daa1",
+    brightBlue: "#a9cdff",
+    brightMagenta: "#e1c0f5",
+    brightCyan: "#ace6e2",
+    brightWhite: "#e7edf7",
+  };
+}
 
 export default function Terminal({
   sessionId,
@@ -88,6 +140,7 @@ export default function Terminal({
   splitRatio = 0.5,
   isFocused,
   onFocus,
+  theme,
   sessionName,
   workPath,
   onClosePanel,
@@ -172,28 +225,7 @@ export default function Terminal({
       cursorBlink: true,
       fontSize,
       fontFamily: "'Cascadia Code', 'Consolas', monospace",
-      theme: {
-        background: "#1e1e2e",
-        foreground: "#cdd6f4",
-        cursor: "#f5e0dc",
-        selectionBackground: "#585b70",
-        black: "#45475a",
-        red: "#f38ba8",
-        green: "#a6e3a1",
-        yellow: "#f9e2af",
-        blue: "#89b4fa",
-        magenta: "#f5c2e7",
-        cyan: "#94e2d5",
-        white: "#bac2de",
-        brightBlack: "#585b70",
-        brightRed: "#f38ba8",
-        brightGreen: "#a6e3a1",
-        brightYellow: "#f9e2af",
-        brightBlue: "#89b4fa",
-        brightMagenta: "#f5c2e7",
-        brightCyan: "#94e2d5",
-        brightWhite: "#a6adc8",
-      },
+      theme: getTerminalPalette(theme),
       allowProposedApi: true,
     });
 
@@ -206,6 +238,7 @@ export default function Terminal({
 
     term.open(innerRef.current);
     fitAddon.fit();
+    sendResize(term.cols, term.rows);
 
     // Enable SGR mouse tracking mode (1006)
     // This tells xterm.js to send mouse events via escape sequences
@@ -404,6 +437,48 @@ export default function Terminal({
       term.dispose();
     };
   }, [sendInput, sendResize, sendMouse]);
+
+  useEffect(() => {
+    const term = termRef.current;
+    const fitAddon = fitAddonRef.current;
+    const container = innerRef.current;
+    if (!term || !fitAddon || !container) return;
+
+    const palette = getTerminalPalette(theme);
+    term.options.theme = palette;
+
+    const viewport = container.querySelector(".xterm-viewport") as HTMLElement | null;
+    const screen = container.querySelector(".xterm-screen") as HTMLElement | null;
+    const rows = container.querySelector(".xterm-rows") as HTMLElement | null;
+
+    container.style.backgroundColor = palette.background;
+    container.style.color = palette.foreground;
+    if (viewport) viewport.style.backgroundColor = palette.background;
+    if (screen) screen.style.backgroundColor = palette.background;
+    if (rows) rows.style.color = palette.foreground;
+
+    requestAnimationFrame(() => {
+      try {
+        term.clearTextureAtlas();
+      } catch {
+        // ignore renderer-specific failures
+      }
+
+      try {
+        fitAddon.fit();
+      } catch {
+        // ignore
+      }
+
+      try {
+        term.refresh(0, Math.max(term.rows - 1, 0));
+      } catch {
+        // ignore
+      }
+
+      sendResizeRef.current?.(term.cols, term.rows);
+    });
+  }, [theme]);
 
   // fontSize change -> update terminal
   useEffect(() => {
@@ -680,7 +755,7 @@ export default function Terminal({
           <TitleBarBtn
             icon={<RefreshIcon size={iconSize} />}
             title="Refresh"
-            hoverColor="#94e2d5"
+            hoverColor="var(--info)"
             fontSize={fontSize}
             onClick={(e) => {
               e.stopPropagation();
@@ -695,7 +770,7 @@ export default function Terminal({
             <TitleBarBtn
               icon={<MinimizeIcon size={iconSize} />}
               title="Suspend"
-              hoverColor="#f9e2af"
+              hoverColor="var(--warn)"
               fontSize={fontSize}
               onClick={(e) => { e.stopPropagation(); onSuspend(); }}
             />
@@ -704,7 +779,7 @@ export default function Terminal({
             <TitleBarBtn
               icon={<MaximizeIcon size={iconSize} />}
               title="Maximize"
-              hoverColor="#89b4fa"
+              hoverColor="var(--accent)"
               fontSize={fontSize}
               onClick={(e) => { e.stopPropagation(); onMaximize(); }}
             />
@@ -712,7 +787,7 @@ export default function Terminal({
           <TitleBarBtn
             icon={<CloseIcon size={iconSize} />}
             title="Kill"
-            hoverColor="#f38ba8"
+            hoverColor="var(--danger)"
             fontSize={fontSize}
             onClick={(e) => { e.stopPropagation(); onTerminate(); }}
           />
@@ -779,8 +854,8 @@ export default function Terminal({
                   width: 10,
                   height: scrollThumb.height,
                   borderRadius: 5,
-                  background: scrollbarActive ? "rgba(137, 180, 250, 0.9)" : "rgba(88, 91, 112, 0.8)",
-                  border: scrollbarActive ? "1px solid rgba(137, 180, 250, 0.6)" : "1px solid rgba(108, 112, 134, 0.4)",
+                  background: scrollbarActive ? "var(--accent)" : "var(--terminal-scrollbar)",
+                  border: scrollbarActive ? "1px solid var(--accent-strong)" : "1px solid var(--border-subtle)",
                   transition: "background 0.15s, border 0.15s",
                 }}
               />
@@ -839,7 +914,7 @@ function TitleBarBtn({
       title={title}
       style={{
         background: active ? activeBackground : "none",
-        color: active ? hoverColor : "#6c7086",
+        color: active ? hoverColor : "var(--text-muted)",
         padding: `${Math.round(fontSize * 0.14)}px ${Math.round(fontSize * 0.29)}px`,
         lineHeight: 1,
       }}
@@ -850,7 +925,7 @@ function TitleBarBtn({
       }}
       onMouseLeave={(e) => {
         const btn = e.currentTarget as HTMLButtonElement;
-        btn.style.color = active ? hoverColor : "#6c7086";
+        btn.style.color = active ? hoverColor : "var(--text-muted)";
         btn.style.background = active ? activeBackground : "none";
       }}
     >

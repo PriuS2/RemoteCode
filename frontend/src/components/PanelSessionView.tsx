@@ -76,7 +76,7 @@ export default function PanelSessionView({
         <div className="terminal-toolbar__actions">
           <ToolbarButton
             title="Refresh"
-            hoverColor="#94e2d5"
+            hoverColor="var(--info)"
             onClick={(event) => {
               event.stopPropagation();
               setRefreshKey((value) => value + 1);
@@ -87,7 +87,7 @@ export default function PanelSessionView({
           {splitMode && onMaximize && (
             <ToolbarButton
               title="Maximize"
-              hoverColor="#89b4fa"
+              hoverColor="var(--accent)"
               onClick={(event) => {
                 event.stopPropagation();
                 onMaximize();
@@ -98,7 +98,7 @@ export default function PanelSessionView({
           )}
           <ToolbarButton
             title="Close Panel"
-            hoverColor="#f38ba8"
+            hoverColor="var(--danger)"
             onClick={(event) => {
               event.stopPropagation();
               onClosePanel();
@@ -138,7 +138,7 @@ function ToolbarButton({
       }}
       onMouseLeave={(event) => {
         const button = event.currentTarget;
-        button.style.color = "#6c7086";
+        button.style.color = "var(--text-muted)";
         button.style.background = "none";
       }}
       style={{ lineHeight: 1 }}
