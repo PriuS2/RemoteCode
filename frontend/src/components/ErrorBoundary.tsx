@@ -30,17 +30,17 @@ export default class ErrorBoundary extends React.Component<
             alignItems: "center",
             justifyContent: "center",
             height: "100vh",
-            background: "#1e1e2e",
-            color: "#cdd6f4",
+            background: "var(--surface-base)",
+            color: "var(--text-primary)",
             fontFamily: "monospace",
             gap: 16,
             padding: 24,
           }}
         >
-          <h2 style={{ color: "#f38ba8", margin: 0 }}>Something went wrong</h2>
+          <h2 style={{ color: "var(--danger)", margin: 0 }}>Something went wrong</h2>
           <pre
             style={{
-              color: "#6c7086",
+              color: "var(--text-muted)",
               fontSize: uiPx(13),
               maxWidth: "80vw",
               overflow: "auto",
@@ -51,15 +51,12 @@ export default class ErrorBoundary extends React.Component<
           </pre>
           <button
             onClick={() => window.location.reload()}
+            className="primary-button"
             style={{
               padding: "8px 20px",
               fontSize: uiPx(14),
               fontWeight: 600,
-              background: "#89b4fa",
-              color: "#1e1e2e",
-              border: "none",
               borderRadius: 6,
-              cursor: "pointer",
             }}
           >
             Reload

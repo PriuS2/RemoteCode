@@ -69,10 +69,10 @@ const UndoIcon = () => (
 const BTN_BASE: React.CSSProperties = {
   height: 34,
   padding: "0 4px",
-  border: "none",
+  border: "1px solid var(--border-subtle)",
   borderRadius: 5,
-  background: "#313244",
-  color: "#cdd6f4",
+  background: "var(--surface-2)",
+  color: "var(--text-primary)",
   fontSize: uiPx(12),
   fontWeight: 600,
   fontFamily: "'Cascadia Code', 'Consolas', monospace",
@@ -90,8 +90,8 @@ const BTN_BASE: React.CSSProperties = {
 
 const PREFIX_BTN: React.CSSProperties = {
   ...BTN_BASE,
-  background: "#45475a",
-  color: "#89b4fa",
+  background: "var(--surface-3)",
+  color: "var(--accent)",
   fontWeight: 700,
   fontSize: uiPx(14),
 };
@@ -102,14 +102,14 @@ const ARROW_BTN: React.CSSProperties = {
   width: 38,
   height: 34,
   padding: 0,
-  background: "#45475a",
+  background: "var(--surface-3)",
   borderRadius: 4,
 };
 
 const ENTER_BTN: React.CSSProperties = {
   ...BTN_BASE,
   flex: "none",
-  background: "#45475a",
+  background: "var(--surface-3)",
   borderRadius: 5,
   gridArea: "en",
   width: "100%",
@@ -127,7 +127,7 @@ const DPAD_GRID: React.CSSProperties = {
   gridTemplateColumns: "38px 38px 38px",
   gridTemplateRows: "34px 34px 34px",
   gap: 2,
-  background: "#313244",
+  background: "var(--surface-2)",
   borderRadius: 6,
   padding: "0 2px",
 };
