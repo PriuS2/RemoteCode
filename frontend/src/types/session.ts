@@ -4,7 +4,7 @@ export interface Session {
   name: string;
   work_path: string;
   status: string;
-  cli_type: "claude" | "kilo" | "opencode" | "terminal" | "custom" | "folder" | "git";
+  cli_type: "claude" | "kilo" | "opencode" | "terminal" | "custom" | "folder" | "git" | "ide";
   created_at: string;
   last_accessed_at: string;
   claude_session_id: string | null;

@@ -40,6 +40,14 @@ const CLI_TONES = {
     text: "var(--cli-git-text)",
     hover: "var(--cli-git-hover)",
   },
+  ide: {
+    label: "IDE",
+    solid: "var(--info-soft)",
+    soft: "color-mix(in srgb, var(--info) 14%, var(--surface-2))",
+    border: "color-mix(in srgb, var(--info) 45%, transparent)",
+    text: "var(--info)",
+    hover: "var(--info)",
+  },
   folder: {
     label: "Folder",
     solid: "var(--cli-folder-solid)",

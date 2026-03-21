@@ -12,7 +12,7 @@ interface AddSessionModalProps {
   onCancel: () => void;
 }
 
-type CliType = "claude" | "kilo" | "opencode" | "terminal" | "folder" | "git" | "custom";
+type CliType = "claude" | "kilo" | "opencode" | "terminal" | "folder" | "git" | "ide" | "custom";
 
 const CLI_OPTIONS: Array<{
   type: CliType;
@@ -23,6 +23,7 @@ const CLI_OPTIONS: Array<{
   { type: "kilo", label: "Kilo Code", description: "Interactive Kilo CLI session." },
   { type: "opencode", label: "OpenCode", description: "Interactive OpenCode terminal session." },
   { type: "terminal", label: "Terminal", description: "Plain shell session without CLI wrapper." },
+  { type: "ide", label: "IDE", description: "Monaco-based editor workspace with file editing tools." },
   { type: "folder", label: "Folder", description: "Saved file explorer session for this project." },
   { type: "git", label: "Git", description: "Saved Git panel session for this project." },
   { type: "custom", label: "Custom CLI", description: "Run your own command in the session." },

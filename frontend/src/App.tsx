@@ -5,6 +5,7 @@ import NewProject from "./components/NewSession";
 import AddSessionModal from "./components/AddSessionModal";
 import FileExplorer from "./components/FileExplorer";
 import GitPanel from "./components/GitPanel";
+import IdeWorkbench from "./components/IdeWorkbench";
 import PanelSessionView from "./components/PanelSessionView";
 import Terminal from "./components/Terminal";
 import type { ActivityState } from "./components/Terminal";
@@ -37,7 +38,7 @@ function findProject(projects: Project[], projectId: string): Project | undefine
 }
 
 function isPanelSession(session: Session | undefined): session is Session {
-  return session?.cli_type === "folder" || session?.cli_type === "git";
+  return session?.cli_type === "folder" || session?.cli_type === "git" || session?.cli_type === "ide";
 }
 
 function getStoredFontSize(key: string, fallback: number): number {
@@ -302,10 +303,7 @@ export default function App() {
   const applyTheme = useCallback((nextTheme: ThemeMode) => {
     if (nextTheme === theme) return;
     setTheme(nextTheme);
-    if (mountedSessions.length > 0) {
-      setShowThemeNotice(true);
-    }
-  }, [mountedSessions.length, theme]);
+  }, [theme]);
 
   const toggleTheme = useCallback(() => {
     applyTheme(theme === "light" ? "dark" : "light");
@@ -681,7 +679,7 @@ export default function App() {
         </div>
       </header>
 
-      {showThemeNotice && (
+      {false && (
         <div className="theme-notice workbench-card" role="status" aria-live="polite">
           <div className="theme-notice__copy">
             <strong>테마 변경 안내</strong>
@@ -761,7 +759,11 @@ export default function App() {
             const canSuspend = session?.cli_type !== "kilo";
 
             if (isPanelSession(session)) {
-              const panelLabel = session.cli_type === "folder" ? "Folder Session" : "Git Session";
+              const panelLabel = session.cli_type === "folder"
+                ? "Folder Session"
+                : session.cli_type === "git"
+                  ? "Git Session"
+                  : "IDE Session";
               return (
                 <PanelSessionView
                   key={sid}
@@ -791,7 +793,7 @@ export default function App() {
                         embedded
                         showCloseButton={false}
                       />
-                    ) : (
+                    ) : session.cli_type === "git" ? (
                       <GitPanel
                         key={`git-${sid}-${refreshKey}`}
                         workPath={sessionWorkPath}
@@ -800,6 +802,13 @@ export default function App() {
                         embedded
                         showHeaderTitle={false}
                         showWindowControls={false}
+                      />
+                    ) : (
+                      <IdeWorkbench
+                        key={`ide-${sid}-${refreshKey}`}
+                        sessionId={sid}
+                        rootPath={sessionWorkPath}
+                        theme={theme}
                       />
                     )
                   )}

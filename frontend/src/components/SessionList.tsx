@@ -44,11 +44,11 @@ function getCliMeta(cliType: string) {
 }
 
 function isProcessSession(session: Session) {
-  return session.cli_type !== "folder" && session.cli_type !== "git";
+  return session.cli_type !== "folder" && session.cli_type !== "git" && session.cli_type !== "ide";
 }
 
 function canSuspendSession(session: Session) {
-  return isProcessSession(session) && session.cli_type !== "kilo";
+  return (isProcessSession(session) && session.cli_type !== "kilo") || session.cli_type === "ide";
 }
 
 function reorderList<T extends { id: string }>(items: T[], draggedId: string, targetId: string): T[] {

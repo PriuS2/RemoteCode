@@ -178,6 +178,84 @@ Behavior:
 
 - Rejects files larger than 20 MB.
 
+## IDE endpoints
+
+### GET `/api/ide/sessions/{session_id}/file`
+
+Load a file into an IDE session editor.
+
+Query parameters:
+
+- `path` required
+
+Response:
+
+```json
+{
+  "path": "C:\\repo\\src\\app.ts",
+  "content": "export const ok = true;\n",
+  "version": "1742610192000000000:25",
+  "readonly": false,
+  "too_large": false,
+  "language_id": "typescript",
+  "size": 25
+}
+```
+
+Notes:
+
+- The path must stay inside the IDE session project root.
+- Files larger than 1 MB are returned with `too_large=true` and `readonly=true`.
+- Binary or non-UTF-8 files open read-only with empty editor content.
+
+### PUT `/api/ide/sessions/{session_id}/file`
+
+Save a file from an IDE session editor.
+
+Request:
+
+```json
+{
+  "path": "C:\\repo\\src\\app.ts",
+  "content": "export const ok = false;\n",
+  "expected_version": "1742610192000000000:25"
+}
+```
+
+Response:
+
+```json
+{
+  "path": "C:\\repo\\src\\app.ts",
+  "version": "1742610293000000000:26",
+  "size": 26,
+  "language_id": "typescript"
+}
+```
+
+Notes:
+
+- Saves use optimistic concurrency and return `409` with structured detail when the on-disk version differs from `expected_version`.
+
+### GET `/api/ide/sessions/{session_id}/languages`
+
+Return supported IDE language status.
+
+Response:
+
+```json
+[
+  {
+    "language_id": "python",
+    "label": "Python",
+    "transport": "lsp",
+    "available": true,
+    "detail": "Uses pyright-langserver over stdio.",
+    "extensions": [".py", ".pyi", ".pyw"]
+  }
+]
+```
+
 ### POST `/api/mkdir`
 
 Create a directory inside an existing parent directory.
@@ -920,6 +998,21 @@ Other status values:
 
 - `taken_over`
 - `not_found`
+
+### WS `/ws/ide/{session_id}/lsp/{language_id}`
+
+Language-server proxy WebSocket for IDE sessions.
+
+Authentication:
+
+- Preferred: auth cookie from the browser
+- Fallback: `?token=<jwt>`
+
+Behavior:
+
+- Only available for `cli_type="ide"` sessions.
+- Accepts JSON-RPC request/notification payloads from the browser and relays them to the language server stdio process.
+- Returns `4404` when the session is not an IDE session or the requested language server is unavailable.
 
 ## Error responses
 
