@@ -5,14 +5,15 @@
 [![Node.js 18+](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
 
 Remote Code is a self-hosted web app for running terminal-based coding workflows from the browser.
-It provides persistent PTY-backed sessions, file browsing, Git tooling, and OpenCode Web proxying on
-top of a FastAPI backend and React frontend.
+It provides persistent PTY-backed sessions, file browsing, Git tooling, Monaco-based IDE sessions, and
+OpenCode Web proxying on top of a FastAPI backend and React frontend.
 
 ## Features
 
 - Web terminal powered by xterm.js
+- Monaco IDE session with multi-tab editing, save/reload, and language-aware diagnostics
 - Multiple persistent sessions with suspend, resume, rename, reorder, and split view
-- CLI types: `claude`, `kilo`, `opencode`, `opencode-web`, `terminal`, and `custom`
+- CLI types: `claude`, `kilo`, `opencode`, `terminal`, `custom`, `folder`, `git`, and `ide`
 - File explorer with preview, upload, download, rename, delete, mkdir, and server-side open
 - Git status, diff, history, branch, commit, stash, pull, and push actions
 - Password login backed by an `HttpOnly` session cookie
@@ -128,6 +129,9 @@ uses `credentials: "same-origin"` for authenticated requests.
 | `opencode-web` | OpenCode Web launched through the backend proxy |
 | `terminal` | Plain shell session |
 | `custom` | User-provided command with optional custom exit command |
+| `folder` | Saved file explorer panel |
+| `git` | Saved Git panel |
+| `ide` | Monaco-based editor panel with built-in web IntelliSense and Python LSP support |
 
 ## API Overview
 
@@ -162,6 +166,13 @@ Remote Code uses cookie-authenticated REST APIs plus a terminal WebSocket endpoi
 - `DELETE /api/sessions/{session_id}`
 - `POST /api/sessions/reorder`
 - `WS /ws/terminal/{session_id}`
+
+### IDE
+
+- `GET /api/ide/sessions/{session_id}/file`
+- `PUT /api/ide/sessions/{session_id}/file`
+- `GET /api/ide/sessions/{session_id}/languages`
+- `WS /ws/ide/{session_id}/lsp/{language_id}`
 
 ### Git
 

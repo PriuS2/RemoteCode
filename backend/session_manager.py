@@ -25,12 +25,13 @@ from .database import (
     update_project_session_order as db_update_project_session_order,
     update_session as db_update_session,
 )
+from .language_server import language_server_manager
 from .pty_manager import PtyInstance, pty_manager
 
 logger = logging.getLogger(__name__)
 
-NON_PTY_CLI_TYPES = {"folder", "git"}
-SUPPORTED_CLI_TYPES = {"claude", "kilo", "opencode", "terminal", "custom", "folder", "git"}
+NON_PTY_CLI_TYPES = {"folder", "git", "ide"}
+SUPPORTED_CLI_TYPES = {"claude", "kilo", "opencode", "terminal", "custom", "folder", "git", "ide"}
 
 
 class SessionValidationError(ValueError):
@@ -148,6 +149,7 @@ class SessionManager:
             ready_messages = {
                 "folder": "Folder session is ready.",
                 "git": "Git session is ready.",
+                "ide": "IDE session is ready.",
             }
             return {
                 "ok": True,
@@ -215,6 +217,8 @@ class SessionManager:
         for session in sessions:
             if session.get("cli_type", "claude") not in NON_PTY_CLI_TYPES:
                 pty_manager.remove(session["id"])
+            elif session.get("cli_type") == "ide":
+                await language_server_manager.close_session(session["id"])
 
         await db_delete_project_record(project_id)
         logger.info(f"Project deleted: {project_id}")
@@ -324,6 +328,8 @@ class SessionManager:
             )
 
         if cli_type in NON_PTY_CLI_TYPES:
+            if cli_type == "ide":
+                await language_server_manager.close_session(session_id)
             await db_update_session(session_id, status="suspended")
             return await db_get_session(session_id)
 
@@ -472,6 +478,8 @@ class SessionManager:
 
         if cli_type not in NON_PTY_CLI_TYPES:
             pty_manager.remove(session_id)
+        elif cli_type == "ide":
+            await language_server_manager.close_session(session_id)
 
         await db_update_session(session_id, status="closed")
         logger.info(f"Session terminated: {session_id}")
@@ -486,6 +494,8 @@ class SessionManager:
 
         if cli_type not in NON_PTY_CLI_TYPES:
             pty_manager.remove(session_id)
+        elif cli_type == "ide":
+            await language_server_manager.close_session(session_id)
 
         await db_delete_session(session_id)
         logger.info(f"Session deleted: {session_id}")

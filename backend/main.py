@@ -6,6 +6,7 @@ import platform
 import string
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,6 +31,8 @@ from .auth import (
 )
 from .config import _INSECURE_JWT_SECRET, settings
 from .database import close_db, init_db, mark_all_active_as_suspended
+from .language_registry import detect_language_id, list_language_statuses
+from .language_server import language_server_manager
 from .pty_manager import pty_manager
 from .session_manager import SessionValidationError, session_manager
 from .git_utils import GitError, run_git, is_git_repo
@@ -43,6 +46,7 @@ _drive_cache: list[str] = []
 _drive_cache_time: float = 0
 _DRIVE_CACHE_TTL = 30.0
 _VIDEO_EXTENSIONS = {".mp4", ".webm", ".ogv", ".ogg", ".m4v", ".mov"}
+_IDE_MAX_FILE_SIZE = 1024 * 1024
 
 
 def _get_drives() -> list[str]:
@@ -148,6 +152,59 @@ def _clear_auth_cookie(response: JSONResponse, request: Request) -> None:
     )
 
 
+def _compute_file_version(path: str) -> str:
+    stat = os.stat(path)
+    return f"{stat.st_mtime_ns}:{stat.st_size}"
+
+
+def _is_within_root(root_path: str, target_path: str) -> bool:
+    root_real = os.path.realpath(os.path.abspath(root_path))
+    target_real = os.path.realpath(os.path.abspath(target_path))
+    try:
+        return os.path.commonpath([root_real, target_real]) == root_real
+    except ValueError:
+        return False
+
+
+def _resolve_ide_path(root_path: str, requested_path: str, *, allow_missing: bool) -> str:
+    candidate = requested_path.strip()
+    if not candidate:
+        raise HTTPException(status_code=400, detail="path is required")
+
+    if os.path.isabs(candidate):
+        resolved = os.path.abspath(candidate)
+    else:
+        resolved = os.path.abspath(os.path.join(root_path, candidate))
+
+    if not _is_within_root(root_path, resolved):
+        raise HTTPException(status_code=403, detail="Path is outside the project root")
+
+    if not allow_missing and not os.path.exists(resolved):
+        raise HTTPException(status_code=404, detail=f"File not found: {resolved}")
+
+    return resolved
+
+
+def _read_utf8_text(path: str) -> tuple[str, bool]:
+    with open(path, "rb") as f:
+        raw = f.read()
+    if b"\x00" in raw:
+        return "", False
+    try:
+        return raw.decode("utf-8"), True
+    except UnicodeDecodeError:
+        return "", False
+
+
+async def _get_ide_session(session_id: str) -> dict:
+    session = await session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.get("cli_type") != "ide":
+        raise HTTPException(status_code=400, detail="Session is not an IDE session")
+    return session
+
+
 # --- Request/Response Models ---
 
 class LoginRequest(BaseModel):
@@ -211,6 +268,38 @@ class SessionResponse(BaseModel):
     custom_command: str | None = None
     custom_exit_command: str | None = None
     order_index: int
+
+
+class IdeFileResponse(BaseModel):
+    path: str
+    content: str
+    version: str | None = None
+    readonly: bool
+    too_large: bool
+    language_id: str
+    size: int
+
+
+class IdeSaveFileRequest(BaseModel):
+    path: str
+    content: str
+    expected_version: str | None = None
+
+
+class IdeSaveFileResponse(BaseModel):
+    path: str
+    version: str
+    size: int
+    language_id: str
+
+
+class IdeLanguageStatusResponse(BaseModel):
+    language_id: str
+    label: str
+    transport: str
+    available: bool
+    detail: str | None = None
+    extensions: list[str]
 
 
 class ProjectResponse(BaseModel):
@@ -708,6 +797,110 @@ async def upload_files(
     return {"uploaded": uploaded, "count": len(uploaded)}
 
 
+@app.get("/api/ide/sessions/{session_id}/file", response_model=IdeFileResponse)
+async def ide_get_file(
+    session_id: str,
+    path: str = Query(...),
+    _user: str = Depends(get_current_user),
+):
+    session = await _get_ide_session(session_id)
+    resolved = _resolve_ide_path(session["work_path"], path, allow_missing=False)
+
+    if not os.path.isfile(resolved):
+        raise HTTPException(status_code=400, detail=f"Not a file: {resolved}")
+
+    try:
+        size = os.path.getsize(resolved)
+        readonly = not os.access(resolved, os.W_OK)
+        language_id = detect_language_id(resolved)
+
+        if size > _IDE_MAX_FILE_SIZE:
+            return IdeFileResponse(
+                path=resolved,
+                content="",
+                version=_compute_file_version(resolved),
+                readonly=True,
+                too_large=True,
+                language_id=language_id,
+                size=size,
+            )
+
+        content, is_text = _read_utf8_text(resolved)
+        return IdeFileResponse(
+            path=resolved,
+            content=content if is_text else "",
+            version=_compute_file_version(resolved),
+            readonly=readonly or not is_text,
+            too_large=False,
+            language_id=language_id,
+            size=size,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=403, detail=f"Access denied: {resolved}")
+
+
+@app.put("/api/ide/sessions/{session_id}/file", response_model=IdeSaveFileResponse)
+async def ide_save_file(
+    session_id: str,
+    req: IdeSaveFileRequest,
+    _user: str = Depends(get_current_user),
+):
+    session = await _get_ide_session(session_id)
+    resolved = _resolve_ide_path(session["work_path"], req.path, allow_missing=True)
+    parent = os.path.dirname(resolved) or session["work_path"]
+
+    if not _is_within_root(session["work_path"], parent):
+        raise HTTPException(status_code=403, detail="Path is outside the project root")
+    if not os.path.isdir(parent):
+        raise HTTPException(status_code=400, detail=f"Parent directory does not exist: {parent}")
+    if os.path.exists(resolved) and not os.path.isfile(resolved):
+        raise HTTPException(status_code=400, detail=f"Not a file: {resolved}")
+
+    encoded = req.content.encode("utf-8")
+    if len(encoded) > _IDE_MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File is too large to save through the IDE")
+
+    current_version = _compute_file_version(resolved) if os.path.exists(resolved) else None
+    if req.expected_version != current_version:
+        raise HTTPException(
+            status_code=409,
+            detail=ApiErrorDetail(
+                code="version_conflict",
+                message="The file changed on disk. Reload before saving.",
+            ).model_dump(),
+        )
+
+    try:
+        with tempfile.NamedTemporaryFile("wb", delete=False, dir=parent) as temp_file:
+            temp_file.write(encoded)
+            temp_path = temp_file.name
+        os.replace(temp_path, resolved)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail=f"Access denied: {resolved}")
+    finally:
+        if "temp_path" in locals() and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
+    return IdeSaveFileResponse(
+        path=resolved,
+        version=_compute_file_version(resolved),
+        size=len(encoded),
+        language_id=detect_language_id(resolved),
+    )
+
+
+@app.get("/api/ide/sessions/{session_id}/languages", response_model=list[IdeLanguageStatusResponse])
+async def ide_list_languages(
+    session_id: str,
+    _user: str = Depends(get_current_user),
+):
+    await _get_ide_session(session_id)
+    return [IdeLanguageStatusResponse(**item) for item in list_language_statuses()]
+
+
 # --- Session API (인증 필요) ---
 
 @app.post("/api/sessions/preflight", response_model=SessionPreflightResponse)
@@ -951,6 +1144,36 @@ async def websocket_terminal(
         await ws.close(code=4401, reason="Unauthorized")
         return
     await handle_terminal_ws(ws, session_id)
+
+
+@app.websocket("/ws/ide/{session_id}/lsp/{language_id}")
+async def websocket_ide_lsp(
+    ws: WebSocket,
+    session_id: str,
+    language_id: str,
+    token: str = Query(default=""),
+):
+    if not verify_ws_token(ws, token):
+        await ws.accept()
+        await ws.close(code=4401, reason="Unauthorized")
+        return
+
+    session = await session_manager.get_session(session_id)
+    if not session or session.get("cli_type") != "ide":
+        await ws.accept()
+        await ws.close(code=4404, reason="IDE session not found")
+        return
+
+    try:
+        await language_server_manager.proxy_websocket(
+            ws,
+            session_id=session_id,
+            language_id=language_id,
+            root_path=session["work_path"],
+        )
+    except RuntimeError as e:
+        await ws.accept()
+        await ws.close(code=4404, reason=str(e))
 
 
 # --- Git API Models ---
