@@ -148,10 +148,7 @@ body,
 body {
   font-family: var(--font-ui);
   font-size: var(--web-fs);
-  background:
-    radial-gradient(circle at top left, rgba(120, 183, 255, 0.08), transparent 32%),
-    radial-gradient(circle at top right, rgba(125, 212, 248, 0.06), transparent 28%),
-    linear-gradient(180deg, #0d1017 0%, #111520 45%, #0d1017 100%);
+  background: var(--surface-base);
   color: var(--text-primary);
   overflow: hidden;
 }
@@ -177,7 +174,7 @@ button {
 }
 
 .workbench-card {
-  background: linear-gradient(180deg, rgba(25, 31, 43, 0.98), rgba(19, 24, 34, 0.98));
+  background: var(--surface-1);
   border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow-shell);
   backdrop-filter: blur(14px);
@@ -214,7 +211,7 @@ button {
   width: 34px;
   height: 34px;
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(120, 183, 255, 0.22), rgba(120, 183, 255, 0.08));
+  background: var(--surface-2);
   color: var(--accent);
   font-family: var(--font-mono);
   font-size: calc(13px * var(--web-scale));
@@ -250,7 +247,7 @@ button {
   padding: 0 12px;
   border-radius: 999px;
   border: 1px solid var(--border-subtle);
-  background: rgba(34, 42, 57, 0.65);
+  background: var(--surface-2);
   color: var(--text-secondary);
   font-size: calc(12px * var(--web-scale));
   font-weight: 500;
@@ -269,7 +266,7 @@ button {
   height: 36px;
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  background: rgba(30, 37, 51, 0.72);
+  background: var(--surface-2);
   color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
@@ -302,7 +299,7 @@ button {
   width: 250px;
   padding: 14px;
   border-radius: 16px;
-  background: linear-gradient(180deg, rgba(24, 30, 41, 0.98), rgba(18, 22, 31, 0.98));
+  background: var(--surface-1);
   border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow-floating);
   z-index: 100;
@@ -332,7 +329,7 @@ button {
   gap: 10px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(34, 42, 57, 0.8);
+  background: var(--surface-inset);
   border: 1px solid var(--border-subtle);
 }
 
@@ -390,7 +387,7 @@ button {
 }
 
 .sidebar {
-  background: linear-gradient(180deg, rgba(23, 28, 39, 0.98), rgba(18, 22, 31, 0.98));
+  background: var(--surface-1);
   border-radius: var(--radius-xl);
   overflow: hidden;
   flex-shrink: 0;
@@ -437,7 +434,7 @@ button {
   position: relative;
   overflow: hidden;
   border-radius: var(--radius-xl);
-  background: linear-gradient(180deg, rgba(18, 23, 33, 0.98), rgba(13, 16, 24, 0.98));
+  background: var(--surface-1);
 }
 
 .empty-state {
@@ -480,7 +477,7 @@ button {
   padding: 0 18px;
   border: 1px solid transparent;
   border-radius: 13px;
-  background: linear-gradient(180deg, var(--cta-primary), var(--cta-primary-strong));
+  background: var(--cta-primary);
   color: var(--cta-primary-text);
   font-size: calc(13px * var(--web-scale));
   font-weight: 700;
@@ -514,7 +511,7 @@ button {
   padding: 0 14px;
   border-radius: 12px;
   border: 1px solid var(--border-subtle);
-  background: rgba(34, 42, 57, 0.7);
+  background: var(--surface-1);
   color: var(--text-secondary);
   cursor: pointer;
 }
@@ -599,7 +596,7 @@ button {
   padding: 0 12px;
   border-radius: 12px;
   border: 1px solid var(--border-subtle);
-  background: rgba(34, 42, 57, 0.82);
+  background: var(--input-bg);
   color: var(--text-primary);
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
@@ -611,8 +608,8 @@ button {
 
 .ui-input:focus {
   border-color: var(--border-accent);
-  box-shadow: 0 0 0 3px rgba(120, 183, 255, 0.12);
-  background: rgba(38, 47, 64, 0.9);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: var(--input-bg);
 }
 
 .session-list__hint {
@@ -646,18 +643,18 @@ button {
   padding: 10px 12px;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: rgba(20, 26, 37, 0.72);
+  background: var(--surface-2);
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
 .project-row:hover {
-  background: rgba(24, 31, 44, 0.92);
+  background: var(--surface-3);
 }
 
 .project-row.is-expanded {
   border-color: var(--border-subtle);
-  background: rgba(25, 33, 47, 0.95);
+  background: var(--surface-3);
 }
 
 .project-row.is-drag-over {
@@ -761,15 +758,15 @@ button {
 }
 
 .session-row:hover {
-  background: rgba(34, 42, 57, 0.74);
+  background: var(--surface-3);
 }
 
 .session-row.is-active {
-  background: rgba(34, 42, 57, 0.92);
+  background: color-mix(in srgb, var(--surface-3) 84%, var(--accent) 16%);
 }
 
 .session-row.is-focused {
-  background: rgba(33, 44, 62, 0.95);
+  background: color-mix(in srgb, var(--surface-3) 78%, var(--accent) 22%);
 }
 
 .session-row.is-dragging {
@@ -823,7 +820,7 @@ button {
 }
 
 .session-chip--status {
-  background: rgba(34, 42, 57, 0.8);
+  background: var(--surface-2);
   border-color: var(--border-subtle);
 }
 
@@ -930,7 +927,7 @@ button {
   flex: 1;
   flex-direction: column;
   min-height: 0;
-  background: linear-gradient(180deg, rgba(21, 25, 35, 0.99), rgba(13, 17, 25, 0.99));
+  background: var(--surface-inset);
 }
 
 .terminal-shell.is-split {
@@ -1008,7 +1005,7 @@ button {
   gap: 2px;
   padding: 2px;
   border-radius: 10px;
-  background: rgba(34, 42, 57, 0.7);
+  background: var(--surface-2);
   border: 1px solid var(--border-subtle);
 }
 
@@ -1036,7 +1033,7 @@ button {
 }
 
 .terminal-tool-button:hover {
-  background: rgba(34, 42, 57, 0.82);
+  background: var(--surface-3);
   color: var(--text-primary);
 }
 
@@ -1137,7 +1134,7 @@ button {
   width: 100%;
   overflow: hidden;
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(23, 29, 41, 0.99), rgba(16, 20, 28, 0.99));
+  background: var(--surface-1);
   border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow-floating);
 }
@@ -1201,7 +1198,7 @@ button {
   padding: 0 14px;
   border-radius: 12px;
   border: 1px solid var(--border-subtle);
-  background: rgba(34, 42, 57, 0.75);
+  background: var(--surface-2);
   color: var(--text-secondary);
   cursor: pointer;
   font-size: calc(13px * var(--web-scale));
@@ -1215,8 +1212,8 @@ button {
 
 .dialog-button.is-primary {
   border-color: transparent;
-  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  color: #07111f;
+  background: var(--accent);
+  color: var(--accent-contrast);
 }
 
 .dialog-button.is-danger {
@@ -1249,7 +1246,7 @@ button {
   width: min(420px, 100%);
   padding: 28px;
   border-radius: 24px;
-  background: linear-gradient(180deg, rgba(21, 27, 37, 0.98), rgba(16, 19, 28, 0.98));
+  background: var(--surface-1);
   border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow-floating);
 }
@@ -1556,10 +1553,7 @@ html[data-theme="dark"] {
   --border-subtle: rgba(238, 242, 246, 0.1);
   --border-strong: rgba(238, 242, 246, 0.18);
   --border-accent: rgba(238, 242, 246, 0.2);
-  --app-gradient:
-    radial-gradient(circle at top left, rgba(118, 145, 165, 0.15), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(89, 112, 96, 0.12), transparent 30%),
-    linear-gradient(180deg, #0e1215 0%, #151a1e 100%);
+  --app-gradient: var(--surface-base);
   --shadow-shell: 0 20px 70px rgba(0, 0, 0, 0.34);
   --shadow-floating: 0 24px 60px rgba(0, 0, 0, 0.42);
   --terminal-status-connecting-bg: rgba(241, 205, 134, 0.9);
@@ -2227,6 +2221,157 @@ body {
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-floating);
+}
+
+.ide-workbench-sidebar {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-2) 92%, transparent),
+    color-mix(in srgb, var(--surface-1) 94%, transparent)
+  );
+}
+
+.ide-workbench-drag-handle {
+  background: linear-gradient(180deg, transparent, rgba(148, 163, 184, 0.18), transparent);
+}
+
+.ide-workbench-statusbar {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 90%, transparent), var(--surface-1));
+}
+
+.image-preview-canvas {
+  background-image:
+    linear-gradient(45deg, #d7dbdf 25%, transparent 25%),
+    linear-gradient(-45deg, #d7dbdf 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #d7dbdf 75%),
+    linear-gradient(-45deg, transparent 75%, #d7dbdf 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-color: #eef2f6;
+}
+
+html[data-theme="dark"] .app-header,
+html[data-theme="dark"] .sidebar,
+html[data-theme="dark"] .terminal-area,
+html[data-theme="dark"] .context-menu,
+html[data-theme="dark"] .terminal-toolbar {
+  background: var(--surface-1);
+}
+
+html[data-theme="dark"] .terminal-shell {
+  background: var(--surface-inset);
+}
+
+html[data-theme="dark"] .theme-notice {
+  background: color-mix(in srgb, var(--surface-1) 86%, var(--info) 14%);
+  border: 1px solid color-mix(in srgb, var(--info) 26%, transparent);
+}
+
+html[data-theme="dark"] .project-row.is-expanded,
+html[data-theme="dark"] .session-row.is-active {
+  background: color-mix(in srgb, var(--surface-3) 84%, var(--accent) 16%);
+}
+
+html[data-theme="dark"] .terminal-toolbar.is-focused {
+  background: color-mix(in srgb, var(--surface-2) 86%, var(--accent) 14%);
+}
+
+html[data-theme="dark"] .dialog-button.is-primary {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+html[data-theme="dark"] .dialog-button.is-primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+  color: var(--accent-contrast);
+}
+
+html[data-theme="dark"] .ide-workbench-sidebar,
+html[data-theme="dark"] .ide-workbench-statusbar {
+  background: var(--surface-1);
+}
+
+html[data-theme="dark"] .ide-workbench-drag-handle {
+  background: color-mix(in srgb, var(--surface-3) 72%, transparent);
+}
+
+html[data-theme="dark"] .image-preview-canvas {
+  background: var(--surface-base);
+}
+
+html[data-theme="dark"] .image-preview-canvas__image {
+  box-shadow:
+    0 0 0 1px var(--border-subtle),
+    0 16px 32px rgba(0, 0, 0, 0.24);
+}
+
+html[data-theme="light"] .header-badge,
+:root:not([data-theme]) .header-badge,
+html[data-theme="light"] .chrome-btn,
+:root:not([data-theme]) .chrome-btn,
+html[data-theme="light"] .ghost-button,
+:root:not([data-theme]) .ghost-button,
+html[data-theme="light"] .dialog-button:not(.is-primary):not(.is-danger),
+:root:not([data-theme]) .dialog-button:not(.is-primary):not(.is-danger),
+html[data-theme="light"] .session-chip--status,
+:root:not([data-theme]) .session-chip--status,
+html[data-theme="light"] .terminal-font-controls,
+:root:not([data-theme]) .terminal-font-controls {
+  background: var(--surface-2);
+}
+
+html[data-theme="light"] .settings-control,
+:root:not([data-theme]) .settings-control {
+  background: var(--surface-inset);
+  border-color: var(--border-subtle);
+}
+
+html[data-theme="light"] .ui-input,
+:root:not([data-theme]) .ui-input {
+  background: var(--input-bg);
+  border-color: var(--input-border);
+  color: var(--text-primary);
+}
+
+html[data-theme="light"] .ui-input:focus,
+:root:not([data-theme]) .ui-input:focus {
+  background: var(--input-bg);
+  border-color: var(--border-accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+html[data-theme="light"] .ui-input--readonly,
+:root:not([data-theme]) .ui-input--readonly {
+  background: var(--input-readonly-bg);
+  color: var(--text-secondary);
+}
+
+html[data-theme="light"] .project-row,
+:root:not([data-theme]) .project-row {
+  background: var(--surface-2);
+}
+
+html[data-theme="light"] .project-row:hover,
+:root:not([data-theme]) .project-row:hover,
+html[data-theme="light"] .session-row:hover,
+:root:not([data-theme]) .session-row:hover {
+  background: var(--surface-3);
+}
+
+html[data-theme="light"] .project-row.is-expanded,
+:root:not([data-theme]) .project-row.is-expanded {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+}
+
+html[data-theme="light"] .session-row.is-active,
+:root:not([data-theme]) .session-row.is-active {
+  background: color-mix(in srgb, var(--surface-3) 88%, var(--accent) 12%);
+}
+
+html[data-theme="light"] .session-row.is-focused,
+:root:not([data-theme]) .session-row.is-focused {
+  background: color-mix(in srgb, var(--surface-3) 82%, var(--accent) 18%);
 }
 
 @media (max-width: 768px) {

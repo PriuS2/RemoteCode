@@ -2958,6 +2958,7 @@ function ImagePreview({
         </div>
       ) : imageUrl ? (
         <div
+          className="image-preview-canvas"
           ref={containerRef}
           onMouseDown={handleMouseDown}
           onTouchStart={handleTouchStart}
@@ -2971,17 +2972,10 @@ function ImagePreview({
             position: "relative",
             cursor: "grab",
             touchAction: "none",
-            backgroundImage:
-              "linear-gradient(45deg, #1e1e2e 25%, transparent 25%), " +
-              "linear-gradient(-45deg, #1e1e2e 25%, transparent 25%), " +
-              "linear-gradient(45deg, transparent 75%, #1e1e2e 75%), " +
-              "linear-gradient(-45deg, transparent 75%, #1e1e2e 75%)",
-            backgroundSize: "16px 16px",
-            backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
-            backgroundColor: "#11111b",
           }}
         >
           <img
+            className="image-preview-canvas__image"
             ref={imgRef}
             src={imageUrl}
             alt={file.name}
