@@ -21,15 +21,12 @@ jobs:
         include:
           - runner: windows-latest
             artifact_name: windows-x64
-            shell: powershell
             build_command: .\build-release.ps1
           - runner: macos-13
             artifact_name: macos-x64
-            shell: bash
             build_command: chmod +x build-release.sh && ./build-release.sh
           - runner: macos-14
             artifact_name: macos-arm64
-            shell: bash
             build_command: chmod +x build-release.sh && ./build-release.sh
 
     runs-on: ${{ matrix.runner }}
@@ -51,7 +48,6 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Build release package
-        shell: ${{ matrix.shell }}
         env:
           BUILD_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
         run: ${{ matrix.build_command }}
