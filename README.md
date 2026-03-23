@@ -82,6 +82,8 @@ CCR_DB_PATH=sessions.db
 ```
 
 The server refuses to start while `CCR_JWT_SECRET` is left at the insecure default.
+When you run `python remote_code_launcher.py`, the launcher creates a separate runtime `.env`
+in the user app-data folder and auto-generates a secure JWT secret if needed.
 
 ### 3. Run
 
@@ -111,6 +113,11 @@ cd frontend && npm run build && cd ..
 make start
 ```
 
+```bash
+# Desktop launcher
+python remote_code_launcher.py
+```
+
 ### 4. Access
 
 - Development: `http://localhost:5173`
@@ -118,6 +125,42 @@ make start
 
 Log in with the password from `CCR_PASSWORD`. The backend sets an `HttpOnly` cookie and the frontend
 uses `credentials: "same-origin"` for authenticated requests.
+
+## Desktop Packaging
+
+Remote Code can be packaged as a browser-launching desktop executable for Windows and macOS with
+PyInstaller. The packaged app starts the local FastAPI server and opens the default browser once
+`/api/health` is reachable.
+
+### Build locally
+
+```bash
+# Windows
+.\build-release.ps1
+
+# macOS
+chmod +x build-release.sh
+./build-release.sh
+
+# Or Make
+make build-release
+```
+
+Artifacts are written to `release/`:
+
+- Windows: `remote-code-<version>-windows-x64.zip`
+- macOS Intel: `remote-code-<version>-macos-x64.zip`
+- macOS Apple Silicon: `remote-code-<version>-macos-arm64.zip`
+
+### Runtime data and config
+
+- Source mode uses the project-root `.env`
+- Packaged mode uses a user data directory
+  - Windows: `%APPDATA%\Remote Code`
+  - macOS: `~/Library/Application Support/Remote Code`
+
+The packaged launcher stores its `.env` and `sessions.db` there. Environment variables still take
+precedence over the runtime `.env`.
 
 ## Supported Session Types
 

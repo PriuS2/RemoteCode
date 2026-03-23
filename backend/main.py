@@ -34,6 +34,7 @@ from .database import close_db, init_db, mark_all_active_as_suspended
 from .language_registry import detect_language_id, list_language_statuses
 from .language_server import language_server_manager
 from .pty_manager import pty_manager
+from .runtime_paths import get_static_dir
 from .session_manager import SessionValidationError, session_manager
 from .git_utils import GitError, run_git, is_git_repo
 from .websocket import handle_terminal_ws
@@ -1963,10 +1964,12 @@ async def git_stash_drop(req: GitPullPushRequest, _user: str = Depends(get_curre
 
 # --- Static Files & SPA Catch-All ---
 
-STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR = get_static_dir()
 
 if STATIC_DIR.is_dir():
-    app.mount("/assets", StaticFiles(directory=str(STATIC_DIR / "assets")), name="assets")
+    assets_dir = STATIC_DIR / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
     @app.get("/{full_path:path}")
     async def spa_catch_all(request: Request, full_path: str):
@@ -1975,3 +1978,5 @@ if STATIC_DIR.is_dir():
         if index.exists():
             return FileResponse(str(index))
         raise HTTPException(status_code=404, detail="Not found")
+else:
+    logger.warning("Static files not found at %s", STATIC_DIR)

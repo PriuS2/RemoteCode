@@ -1,4 +1,8 @@
-from pydantic_settings import BaseSettings
+from __future__ import annotations
+
+import os
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _INSECURE_JWT_SECRET = "change-this-secret-key"
 
@@ -15,7 +19,11 @@ class Settings(BaseSettings):
     db_path: str = "sessions.db"
     allowed_origins: str = "*"
 
-    model_config = {"env_prefix": "CCR_"}
+    model_config = SettingsConfigDict(
+        env_prefix="CCR_",
+        env_file=os.environ.get("CCR_ENV_FILE"),
+        env_file_encoding="utf-8",
+    )
 
 
 settings = Settings()

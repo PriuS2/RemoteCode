@@ -95,6 +95,32 @@ docker run -d \
   remote-code
 ```
 
+### Method 4: Desktop Executable (Windows/macOS)
+
+Use this when you want a browser-launching executable instead of a Python/Node runtime setup.
+
+```bash
+# Windows
+.\build-release.ps1
+
+# macOS
+chmod +x build-release.sh
+./build-release.sh
+```
+
+Output archives are created in `release/`.
+
+- Windows: `remote-code-<version>-windows-x64.zip`
+- macOS Intel: `remote-code-<version>-macos-x64.zip`
+- macOS Apple Silicon: `remote-code-<version>-macos-arm64.zip`
+
+The packaged launcher stores runtime files in the user app-data directory:
+
+- Windows: `%APPDATA%\Remote Code`
+- macOS: `~/Library/Application Support/Remote Code`
+
+That directory contains the packaged-app `.env` and `sessions.db`.
+
 ## Platform-Specific Instructions
 
 ### Windows

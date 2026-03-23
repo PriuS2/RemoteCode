@@ -1,4 +1,4 @@
-.PHONY: setup start dev tunnel tunnel-quick
+.PHONY: setup start dev tunnel tunnel-quick build-release
 
 ifeq ($(OS),Windows_NT)
   SHELL_CMD = powershell -ExecutionPolicy Bypass -File
@@ -22,3 +22,6 @@ tunnel:
 
 tunnel-quick:
 	$(SHELL_CMD) tunnel-quick$(EXT)
+
+build-release:
+	$(SHELL_CMD) build-release$(EXT)

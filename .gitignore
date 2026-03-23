@@ -16,6 +16,9 @@ frontend/dist/
 
 # Build output (served by backend)
 backend/static/
+/build/
+/dist/
+/release/
 
 # IDE
 .vscode/
