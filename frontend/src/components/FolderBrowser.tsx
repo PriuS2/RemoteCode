@@ -23,18 +23,18 @@ interface BrowseData {
 }
 
 const IconFolder = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, color: "var(--accent)" }}>
     <path
       d="M1 3.5C1 2.67 1.67 2 2.5 2H6l1.5 2H13.5C14.33 4 15 4.67 15 5.5V12.5C15 13.33 14.33 14 13.5 14H2.5C1.67 14 1 13.33 1 12.5V3.5Z"
-      fill="#89b4fa"
+      fill="currentColor"
       opacity="0.8"
     />
   </svg>
 );
 
 const IconUp = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-    <path d="M8 3L3 8h3v5h4V8h3L8 3z" fill="#f9e2af" />
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, color: "var(--warn)" }}>
+    <path d="M8 3L3 8h3v5h4V8h3L8 3z" fill="currentColor" />
   </svg>
 );
 
@@ -304,9 +304,9 @@ export default function FolderBrowser({
                     padding: "4px 10px",
                     fontSize: uiPx(11),
                     fontWeight: 600,
-                    background: active ? "#f9e2af" : "#313244",
-                    color: active ? "#1e1e2e" : "#a6adc8",
-                    border: "none",
+                    background: active ? "var(--warn-soft)" : "var(--surface-2)",
+                    color: active ? "var(--warn)" : "var(--text-secondary)",
+                    border: "1px solid transparent",
                     borderRadius: 4,
                     cursor: "pointer",
                     fontFamily: "monospace",
@@ -329,13 +329,13 @@ export default function FolderBrowser({
           }}
         >
           {loading && (
-            <div style={{ padding: 20, textAlign: "center", color: "#6c7086" }}>
+            <div style={{ padding: 20, textAlign: "center", color: "var(--text-muted)" }}>
               Loading...
             </div>
           )}
 
           {error && (
-            <div style={{ padding: 12, color: "#f38ba8", fontSize: uiPx(13) }}>{error}</div>
+            <div style={{ padding: 12, color: "var(--danger)", fontSize: uiPx(13) }}>{error}</div>
           )}
 
           {!loading && data && (
@@ -344,7 +344,7 @@ export default function FolderBrowser({
                 <FolderRow icon={<IconUp />} name=".." onClick={() => browse(data.parent!)} />
               )}
               {data.folders.length === 0 && !data.parent && (
-                <div style={{ padding: 20, color: "#6c7086", fontSize: uiPx(13), textAlign: "center" }}>
+                <div style={{ padding: 20, color: "var(--text-muted)", fontSize: uiPx(13), textAlign: "center" }}>
                   Empty
                 </div>
               )}
@@ -366,7 +366,7 @@ export default function FolderBrowser({
         <div
           style={{
             padding: "12px 16px",
-            borderTop: "1px solid #313244",
+            borderTop: "1px solid var(--border-subtle)",
             display: "flex",
             gap: 8,
             justifyContent: "flex-end",
@@ -374,14 +374,11 @@ export default function FolderBrowser({
         >
           <button
             onClick={onCancel}
+            className="secondary-button"
             style={{
               padding: "10px 16px",
               fontSize: uiPx(13),
-              background: "transparent",
-              color: "#a6adc8",
-              border: "1px solid #45475a",
               borderRadius: 6,
-              cursor: "pointer",
             }}
           >
             Cancel
@@ -389,15 +386,12 @@ export default function FolderBrowser({
           <button
             onClick={() => data && onSelect(data.current)}
             disabled={!data}
+            className="primary-button"
             style={{
               padding: "10px 16px",
               fontSize: uiPx(13),
               fontWeight: 600,
-              background: "#89b4fa",
-              color: "#1e1e2e",
-              border: "none",
               borderRadius: 6,
-              cursor: "pointer",
             }}
           >
             Select
@@ -420,6 +414,7 @@ function FolderRow({
   return (
     <div
       onClick={onClick}
+      className="panel-list-row"
       style={{
         display: "flex",
         alignItems: "center",
@@ -428,13 +423,7 @@ function FolderRow({
         borderRadius: 6,
         cursor: "pointer",
         fontSize: uiPx(13),
-        color: "#cdd6f4",
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background = "#313244";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background = "transparent";
+        color: "var(--text-primary)",
       }}
     >
       {icon}

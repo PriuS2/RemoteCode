@@ -97,40 +97,40 @@
   --radius-xl: 24px;
 }
 
-/* highlight.js - Catppuccin Mocha */
-.hljs { color: #cdd6f4; }
+/* highlight.js */
+.hljs { color: var(--syntax-fg); }
 .hljs-keyword,
 .hljs-selector-tag,
 .hljs-built_in,
-.hljs-type { color: #cba6f7; }
+.hljs-type { color: var(--syntax-keyword); }
 .hljs-string,
 .hljs-template-variable,
-.hljs-addition { color: #a6e3a1; }
+.hljs-addition { color: var(--syntax-string); }
 .hljs-comment,
-.hljs-quote { color: #6c7086; font-style: italic; }
+.hljs-quote { color: var(--syntax-comment); font-style: italic; }
 .hljs-number,
 .hljs-literal,
-.hljs-regexp { color: #fab387; }
+.hljs-regexp,
+.hljs-meta { color: var(--syntax-number); }
 .hljs-title,
 .hljs-title\.function_,
-.hljs-section { color: #89b4fa; }
+.hljs-section,
+.hljs-name,
+.hljs-property { color: var(--accent); }
 .hljs-attr,
 .hljs-attribute,
 .hljs-variable,
-.hljs-template-tag { color: #f9e2af; }
-.hljs-tag { color: #f38ba8; }
-.hljs-name { color: #89b4fa; }
+.hljs-template-tag { color: var(--warn); }
+.hljs-tag { color: var(--syntax-tag); }
 .hljs-selector-id,
-.hljs-selector-class { color: #94e2d5; }
+.hljs-selector-class { color: var(--info); }
 .hljs-symbol,
-.hljs-bullet { color: #f5c2e7; }
-.hljs-meta { color: #fab387; }
-.hljs-params { color: #cdd6f4; }
-.hljs-property { color: #89dceb; }
-.hljs-punctuation { color: #9399b2; }
-.hljs-operator { color: #94e2d5; }
-.hljs-deletion { color: #f38ba8; background: rgba(243, 139, 168, 0.1); }
-.hljs-addition { background: rgba(166, 227, 161, 0.1); }
+.hljs-bullet { color: var(--info); }
+.hljs-params,
+.hljs-punctuation,
+.hljs-operator { color: var(--text-secondary); }
+.hljs-deletion { color: var(--syntax-tag); background: var(--syntax-diff-del-bg); }
+.hljs-addition { background: var(--syntax-diff-add-bg); }
 
 * {
   box-sizing: border-box;
@@ -1426,6 +1426,14 @@ html[data-theme="light"],
   --text-primary: #191814;
   --text-secondary: #585449;
   --text-muted: #8b8578;
+  --syntax-fg: #221f18;
+  --syntax-keyword: #7f5b39;
+  --syntax-string: #3e7a55;
+  --syntax-comment: #8b8578;
+  --syntax-number: #9e7b31;
+  --syntax-tag: #b35f66;
+  --syntax-diff-add-bg: rgba(62, 122, 85, 0.12);
+  --syntax-diff-del-bg: rgba(179, 95, 102, 0.12);
   --accent: #22211d;
   --accent-strong: #12110d;
   --accent-soft: rgba(34, 33, 29, 0.08);
@@ -1525,6 +1533,14 @@ html[data-theme="dark"] {
   --text-primary: #eef2f6;
   --text-secondary: #b1bcc6;
   --text-muted: #7b8792;
+  --syntax-fg: #e8edf3;
+  --syntax-keyword: #b8c8ff;
+  --syntax-string: #9bd5af;
+  --syntax-comment: #7b8792;
+  --syntax-number: #f0ca82;
+  --syntax-tag: #ef9aa0;
+  --syntax-diff-add-bg: rgba(155, 213, 175, 0.12);
+  --syntax-diff-del-bg: rgba(239, 154, 160, 0.12);
   --accent: #e8ede3;
   --accent-strong: #ffffff;
   --accent-soft: rgba(232, 237, 227, 0.08);
@@ -2137,6 +2153,80 @@ body {
 
 .folder-browser-panel {
   max-width: min(520px, 100%);
+}
+
+.panel-shell {
+  background: var(--surface-1);
+  color: var(--text-primary);
+}
+
+.panel-shell--inset {
+  background: var(--surface-inset);
+}
+
+.panel-divider {
+  border-color: var(--border-subtle);
+}
+
+.panel-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--panel-fg, var(--text-muted));
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.panel-icon-button:hover:not(:disabled) {
+  background: var(--panel-hover-bg, var(--bg-hover));
+  color: var(--panel-hover-fg, var(--text-primary));
+  border-color: var(--panel-hover-border, transparent);
+}
+
+.panel-icon-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.panel-icon-button--chip {
+  border-color: var(--panel-border, var(--border-strong));
+  background: var(--panel-bg, var(--surface-2));
+}
+
+.panel-list-row {
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.panel-list-row:hover {
+  background: var(--row-hover-bg, var(--bg-hover));
+}
+
+.panel-list-row.is-selected,
+.panel-list-row[data-selected="true"] {
+  background: var(--row-selected-bg, var(--accent-soft));
+}
+
+.panel-menu {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-floating);
+}
+
+.panel-dialog {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-floating);
 }
 
 @media (max-width: 768px) {

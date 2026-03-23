@@ -796,8 +796,8 @@ export default function FileExplorer({
         position: "absolute",
         inset: 0,
         zIndex: 50,
-        background: "rgba(166,227,161,0.08)",
-        border: "2px dashed #a6e3a1",
+        background: "var(--success-soft)",
+        border: "2px dashed var(--success)",
         borderRadius: 6,
         display: "flex",
         alignItems: "center",
@@ -807,7 +807,7 @@ export default function FileExplorer({
     >
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
         <UploadIcon size={32} />
-        <span style={{ color: "#a6e3a1", fontSize: uiPx(13), fontWeight: 600 }}>Drop files to upload</span>
+        <span style={{ color: "var(--success)", fontSize: uiPx(13), fontWeight: 600 }}>Drop files to upload</span>
       </div>
     </div>
   );
@@ -816,9 +816,9 @@ export default function FileExplorer({
     <div style={{
       padding: "4px 8px",
       fontSize: uiPx(11),
-      color: uploading ? "#89b4fa" : uploadProgress.includes("failed") || uploadProgress.includes("denied") || uploadProgress.includes("large") ? "#f38ba8" : "#a6e3a1",
-      background: "#181825",
-      borderTop: "1px solid #313244",
+      color: uploading ? "var(--accent)" : uploadProgress.includes("failed") || uploadProgress.includes("denied") || uploadProgress.includes("large") ? "var(--danger)" : "var(--success)",
+      background: "var(--surface-1)",
+      borderTop: "1px solid var(--border-subtle)",
       textAlign: "center",
       flexShrink: 0,
     }}>
@@ -850,15 +850,15 @@ export default function FileExplorer({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         style={{
-          position: "fixed",
-          top: 44,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 60,
-          background: "#1e1e2e",
-          display: "flex",
-          flexDirection: "column",
+        position: "fixed",
+        top: 44,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 60,
+        background: "var(--surface-2)",
+        display: "flex",
+        flexDirection: "column",
           fontSize: explorerFontSize,
         } as React.CSSProperties}
       >
@@ -939,8 +939,8 @@ export default function FileExplorer({
         flexDirection: "column",
         minWidth: 0,
         height: "100%",
-        background: "#181825",
-        borderRight: embedded ? undefined : "1px solid #313244",
+        background: "var(--surface-1)",
+        borderRight: embedded ? undefined : "1px solid var(--border-subtle)",
         position: "relative",
         fontSize: explorerFontSize,
       } as React.CSSProperties}
@@ -1065,9 +1065,9 @@ function ExplorerHeader({
         flexDirection: "column",
         gap: "0.35em",
         padding: "0.35em 0.5em 0.45em",
-        borderBottom: "1px solid #313244",
+        borderBottom: "1px solid var(--border-subtle)",
         flexShrink: 0,
-        background: "#181825",
+        background: "var(--surface-1)",
         fontSize: explorerFontSize,
       }}
     >
@@ -1076,11 +1076,10 @@ function ExplorerHeader({
           onClick={onBack}
           disabled={!canGoBack}
           title="Back"
+          className="panel-icon-button"
           style={{
-            background: "none",
-            border: "none",
-            color: canGoBack ? "#cdd6f4" : "#45475a",
-            cursor: canGoBack ? "pointer" : "default",
+            ["--panel-fg" as any]: canGoBack ? "var(--text-primary)" : "var(--border-strong)",
+            ["--panel-hover-fg" as any]: "var(--text-primary)",
             padding: "0.15em 0.3em",
             display: "flex",
             alignItems: "center",
@@ -1102,7 +1101,7 @@ function ExplorerHeader({
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
             fontSize: "0.95em",
-            color: "#89b4fa",
+            color: "var(--accent)",
             fontFamily: "'Cascadia Code', 'Consolas', monospace",
           }}
         >
@@ -1115,19 +1114,16 @@ function ExplorerHeader({
           <button
             onClick={onRefresh}
             title="Refresh"
+            className="panel-icon-button"
             style={{
-              background: "none",
-              border: "none",
-              color: "#6c7086",
-              cursor: "pointer",
+              ["--panel-fg" as any]: "var(--text-muted)",
+              ["--panel-hover-fg" as any]: "var(--text-primary)",
               padding: "0.15em 0.3em",
               display: "flex",
               alignItems: "center",
               borderRadius: 3,
               flexShrink: 0,
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
           >
             <RefreshIcon />
           </button>
@@ -1137,19 +1133,16 @@ function ExplorerHeader({
             <button
               onClick={onOpenNative}
               title={`${openNativeTitle} (server-side action)`}
+              className="panel-icon-button"
               style={{
-                background: "none",
-                border: "none",
-                color: "#6c7086",
-                cursor: "pointer",
+                ["--panel-fg" as any]: "var(--text-muted)",
+                ["--panel-hover-fg" as any]: "var(--warn)",
                 padding: "0.15em 0.3em",
                 display: "flex",
                 alignItems: "center",
                 borderRadius: 3,
                 flexShrink: 0,
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#f9e2af"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
             >
               <OpenExternalIcon />
             </button>
@@ -1162,7 +1155,7 @@ function ExplorerHeader({
             style={{
               background: "none",
               border: "none",
-              color: showHidden ? "#a6e3a1" : "#6c7086",
+              color: showHidden ? "var(--success)" : "var(--text-muted)",
               cursor: "pointer",
               padding: "0.15em 0.3em",
               fontSize: "0.85em",
@@ -1178,11 +1171,10 @@ function ExplorerHeader({
           <button
             onClick={onToggleView}
             title={viewMode === "grid" ? "List view" : "Grid view"}
+            className="panel-icon-button"
             style={{
-              background: "none",
-              border: "none",
-              color: "#6c7086",
-              cursor: "pointer",
+              ["--panel-fg" as any]: "var(--text-muted)",
+              ["--panel-hover-fg" as any]: "var(--text-primary)",
               padding: "0.15em 0.3em",
               display: "flex",
               alignItems: "center",
@@ -1197,19 +1189,16 @@ function ExplorerHeader({
           <button
             onClick={onUpload}
             title="Upload files"
+            className="panel-icon-button"
             style={{
-              background: "none",
-              border: "none",
-              color: "#6c7086",
-              cursor: "pointer",
+              ["--panel-fg" as any]: "var(--text-muted)",
+              ["--panel-hover-fg" as any]: "var(--success)",
               padding: "0.15em 0.3em",
               display: "flex",
               alignItems: "center",
               borderRadius: 3,
               flexShrink: 0,
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#a6e3a1"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
           >
             <UploadIcon />
           </button>
@@ -1218,19 +1207,16 @@ function ExplorerHeader({
           <button
             onClick={onNewFolder}
             title="New folder"
+            className="panel-icon-button"
             style={{
-              background: "none",
-              border: "none",
-              color: "#6c7086",
-              cursor: "pointer",
+              ["--panel-fg" as any]: "var(--text-muted)",
+              ["--panel-hover-fg" as any]: "var(--warn)",
               padding: "0.15em 0.3em",
               display: "flex",
               alignItems: "center",
               borderRadius: 3,
               flexShrink: 0,
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#f9e2af"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
           >
             <NewFolderIcon />
           </button>
@@ -1242,25 +1228,25 @@ function ExplorerHeader({
           <button
             onClick={() => onFontSizeChange((s) => Math.max(8, s - 1))}
             title="Decrease font size"
+            className="panel-icon-button"
             style={{
-              background: "none", border: "none", color: "#6c7086", cursor: "pointer",
+              ["--panel-fg" as any]: "var(--text-muted)",
+              ["--panel-hover-fg" as any]: "var(--text-primary)",
               fontSize: "1em", fontWeight: 700, padding: "0 0.2em", lineHeight: 1, borderRadius: 3,
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
           >-</button>
-          <span style={{ fontSize: "0.75em", color: "#6c7086", minWidth: "1.2em", textAlign: "center" }}>
+          <span style={{ fontSize: "0.75em", color: "var(--text-muted)", minWidth: "1.2em", textAlign: "center" }}>
             {explorerFontSize}
           </span>
           <button
             onClick={() => onFontSizeChange((s) => Math.min(20, s + 1))}
             title="Increase font size"
+            className="panel-icon-button"
             style={{
-              background: "none", border: "none", color: "#6c7086", cursor: "pointer",
+              ["--panel-fg" as any]: "var(--text-muted)",
+              ["--panel-hover-fg" as any]: "var(--text-primary)",
               fontSize: "1em", fontWeight: 700, padding: "0 0.2em", lineHeight: 1, borderRadius: 3,
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
           >+</button>
           </div>
         )}
@@ -1269,11 +1255,10 @@ function ExplorerHeader({
           <button
             onClick={onClose}
             title="Close"
+            className="panel-icon-button"
             style={{
-              background: "none",
-              border: "none",
-              color: "#6c7086",
-              cursor: "pointer",
+              ["--panel-fg" as any]: "var(--text-muted)",
+              ["--panel-hover-fg" as any]: "var(--text-primary)",
               padding: "0.15em 0.3em",
               display: "flex",
               alignItems: "center",
@@ -1298,19 +1283,19 @@ function ExplorerHeader({
             placeholder="Filter current folder"
             style={{
               flex: 1,
-              minWidth: 0,
-              padding: "0.45em 0.65em",
-              borderRadius: 6,
-              border: "1px solid #45475a",
-              background: "#313244",
-              color: "#cdd6f4",
-              fontSize: "0.82em",
-              outline: "none",
-              boxSizing: "border-box",
-            }}
-          />
-          {isLocal && (
-            <span style={{ fontSize: "0.72em", color: "#6c7086", whiteSpace: "nowrap" }}>
+            minWidth: 0,
+            padding: "0.45em 0.65em",
+            borderRadius: 6,
+            border: "1px solid var(--border-strong)",
+            background: "var(--surface-2)",
+            color: "var(--text-primary)",
+            fontSize: "0.82em",
+            outline: "none",
+            boxSizing: "border-box",
+          }}
+        />
+        {isLocal && (
+            <span style={{ fontSize: "0.72em", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
               {openNativeLabel}
             </span>
           )}
@@ -1369,7 +1354,7 @@ function ExplorerBody({
 }) {
   if (loading) {
     return (
-      <div style={{ padding: 20, textAlign: "center", color: "#6c7086" }}>
+      <div style={{ padding: 20, textAlign: "center", color: "var(--text-muted)" }}>
         Loading...
       </div>
     );
@@ -1377,7 +1362,7 @@ function ExplorerBody({
 
   if (error) {
     return (
-      <div style={{ padding: 12, color: "#f38ba8" }}>{error}</div>
+      <div style={{ padding: 12, color: "var(--danger)" }}>{error}</div>
     );
   }
 
@@ -1507,6 +1492,7 @@ function GridItem({
         else onFileClick(entry);
       }}
       onContextMenu={(e) => { if (!isRenaming) onContextMenu(e, entry); }}
+      className="panel-list-row"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -1515,12 +1501,6 @@ function GridItem({
         borderRadius: 6,
         cursor: isRenaming ? "default" : "pointer",
         position: "relative",
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background = "#313244";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background = "transparent";
       }}
     >
       {isFolder ? (
@@ -1542,9 +1522,9 @@ function GridItem({
           style={{
             marginTop: 4,
             fontSize: "0.85em",
-            color: "#cdd6f4",
-            background: "#1e1e2e",
-            border: "1px solid #89b4fa",
+            color: "var(--text-primary)",
+            background: "var(--surface-2)",
+            border: "1px solid var(--accent)",
             borderRadius: 3,
             padding: "1px 4px",
             width: "100%",
@@ -1558,7 +1538,7 @@ function GridItem({
           style={{
             marginTop: 4,
             fontSize: "0.85em",
-            color: "#cdd6f4",
+            color: "var(--text-primary)",
             textAlign: "center",
             width: "100%",
             overflow: "hidden",
@@ -1581,25 +1561,20 @@ function GridItem({
             onInsertEntry(entry);
           }}
           title="Insert path"
+          className="panel-icon-button panel-icon-button--chip"
           style={{
             position: "absolute",
             top: 2,
             right: 2,
-            background: "none",
-            border: "1px solid #45475a",
-            color: "#6c7086",
-            cursor: "pointer",
+            ["--panel-bg" as any]: "transparent",
+            ["--panel-border" as any]: "var(--border-strong)",
+            ["--panel-fg" as any]: "var(--text-muted)",
+            ["--panel-hover-fg" as any]: "var(--success)",
             fontSize: uiPx(12),
             fontWeight: 700,
             borderRadius: 4,
             padding: "2px 5px",
             lineHeight: 1,
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.color = "#a6e3a1";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.color = "#6c7086";
           }}
         >
           @
@@ -1659,6 +1634,7 @@ function ListItem({
         else onFileClick(entry);
       }}
       onContextMenu={(e) => { if (!isRenaming) onContextMenu(e, entry); }}
+      className="panel-list-row"
       style={{
         display: "flex",
         alignItems: "center",
@@ -1666,13 +1642,7 @@ function ListItem({
         padding: "5px 6px",
         borderRadius: 4,
         cursor: isRenaming ? "default" : "pointer",
-        color: "#cdd6f4",
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background = "#313244";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background = "transparent";
+        color: "var(--text-primary)",
       }}
     >
       {isFolder ? (
@@ -1694,9 +1664,9 @@ function ListItem({
           style={{
             flex: 1,
             minWidth: 0,
-            color: "#cdd6f4",
-            background: "#1e1e2e",
-            border: "1px solid #89b4fa",
+            color: "var(--text-primary)",
+            background: "var(--surface-2)",
+            border: "1px solid var(--accent)",
             borderRadius: 3,
             padding: "1px 4px",
             outline: "none",
@@ -1720,7 +1690,7 @@ function ListItem({
       )}
       {/* Size (files only) */}
       {!isRenaming && !isFolder && entry.size != null && (
-        <span style={{ fontSize: "0.85em", color: "#6c7086", flexShrink: 0 }}>
+        <span style={{ fontSize: "0.85em", color: "var(--text-muted)", flexShrink: 0 }}>
           {formatSize(entry.size)}
         </span>
       )}
@@ -1732,23 +1702,18 @@ function ListItem({
             onInsertEntry(entry);
           }}
           title="Insert path"
+          className="panel-icon-button panel-icon-button--chip"
           style={{
-            background: "none",
-            border: "1px solid #45475a",
-            color: "#6c7086",
-            cursor: "pointer",
+            ["--panel-bg" as any]: "transparent",
+            ["--panel-border" as any]: "var(--border-strong)",
+            ["--panel-fg" as any]: "var(--text-muted)",
+            ["--panel-hover-fg" as any]: "var(--success)",
             fontSize: uiPx(12),
             fontWeight: 700,
             borderRadius: 4,
             padding: "2px 6px",
             flexShrink: 0,
             lineHeight: 1,
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.color = "#a6e3a1";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.color = "#6c7086";
           }}
         >
           @
@@ -1810,17 +1775,15 @@ function ContextMenu({
   return createPortal(
     <div
       ref={menuRef}
+      className="panel-menu"
       style={{
         position: "fixed",
         left: pos.x,
         top: pos.y,
         zIndex: 9999,
-        background: "#1e1e2e",
-        border: "1px solid #45475a",
         borderRadius: 6,
         padding: "4px 0",
         minWidth: 180,
-        boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
         fontFamily: "'Cascadia Code', 'Consolas', monospace",
         fontSize: uiPx(12),
       }}
@@ -1828,22 +1791,21 @@ function ContextMenu({
     >
       {items.map((item, i) => {
         if (item === "separator") {
-          return <div key={`sep-${i}`} style={{ height: 1, background: "#313244", margin: "4px 0" }} />;
+          return <div key={`sep-${i}`} style={{ height: 1, background: "var(--border-subtle)", margin: "4px 0" }} />;
         }
         return (
           <div
             key={item.label}
             onClick={item.onClick}
+            className="panel-list-row"
             style={{
               display: "flex",
               alignItems: "center",
               gap: 8,
               padding: "6px 12px",
               cursor: "pointer",
-              color: "#cdd6f4",
+              color: "var(--text-primary)",
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = "#313244"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
           >
             <span style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>{item.icon}</span>
             <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>
@@ -1858,28 +1820,28 @@ function ContextMenu({
 /* ---- Context Menu Icons ---- */
 
 const CtxPreviewIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#89b4fa" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--accent)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
     <path d="M1 7s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4z" />
     <circle cx="7" cy="7" r="1.5" />
   </svg>
 );
 
 const CtxOpenFileIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#a6e3a1" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--success)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
     <path d="M8 1H3.5A1.5 1.5 0 0 0 2 2.5v9A1.5 1.5 0 0 0 3.5 13h7a1.5 1.5 0 0 0 1.5-1.5V5L8 1z" />
     <path d="M8 1v4h4" />
   </svg>
 );
 
 const CtxFolderOpenIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#f9e2af" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--warn)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
     <path d="M1.5 3A1.5 1.5 0 0 1 3 1.5h2.5L7 3.5h4A1.5 1.5 0 0 1 12.5 5v1" />
     <path d="M1 6.5h10.5a1 1 0 0 1 1 .8l-1.2 4.5a1 1 0 0 1-1 .7H2.5a1 1 0 0 1-1-.7L.3 7.3a1 1 0 0 1 1-.8z" />
   </svg>
 );
 
 const CtxDownloadIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#89b4fa" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--accent)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
     <path d="M7 1.5v8" />
     <path d="M4 7l3 3 3-3" />
     <path d="M2 12h10" />
@@ -1887,21 +1849,21 @@ const CtxDownloadIcon = () => (
 );
 
 const CtxAtIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#a6e3a1" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--success)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="7" cy="7" r="2" />
     <path d="M9 5.5v2a1.5 1.5 0 0 0 3 0V7a5 5 0 1 0-2 4" />
   </svg>
 );
 
 const CtxCopyIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#cdd6f4" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--text-primary)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
     <rect x="5" y="5" width="7" height="7" rx="1" />
     <path d="M9 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h2" />
   </svg>
 );
 
 const CtxOpenExternalIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#f9e2af" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--warn)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
     <path d="M10.5 7.5v3.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1h3.5" />
     <path d="M8.5 2H12v3.5" />
     <path d="M6.5 7.5L12 2" />
@@ -1909,14 +1871,14 @@ const CtxOpenExternalIcon = () => (
 );
 
 const CtxRenameIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#cba6f7" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--accent)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
     <path d="M10.5 1.5l2 2-7.5 7.5H3v-2l7.5-7.5z" />
     <path d="M8.5 3.5l2 2" />
   </svg>
 );
 
 const CtxDeleteIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#f38ba8" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--danger)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
     <path d="M2.5 4h9" />
     <path d="M5 4V2.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V4" />
     <path d="M3.5 4l.5 8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l.5-8" />
@@ -1951,7 +1913,7 @@ function DeleteConfirmDialog({
         position: "fixed",
         inset: 0,
         zIndex: 10000,
-        background: "rgba(0,0,0,0.5)",
+        background: "var(--overlay-backdrop)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -1960,25 +1922,23 @@ function DeleteConfirmDialog({
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        className="panel-dialog"
         style={{
-          background: "#1e1e2e",
-          border: "1px solid #45475a",
           borderRadius: 8,
           padding: "20px 24px",
           minWidth: 300,
           maxWidth: 400,
-          boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
           fontFamily: "'Cascadia Code', 'Consolas', monospace",
         }}
       >
-        <div style={{ fontSize: uiPx(14), color: "#cdd6f4", marginBottom: 12, fontWeight: 600 }}>
+        <div style={{ fontSize: uiPx(14), color: "var(--text-primary)", marginBottom: 12, fontWeight: 600 }}>
           Delete {entry.type === "folder" ? "Folder" : "File"}
         </div>
-        <div style={{ fontSize: uiPx(12), color: "#a6adc8", marginBottom: 20, lineHeight: 1.5 }}>
+        <div style={{ fontSize: uiPx(12), color: "var(--text-secondary)", marginBottom: 20, lineHeight: 1.5 }}>
           Are you sure you want to delete{" "}
-          <span style={{ color: "#f38ba8", fontWeight: 600 }}>"{entry.name}"</span>?
+          <span style={{ color: "var(--danger)", fontWeight: 600 }}>"{entry.name}"</span>?
           {entry.type === "folder" && (
-            <span style={{ display: "block", marginTop: 6, color: "#f38ba8", fontSize: uiPx(11) }}>
+            <span style={{ display: "block", marginTop: 6, color: "var(--danger)", fontSize: uiPx(11) }}>
               This will delete the folder and all its contents.
             </span>
           )}
@@ -1986,36 +1946,30 @@ function DeleteConfirmDialog({
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button
             onClick={onCancel}
+            className="secondary-button"
             style={{
-              background: "#313244",
-              border: "1px solid #45475a",
-              color: "#cdd6f4",
               borderRadius: 4,
               padding: "6px 16px",
               fontSize: uiPx(12),
-              cursor: "pointer",
               fontFamily: "inherit",
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#45475a"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#313244"; }}
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
+            className="panel-icon-button"
             style={{
-              background: "#f38ba8",
-              border: "none",
-              color: "#1e1e2e",
+              ["--panel-bg" as any]: "var(--danger)",
+              ["--panel-fg" as any]: "var(--accent-contrast)",
+              ["--panel-hover-bg" as any]: "color-mix(in srgb, var(--danger) 85%, var(--surface-1))",
+              ["--panel-hover-fg" as any]: "var(--accent-contrast)",
               borderRadius: 4,
               padding: "6px 16px",
               fontSize: uiPx(12),
-              cursor: "pointer",
               fontWeight: 600,
               fontFamily: "inherit",
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#eba0ac"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#f38ba8"; }}
           >
             Delete
           </button>
@@ -2242,9 +2196,9 @@ function FilePreview({
           alignItems: "center",
           gap: 6,
           padding: "4px 8px",
-          borderBottom: "1px solid #313244",
+          borderBottom: "1px solid var(--border-subtle)",
           flexShrink: 0,
-          background: "#181825",
+          background: "var(--surface-1)",
         }}
       >
         <FileIcon extension={file.extension} size={16} />
@@ -2257,19 +2211,19 @@ function FilePreview({
             whiteSpace: "nowrap",
             fontSize: uiPx(11),
             fontWeight: 600,
-            color: "#cdd6f4",
+            color: "var(--text-primary)",
           }}
           title={file.name}
         >
           {file.name}
         </span>
         {size > 0 && (
-          <span style={{ fontSize: uiPx(10), color: "#6c7086", flexShrink: 0 }}>
+          <span style={{ fontSize: uiPx(10), color: "var(--text-muted)", flexShrink: 0 }}>
             {formatSize(size)}
           </span>
         )}
         {truncated && (
-          <span style={{ fontSize: uiPx(10), color: "#f9e2af", flexShrink: 0 }}>
+          <span style={{ fontSize: uiPx(10), color: "var(--warn)", flexShrink: 0 }}>
             L{startLine}-{endLine} / {totalLines}
           </span>
         )}
@@ -2278,27 +2232,27 @@ function FilePreview({
           <button
             onClick={() => setPreviewFontSize((s) => Math.max(8, s - 1))}
             title="Decrease font size"
+            className="panel-icon-button"
             style={{
-              background: "none", border: "none", color: "#6c7086", cursor: "pointer",
+              ["--panel-fg" as any]: "var(--text-muted)",
+              ["--panel-hover-fg" as any]: "var(--text-primary)",
               fontSize: uiPx(12), fontWeight: 700, padding: "0 3px", lineHeight: 1, borderRadius: 3,
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
           >
             -
           </button>
-          <span style={{ fontSize: uiPx(9), color: "#6c7086", minWidth: 20, textAlign: "center" }}>
+          <span style={{ fontSize: uiPx(9), color: "var(--text-muted)", minWidth: 20, textAlign: "center" }}>
             {previewFontSize}
           </span>
           <button
             onClick={() => setPreviewFontSize((s) => Math.min(24, s + 1))}
             title="Increase font size"
+            className="panel-icon-button"
             style={{
-              background: "none", border: "none", color: "#6c7086", cursor: "pointer",
+              ["--panel-fg" as any]: "var(--text-muted)",
+              ["--panel-hover-fg" as any]: "var(--text-primary)",
               fontSize: uiPx(12), fontWeight: 700, padding: "0 3px", lineHeight: 1, borderRadius: 3,
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
           >
             +
           </button>
@@ -2307,23 +2261,18 @@ function FilePreview({
         <button
           onClick={onInsertPath}
           title="Insert @path"
+          className="panel-icon-button panel-icon-button--chip"
           style={{
-            background: "none",
-            border: "1px solid #45475a",
-            color: "#a6e3a1",
-            cursor: "pointer",
+            ["--panel-bg" as any]: "transparent",
+            ["--panel-border" as any]: "var(--border-strong)",
+            ["--panel-fg" as any]: "var(--success)",
+            ["--panel-hover-bg" as any]: "var(--success-soft)",
             padding: "1px 6px",
             fontSize: uiPx(10),
             fontWeight: 700,
             borderRadius: 3,
             flexShrink: 0,
             lineHeight: "16px",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "#a6e3a118";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "none";
           }}
         >
           @
@@ -2332,19 +2281,16 @@ function FilePreview({
         <button
           onClick={onClose}
           title="Close preview"
+          className="panel-icon-button"
           style={{
-            background: "none",
-            border: "none",
-            color: "#6c7086",
-            cursor: "pointer",
+            ["--panel-fg" as any]: "var(--text-muted)",
+            ["--panel-hover-fg" as any]: "var(--text-primary)",
             padding: "2px 4px",
             display: "flex",
             alignItems: "center",
             borderRadius: 3,
             flexShrink: 0,
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <line x1="3" y1="3" x2="9" y2="9" />
@@ -2359,8 +2305,8 @@ function FilePreview({
           alignItems: "center",
           gap: 8,
           padding: "6px 8px",
-          borderBottom: "1px solid #313244",
-          background: "#151520",
+          borderBottom: "1px solid var(--border-subtle)",
+          background: "var(--surface-inset)",
           flexWrap: "wrap",
         }}
       >
@@ -2404,7 +2350,7 @@ function FilePreview({
           >
             Next
           </button>
-          <span style={{ fontSize: uiPx(10), color: "#6c7086" }}>
+          <span style={{ fontSize: uiPx(10), color: "var(--text-muted)" }}>
             {matchLines.length > 0 ? `${activeMatchIndex + 1}/${matchLines.length}` : "0 matches"}
           </span>
         </div>
@@ -2452,11 +2398,11 @@ function FilePreview({
       </div>
 
       {loading ? (
-        <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: uiPx(12) }}>
+        <div style={{ padding: 20, textAlign: "center", color: "var(--text-muted)", fontSize: uiPx(12) }}>
           Loading...
         </div>
       ) : errorMessage ? (
-        <div style={{ padding: 20, textAlign: "center", color: "#f38ba8", fontSize: uiPx(12) }}>
+        <div style={{ padding: 20, textAlign: "center", color: "var(--danger)", fontSize: uiPx(12) }}>
           {errorMessage}
         </div>
       ) : (
@@ -2473,30 +2419,30 @@ function FilePreview({
                 alignItems: "center",
                 gap: 6,
                 padding: "4px 8px",
-                background: "rgba(30, 30, 46, 0.97)",
-                borderBottom: "1px solid #45475a",
+                background: "color-mix(in srgb, var(--surface-2) 92%, transparent)",
+                borderBottom: "1px solid var(--border-strong)",
                 backdropFilter: "blur(4px)",
               }}
             >
-              <span style={{ fontSize: uiPx(11), color: "#89b4fa" }}>
+              <span style={{ fontSize: uiPx(11), color: "var(--accent)" }}>
                 L{rangeFrom}{rangeFrom !== rangeTo ? `-${rangeTo}` : ""}
               </span>
-              <span style={{ fontSize: uiPx(10), color: "#6c7086" }}>
+              <span style={{ fontSize: uiPx(10), color: "var(--text-muted)" }}>
                 ({rangeTo - rangeFrom + 1} lines)
               </span>
               <div style={{ flex: 1 }} />
               <button
-                className="sel-insert-btn"
                 onClick={() => {
                   onInsertSelection(rangeFrom, rangeTo, getSelectedText());
                   clearSelection();
                 }}
                 title="Insert @path with selected lines"
+                className="panel-icon-button panel-icon-button--chip"
                 style={{
-                  background: "#313244",
-                  border: "1px solid #45475a",
-                  color: "#a6e3a1",
-                  cursor: "pointer",
+                  ["--panel-bg" as any]: "var(--surface-2)",
+                  ["--panel-border" as any]: "var(--border-strong)",
+                  ["--panel-fg" as any]: "var(--success)",
+                  ["--panel-hover-bg" as any]: "var(--surface-3)",
                   fontSize: uiPx(11),
                   fontWeight: 700,
                   borderRadius: 4,
@@ -2505,12 +2451,6 @@ function FilePreview({
                   display: "flex",
                   alignItems: "center",
                   gap: 4,
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = "#45475a";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = "#313244";
                 }}
               >
                 @ Insert
@@ -3084,10 +3024,6 @@ function PdfPreview({
   onInsertPath: () => void;
 }) {
   const headerButtonStyle: React.CSSProperties = {
-    background: "none",
-    border: "1px solid #45475a",
-    color: "#89b4fa",
-    cursor: "pointer",
     padding: "1px 6px",
     fontSize: uiPx(10),
     fontWeight: 600,
@@ -3103,9 +3039,9 @@ function PdfPreview({
     minWidth: 88,
     padding: "8px 12px",
     borderRadius: 6,
-    border: "1px solid #45475a",
-    background: "#181825",
-    color: "#cdd6f4",
+    border: "1px solid var(--border-strong)",
+    background: "var(--surface-1)",
+    color: "var(--text-primary)",
     textDecoration: "none",
     fontSize: uiPx(12),
     fontWeight: 600,
@@ -3119,9 +3055,9 @@ function PdfPreview({
           alignItems: "center",
           gap: 6,
           padding: "4px 8px",
-          borderBottom: "1px solid #313244",
+          borderBottom: "1px solid var(--border-subtle)",
           flexShrink: 0,
-          background: "#181825",
+          background: "var(--surface-1)",
         }}
       >
         <FileIcon extension={file.extension} size={16} />
@@ -3134,30 +3070,28 @@ function PdfPreview({
             whiteSpace: "nowrap",
             fontSize: uiPx(11),
             fontWeight: 600,
-            color: "#cdd6f4",
+            color: "var(--text-primary)",
           }}
           title={file.name}
         >
           {file.name}
         </span>
         {size > 0 && (
-          <span style={{ fontSize: uiPx(10), color: "#6c7086", flexShrink: 0 }}>
+          <span style={{ fontSize: uiPx(10), color: "var(--text-muted)", flexShrink: 0 }}>
             {formatSize(size)}
           </span>
         )}
         <button
           onClick={onInsertPath}
           title="Insert @path"
+          className="panel-icon-button panel-icon-button--chip"
           style={{
             ...headerButtonStyle,
-            color: "#a6e3a1",
+            ["--panel-bg" as any]: "transparent",
+            ["--panel-border" as any]: "var(--border-strong)",
+            ["--panel-fg" as any]: "var(--success)",
+            ["--panel-hover-bg" as any]: "var(--success-soft)",
             fontWeight: 700,
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "#a6e3a118";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "none";
           }}
         >
           @
@@ -3165,32 +3099,24 @@ function PdfPreview({
         <button
           onClick={() => window.open(openUrl, "_blank", "noopener,noreferrer")}
           title="Open in new tab"
-          style={headerButtonStyle}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "#89b4fa18";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "none";
-          }}
+          className="panel-icon-button panel-icon-button--chip"
+          style={{ ...headerButtonStyle, ["--panel-bg" as any]: "transparent", ["--panel-border" as any]: "var(--border-strong)", ["--panel-fg" as any]: "var(--accent)", ["--panel-hover-bg" as any]: "var(--accent-soft)" }}
         >
           Open
         </button>
         <button
           onClick={onClose}
           title="Close preview"
+          className="panel-icon-button"
           style={{
-            background: "none",
-            border: "none",
-            color: "#6c7086",
-            cursor: "pointer",
+            ["--panel-fg" as any]: "var(--text-muted)",
+            ["--panel-hover-fg" as any]: "var(--text-primary)",
             padding: "2px 4px",
             display: "flex",
             alignItems: "center",
             borderRadius: 3,
             flexShrink: 0,
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <line x1="3" y1="3" x2="9" y2="9" />
@@ -3200,11 +3126,11 @@ function PdfPreview({
       </div>
 
       {loading ? (
-        <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: uiPx(12) }}>
+        <div style={{ padding: 20, textAlign: "center", color: "var(--text-muted)", fontSize: uiPx(12) }}>
           Loading...
         </div>
       ) : errorMessage ? (
-        <div style={{ padding: 20, textAlign: "center", color: "#f38ba8", fontSize: uiPx(12) }}>
+        <div style={{ padding: 20, textAlign: "center", color: "var(--danger)", fontSize: uiPx(12) }}>
           {errorMessage}
         </div>
       ) : pdfUrl ? (
@@ -3212,7 +3138,7 @@ function PdfPreview({
           style={{
             flex: 1,
             minHeight: 0,
-            backgroundColor: "#11111b",
+            backgroundColor: "var(--surface-inset)",
             padding: 12,
           }}
         >
@@ -3225,9 +3151,9 @@ function PdfPreview({
               display: "block",
               width: "100%",
               height: "100%",
-              border: "1px solid #313244",
+              border: "1px solid var(--border-subtle)",
               borderRadius: 8,
-              background: "#0b0d12",
+              background: "var(--surface-base)",
             }}
           >
             <div
@@ -3239,7 +3165,7 @@ function PdfPreview({
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 12,
-                color: "#cdd6f4",
+                color: "var(--text-primary)",
                 textAlign: "center",
                 padding: 24,
               }}
@@ -3247,7 +3173,7 @@ function PdfPreview({
               <div style={{ fontSize: uiPx(14), fontWeight: 600 }}>
                 PDF 미리보기를 사용할 수 없습니다.
               </div>
-              <div style={{ fontSize: uiPx(12), color: "#a6adc8", maxWidth: 360, lineHeight: 1.5 }}>
+              <div style={{ fontSize: uiPx(12), color: "var(--text-secondary)", maxWidth: 360, lineHeight: 1.5 }}>
                 현재 브라우저에서 내장 PDF 뷰어를 지원하지 않거나 비활성화되어 있습니다. 새 탭에서 열거나 다운로드해 확인하세요.
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
@@ -3381,11 +3307,11 @@ function AudioPreview({
 
       {/* Body */}
       {loading ? (
-        <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: uiPx(12) }}>
+        <div style={{ padding: 20, textAlign: "center", color: "var(--text-muted)", fontSize: uiPx(12) }}>
           Loading...
         </div>
       ) : errorMessage ? (
-        <div style={{ padding: 20, textAlign: "center", color: "#f38ba8", fontSize: uiPx(12) }}>
+        <div style={{ padding: 20, textAlign: "center", color: "var(--danger)", fontSize: uiPx(12) }}>
           {errorMessage}
         </div>
       ) : audioUrl ? (
@@ -3398,17 +3324,17 @@ function AudioPreview({
             alignItems: "center",
             justifyContent: "center",
             gap: 16,
-            backgroundColor: "#11111b",
+            backgroundColor: "var(--surface-inset)",
             padding: 24,
           }}
         >
           {/* Large audio icon */}
-          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#89b4fa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 18V5l12-2v13" />
             <circle cx="6" cy="18" r="3" />
             <circle cx="18" cy="16" r="3" />
           </svg>
-          <span style={{ color: "#cdd6f4", fontSize: uiPx(13), fontWeight: 500, textAlign: "center", wordBreak: "break-all" }}>
+          <span style={{ color: "var(--text-primary)", fontSize: uiPx(13), fontWeight: 500, textAlign: "center", wordBreak: "break-all" }}>
             {file.name}
           </span>
           {/* Native audio player */}
@@ -3452,9 +3378,9 @@ function VideoPreview({
           alignItems: "center",
           gap: 6,
           padding: "4px 8px",
-          borderBottom: "1px solid #313244",
+          borderBottom: "1px solid var(--border-subtle)",
           flexShrink: 0,
-          background: "#181825",
+          background: "var(--surface-1)",
         }}
       >
         <FileIcon extension={file.extension} size={16} />
@@ -3467,25 +3393,26 @@ function VideoPreview({
             whiteSpace: "nowrap",
             fontSize: uiPx(11),
             fontWeight: 600,
-            color: "#cdd6f4",
+            color: "var(--text-primary)",
           }}
           title={file.name}
         >
           {file.name}
         </span>
         {size > 0 && (
-          <span style={{ fontSize: uiPx(10), color: "#6c7086", flexShrink: 0 }}>
+          <span style={{ fontSize: uiPx(10), color: "var(--text-muted)", flexShrink: 0 }}>
             {formatSize(size)}
           </span>
         )}
         <button
           onClick={onInsertPath}
           title="Insert @path"
+          className="panel-icon-button panel-icon-button--chip"
           style={{
-            background: "none",
-            border: "1px solid #45475a",
-            color: "#a6e3a1",
-            cursor: "pointer",
+            ["--panel-bg" as any]: "transparent",
+            ["--panel-border" as any]: "var(--border-strong)",
+            ["--panel-fg" as any]: "var(--success)",
+            ["--panel-hover-bg" as any]: "var(--success-soft)",
             padding: "1px 6px",
             fontSize: uiPx(10),
             fontWeight: 700,
@@ -3493,31 +3420,22 @@ function VideoPreview({
             flexShrink: 0,
             lineHeight: "16px",
           }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "#a6e3a118";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "none";
-          }}
         >
           @
         </button>
         <button
           onClick={onClose}
           title="Close preview"
+          className="panel-icon-button"
           style={{
-            background: "none",
-            border: "none",
-            color: "#6c7086",
-            cursor: "pointer",
+            ["--panel-fg" as any]: "var(--text-muted)",
+            ["--panel-hover-fg" as any]: "var(--text-primary)",
             padding: "2px 4px",
             display: "flex",
             alignItems: "center",
             borderRadius: 3,
             flexShrink: 0,
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <line x1="3" y1="3" x2="9" y2="9" />
@@ -3527,11 +3445,11 @@ function VideoPreview({
       </div>
 
       {loading ? (
-        <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: uiPx(12) }}>
+        <div style={{ padding: 20, textAlign: "center", color: "var(--text-muted)", fontSize: uiPx(12) }}>
           Loading...
         </div>
       ) : errorMessage ? (
-        <div style={{ padding: 20, textAlign: "center", color: "#f38ba8", fontSize: uiPx(12) }}>
+        <div style={{ padding: 20, textAlign: "center", color: "var(--danger)", fontSize: uiPx(12) }}>
           {errorMessage}
         </div>
       ) : videoSrc ? (
@@ -3542,7 +3460,7 @@ function VideoPreview({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "#11111b",
+            backgroundColor: "var(--surface-inset)",
             padding: 12,
           }}
         >
@@ -3573,6 +3491,7 @@ function ParentGridItem({ onBack }: { onBack: () => void }) {
   return (
     <div
       onClick={onBack}
+      className="panel-list-row"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -3581,19 +3500,13 @@ function ParentGridItem({ onBack }: { onBack: () => void }) {
         borderRadius: 6,
         cursor: "pointer",
       }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background = "#313244";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background = "transparent";
-      }}
     >
       <ParentFolderIcon size={32} />
       <span
         style={{
           marginTop: 4,
           fontSize: uiPx(10),
-          color: "#a6adc8",
+          color: "var(--text-secondary)",
           textAlign: "center",
         }}
       >
@@ -3607,6 +3520,7 @@ function ParentListItem({ onBack }: { onBack: () => void }) {
   return (
     <div
       onClick={onBack}
+      className="panel-list-row"
       style={{
         display: "flex",
         alignItems: "center",
@@ -3615,13 +3529,7 @@ function ParentListItem({ onBack }: { onBack: () => void }) {
         borderRadius: 4,
         cursor: "pointer",
         fontSize: uiPx(12),
-        color: "#a6adc8",
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background = "#313244";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background = "transparent";
+        color: "var(--text-secondary)",
       }}
     >
       <ParentFolderIcon size={16} />
@@ -3636,12 +3544,12 @@ const ParentFolderIcon = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
     <path
       d="M1 3.5C1 2.67 1.67 2 2.5 2H6l1.5 2H13.5C14.33 4 15 4.67 15 5.5V12.5C15 13.33 14.33 14 13.5 14H2.5C1.67 14 1 13.33 1 12.5V3.5Z"
-      fill="#6c7086"
+      fill="var(--text-muted)"
       opacity="0.6"
     />
     <path
       d="M5 9.5L8 7L11 9.5"
-      stroke="#cdd6f4"
+      stroke="var(--text-primary)"
       strokeWidth="1.5"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -3717,7 +3625,7 @@ function NewFolderInlineGrid({
         alignItems: "center",
         padding: "8px 4px 6px",
         borderRadius: 6,
-        background: "#313244",
+        background: "var(--surface-2)",
       }}
     >
       <IconFolder size={32} />
@@ -3734,9 +3642,9 @@ function NewFolderInlineGrid({
         style={{
           marginTop: 4,
           fontSize: "0.85em",
-          color: "#cdd6f4",
-          background: "#1e1e2e",
-          border: "1px solid #a6e3a1",
+          color: "var(--text-primary)",
+          background: "var(--surface-1)",
+          border: "1px solid var(--success)",
           borderRadius: 3,
           padding: "1px 4px",
           width: "100%",
@@ -3765,8 +3673,8 @@ function NewFolderInlineList({
         gap: 6,
         padding: "5px 6px",
         borderRadius: 4,
-        background: "#313244",
-        color: "#cdd6f4",
+        background: "var(--surface-2)",
+        color: "var(--text-primary)",
       }}
     >
       <IconFolder size={16} />
@@ -3783,9 +3691,9 @@ function NewFolderInlineList({
         style={{
           flex: 1,
           minWidth: 0,
-          color: "#cdd6f4",
-          background: "#1e1e2e",
-          border: "1px solid #a6e3a1",
+          color: "var(--text-primary)",
+          background: "var(--surface-1)",
+          border: "1px solid var(--success)",
           borderRadius: 3,
           padding: "1px 4px",
           outline: "none",
