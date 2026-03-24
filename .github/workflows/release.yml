@@ -22,9 +22,6 @@ jobs:
           - runner: windows-latest
             artifact_name: windows-x64
             build_command: .\build-release.ps1
-          - runner: macos-13
-            artifact_name: macos-x64
-            build_command: chmod +x build-release.sh && ./build-release.sh
           - runner: macos-14
             artifact_name: macos-arm64
             build_command: chmod +x build-release.sh && ./build-release.sh
