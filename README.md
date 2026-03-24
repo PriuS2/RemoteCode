@@ -1,54 +1,110 @@
 # Remote Code
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Node.js 18+](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
 
-Remote Code is a self-hosted web app for running terminal-based coding workflows from the browser.
-It provides persistent PTY-backed sessions, file browsing, Git tooling, Monaco-based IDE sessions, and
-OpenCode Web proxying on top of a FastAPI backend and React frontend.
+Remote Code is a self-hosted browser workbench for terminal-based coding workflows.
+It gives you a persistent web workspace for Claude Code sessions, split views, file browsing, Git review, and IDE panels without moving your project off your machine.
 
-## Features
+## Why Remote Code
 
-- Web terminal powered by xterm.js
-- Monaco IDE session with multi-tab editing, save/reload, and language-aware diagnostics
-- Multiple persistent sessions with suspend, resume, rename, reorder, and split view
-- CLI types: `claude`, `kilo`, `opencode`, `terminal`, `custom`, `folder`, `git`, and `ide`
-- File explorer with preview, upload, download, rename, delete, mkdir, and server-side open
-- Git status, diff, history, branch, commit, stash, pull, and push actions
-- Password login backed by an `HttpOnly` session cookie
-- Optional Cloudflare Tunnel or reverse-proxy deployment
+- Run coding sessions in the browser while keeping files and CLI tools on your own host.
+- Reopen projects and sessions without rebuilding your workspace every time.
+- Combine terminal, File Explorer, Git, and IDE panels in one interface.
+- Use split view when you want two active contexts side by side.
+- Ship it as a source install or as a packaged desktop launcher.
 
-## Architecture
+## Key Capabilities
 
-```text
-Browser (React + xterm.js)
-    <-> HTTP / WebSocket
-FastAPI backend
-    <-> PTY manager (pywinpty / pexpect)
-CLI process
-```
-
-| Layer | Stack |
+| Capability | What it does |
 | --- | --- |
-| Frontend | React 18, TypeScript, Vite, xterm.js |
-| Backend | FastAPI, Uvicorn, WebSocket |
-| PTY | pywinpty on Windows, pexpect on Linux/macOS |
-| Storage | SQLite via aiosqlite |
-| Auth | Password login + JWT-backed `HttpOnly` cookie |
+| Claude Code Sessions | Start and reopen browser-based Claude Code workspaces backed by a real local CLI process. |
+| Persistent Projects | Group sessions under a fixed workspace path so terminals and panels stay attached to the same codebase. |
+| Split View | Open two active sessions side by side for parallel work, review, or debugging. |
+| File Explorer | Browse folders, preview files, upload, download, rename, delete, and create folders from the UI. |
+| Git Panel | Inspect status, diffs, history, branches, stash, pull, push, and commit actions without leaving the browser. |
+| IDE Workspace | Open a Monaco-based editor session with file editing and language-aware tooling. |
+| Flexible Session Types | Use `claude`, `kilo`, `opencode`, `terminal`, `custom`, `folder`, `git`, and `ide` sessions from the same app. |
+
+## Feature Tour
+
+### Login
+
+![Remote Code login screen](docs/screenshots/readme-login.png)
+
+*Password-protected entry keeps the browser client simple while the backend owns the authenticated session cookie.*
+
+### Create a Session
+
+![Add Session modal](docs/screenshots/readme-new-session.png)
+
+*Create a Claude Code, terminal, File Explorer, Git, IDE, or custom CLI session inside a project workspace.*
+
+### Claude Code Session
+
+![Claude Code session](docs/screenshots/readme-claude-session.png)
+
+*Use Claude Code in the browser while the real CLI continues to run on your host machine.*
+
+### Split View
+
+![Split view with Git and Claude Code](docs/screenshots/readme-split-view.png)
+
+*Shift-click a second session to open two active panels side by side.*
+
+### File Explorer
+
+![File Explorer session](docs/screenshots/readme-file-explorer.png)
+
+*Browse the workspace, inspect files, and manage folders without dropping back to the system file manager.*
+
+### Git Panel
+
+![Git panel](docs/screenshots/readme-git-panel.png)
+
+*Review changes, inspect diffs, and manage repository actions from a dedicated Git session.*
 
 ## Requirements
 
 - Python 3.10+
-- Node.js 18+
+- Node.js 18+ for source builds
 - At least one CLI available in `PATH`
   - `claude` for Claude Code sessions
   - `kilo` for Kilo Code sessions
   - `opencode` for OpenCode and OpenCode Web sessions
 
-## Quick Start
+Remote Code does not bundle those CLIs for you. The packaged app and the source install both expect the selected CLI to already exist on the host.
 
-### 1. Setup
+## Getting Started
+
+### Option A: Download and Run from Releases
+
+1. Open the GitHub Releases page and download the archive for your platform.
+2. Extract the archive.
+3. Launch the packaged app.
+   - Windows: run `Remote Code/Remote Code.exe`
+   - macOS: open `Remote Code.app`
+4. On first launch, the app starts the local backend and opens the browser automatically.
+5. Sign in with the password stored in the runtime `.env` file and change it before exposing the app outside your machine.
+
+Runtime data is stored outside the repository:
+
+- Windows: `%APPDATA%\Remote Code`
+- macOS: `~/Library/Application Support/Remote Code`
+
+The packaged launcher stores its runtime `.env` and `sessions.db` there. It also generates a secure JWT secret automatically when needed.
+
+### Option B: Run from Source
+
+1. Clone the repository.
+
+```bash
+git clone <your-repo-url>
+cd RemoteCode
+```
+
+2. Install dependencies.
 
 ```bash
 # Windows
@@ -58,13 +114,11 @@ CLI process
 chmod +x *.sh
 ./setup.sh
 
-# Or Make
+# Optional
 make setup
 ```
 
-### 2. Configure `.env`
-
-The first run creates a `.env` file. Change the security-sensitive defaults before exposing the app.
+3. Review `.env`.
 
 ```env
 CCR_HOST=0.0.0.0
@@ -72,67 +126,101 @@ CCR_PORT=8080
 CCR_CLAUDE_COMMAND=claude
 CCR_KILO_COMMAND=kilo
 CCR_OPENCODE_COMMAND=opencode
-CCR_OPENCODE_WEB_PORT=8096
-CCR_OPENCODE_WEB_HOSTNAME=0.0.0.0
 CCR_PASSWORD=changeme
 CCR_JWT_SECRET=change-this-secret-key
 CCR_JWT_EXPIRE_HOURS=72
 CCR_DB_PATH=sessions.db
-# CCR_ALLOWED_ORIGINS=https://your-domain.com
 ```
 
-The server refuses to start while `CCR_JWT_SECRET` is left at the insecure default.
-When you run `python remote_code_launcher.py`, the launcher creates a separate runtime `.env`
-in the user app-data folder and auto-generates a secure JWT secret if needed.
+Minimum changes before real use:
 
-### 3. Run
+- Set `CCR_PASSWORD` to a real password.
+- Set `CCR_JWT_SECRET` to a secure random string.
+- Set `CCR_ALLOWED_ORIGINS` in production if you expose the app behind a domain.
 
-```bash
-# Development mode
-# Windows
-.\start-dev.ps1
-
-# Linux / macOS
-./start-dev.sh
-
-# Or Make
-make dev
-```
+4. Start the app.
 
 ```bash
 # Production mode
-cd frontend && npm run build && cd ..
-
 # Windows
 .\start.ps1
 
 # Linux / macOS
 ./start.sh
 
-# Or Make
+# Optional
 make start
 ```
 
+5. Open `http://localhost:8080` and sign in with `CCR_PASSWORD`.
+
+#### Development Mode
+
+Use development mode when you want the Vite frontend and the reloading backend:
+
 ```bash
-# Desktop launcher
+# Windows
+.\start-dev.ps1
+
+# Linux / macOS
+./start-dev.sh
+
+# Optional
+make dev
+```
+
+Development mode serves the frontend at `http://localhost:5173` and proxies API and WebSocket traffic to the backend.
+
+#### Optional Desktop Launcher in Source Mode
+
+You can also launch the local packaged-style runner directly from source:
+
+```bash
 python remote_code_launcher.py
 ```
 
-### 4. Access
+## Basic Usage
 
-- Development: `http://localhost:5173`
-- Production: `http://localhost:8080`
+1. Sign in with the configured password.
+2. Create a project and point it at a workspace folder.
+3. Add a `Claude Code` session to start a browser terminal backed by the local CLI.
+4. Add `Folder`, `Git`, or `IDE` sessions for the same project when you need dedicated panels.
+5. Shift-click a second active session in the sidebar to open split view.
+6. Suspend, resume, rename, reorder, or delete sessions from the project rail.
 
-Log in with the password from `CCR_PASSWORD`. The backend sets an `HttpOnly` cookie and the frontend
-uses `credentials: "same-origin"` for authenticated requests.
+## Configuration
 
-## Desktop Packaging
+Most users only need a few settings:
 
-Remote Code can be packaged as a browser-launching desktop executable for Windows and macOS with
-PyInstaller. The packaged app starts the local FastAPI server and opens the default browser once
-`/api/health` is reachable.
+| Variable | Purpose |
+| --- | --- |
+| `CCR_PORT` | Backend port for the app |
+| `CCR_PASSWORD` | Password used by the login screen |
+| `CCR_JWT_SECRET` | Secret used to sign auth tokens |
+| `CCR_CLAUDE_COMMAND` | Command used for Claude Code sessions |
+| `CCR_KILO_COMMAND` | Command used for Kilo sessions |
+| `CCR_OPENCODE_COMMAND` | Command used for OpenCode sessions |
+| `CCR_DB_PATH` | SQLite database path |
+| `CCR_ALLOWED_ORIGINS` | Allowed browser origins for production deployments |
 
-### Build locally
+For the full list, see [docs/configuration.md](docs/configuration.md).
+
+## Session Types
+
+| Session Type | Description |
+| --- | --- |
+| `claude` | Claude Code CLI session |
+| `kilo` | Kilo Code CLI session |
+| `opencode` | OpenCode terminal session |
+| `terminal` | Plain shell session |
+| `custom` | User-provided command with optional custom exit command |
+| `folder` | Saved File Explorer panel |
+| `git` | Saved Git panel |
+| `ide` | Monaco-based editor workspace |
+
+## Build a Release
+
+If you want to produce distributable archives yourself:
 
 ```bash
 # Windows
@@ -142,158 +230,28 @@ PyInstaller. The packaged app starts the local FastAPI server and opens the defa
 chmod +x build-release.sh
 ./build-release.sh
 
-# Or Make
+# Optional
 make build-release
 ```
 
-Artifacts are written to `release/`:
+The packaged output is written to `release/`.
 
-- Windows: `remote-code-<version>-windows-x64.zip`
-- macOS Intel: `remote-code-<version>-macos-x64.zip`
-- macOS Apple Silicon: `remote-code-<version>-macos-arm64.zip`
+## Deployment and Advanced Topics
 
-### Runtime data and config
-
-- Source mode uses the project-root `.env`
-- Packaged mode uses a user data directory
-  - Windows: `%APPDATA%\Remote Code`
-  - macOS: `~/Library/Application Support/Remote Code`
-
-The packaged launcher stores its `.env` and `sessions.db` there. Environment variables still take
-precedence over the runtime `.env`.
-
-## Supported Session Types
-
-| CLI type | Description |
-| --- | --- |
-| `claude` | Claude Code CLI session |
-| `kilo` | Kilo Code CLI session |
-| `opencode` | OpenCode terminal session |
-| `opencode-web` | OpenCode Web launched through the backend proxy |
-| `terminal` | Plain shell session |
-| `custom` | User-provided command with optional custom exit command |
-| `folder` | Saved file explorer panel |
-| `git` | Saved Git panel |
-| `ide` | Monaco-based editor panel with built-in web IntelliSense and Python LSP support |
-
-## API Overview
-
-Remote Code uses cookie-authenticated REST APIs plus a terminal WebSocket endpoint.
-
-### Authentication
-
-- `POST /api/auth/login`
-- `POST /api/auth/logout`
-- `GET /api/auth/session`
-
-### Files and folders
-
-- `GET /api/browse`
-- `GET /api/files`
-- `GET /api/file-content`
-- `GET /api/file-raw`
-- `POST /api/mkdir`
-- `POST /api/rename`
-- `POST /api/delete`
-- `POST /api/upload`
-- `POST /api/open-explorer`
-
-### Sessions
-
-- `POST /api/sessions/preflight`
-- `GET /api/sessions`
-- `POST /api/sessions`
-- `POST /api/sessions/{session_id}/suspend`
-- `POST /api/sessions/{session_id}/resume`
-- `PATCH /api/sessions/{session_id}/rename`
-- `DELETE /api/sessions/{session_id}`
-- `POST /api/sessions/reorder`
-- `WS /ws/terminal/{session_id}`
-
-### IDE
-
-- `GET /api/ide/sessions/{session_id}/file`
-- `PUT /api/ide/sessions/{session_id}/file`
-- `GET /api/ide/sessions/{session_id}/languages`
-- `WS /ws/ide/{session_id}/lsp/{language_id}`
-
-### Git
-
-- `GET /api/git/status`
-- `GET /api/git/log`
-- `GET /api/git/branches`
-- `GET /api/git/diff`
-- `GET /api/git/commit-detail`
-- `GET /api/git/commit-diff`
-- `POST /api/git/stage`
-- `POST /api/git/unstage`
-- `POST /api/git/discard`
-- `POST /api/git/commit`
-- `POST /api/git/checkout`
-- `POST /api/git/create-branch`
-- `POST /api/git/pull`
-- `POST /api/git/push`
-- `GET /api/git/stash-list`
-- `POST /api/git/stash`
-- `POST /api/git/stash-pop`
-- `POST /api/git/stash-drop`
-
-### OpenCode Web
-
-- `GET /api/opencode-web/status`
-- `POST /api/opencode-web/start`
-- `POST /api/opencode-web/stop`
-- `ANY /api/opencode-web/proxy`
-- `ANY /api/opencode-web/proxy/{path}`
-
-For request and response details, see [docs/backend-api.md](docs/backend-api.md).
-
-## Cloudflare Tunnel
-
-For external access you can use the bundled helper scripts:
-
-```bash
-# Temporary tunnel
-make tunnel-quick
-
-# Named tunnel
-make tunnel
-```
-
-See [docs/deployment.md](docs/deployment.md) for deployment details.
-
-## Project Structure
-
-```text
-backend/
-  main.py
-  auth.py
-  config.py
-  database.py
-  git_utils.py
-  opencode_web_manager.py
-  pty_manager.py
-  session_manager.py
-  websocket.py
-frontend/
-  src/
-docs/
-```
-
-## Documentation
-
-- [docs/README.md](docs/README.md) - documentation index
-- [docs/backend-api.md](docs/backend-api.md) - REST and WebSocket reference
-- [docs/configuration.md](docs/configuration.md) - environment variables and runtime settings
-- [docs/websocket-protocol.md](docs/websocket-protocol.md) - terminal WebSocket behavior
-- [docs/verification-checklist.md](docs/verification-checklist.md) - basic manual verification flow
+- [docs/README.md](docs/README.md): documentation index
+- [docs/configuration.md](docs/configuration.md): runtime settings and environment variables
+- [docs/deployment.md](docs/deployment.md): deployment and tunnel guidance
+- [docs/backend-api.md](docs/backend-api.md): REST and WebSocket reference
+- [docs/architecture.md](docs/architecture.md): backend and frontend architecture
+- [docs/websocket-protocol.md](docs/websocket-protocol.md): terminal WebSocket behavior
+- [docs/verification-checklist.md](docs/verification-checklist.md): smoke-test checklist after changes
 
 ## Security Notes
 
-- Change `CCR_PASSWORD`
-- Change `CCR_JWT_SECRET`
-- Restrict `CCR_ALLOWED_ORIGINS` in production
-- Prefer HTTPS or a trusted tunnel when exposing the app
+- Change `CCR_PASSWORD` before using the app beyond local testing.
+- Never leave `CCR_JWT_SECRET` at the insecure default.
+- Prefer HTTPS or a trusted tunnel when exposing the app externally.
+- Restrict `CCR_ALLOWED_ORIGINS` for production deployments.
 
 ## License
 
