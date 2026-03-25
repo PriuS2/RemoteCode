@@ -35,6 +35,8 @@ It gives you a persistent web workspace for Claude Code sessions, split views, f
 
 *Password-protected entry keeps the browser client simple while the backend owns the authenticated session cookie.*
 
+* initial passward : changeme
+
 ### Create a Session
 
 ![Add Session modal](docs/screenshots/readme-new-session.png)
