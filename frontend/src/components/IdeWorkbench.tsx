@@ -659,13 +659,13 @@ export default function IdeWorkbench({ sessionId, rootPath, theme }: IdeWorkbenc
       style={{ height: "100%", display: "flex", minHeight: 0, background: "var(--surface-1)" }}
     >
       <aside
+        className="ide-workbench-sidebar"
         style={{
           width: sidebarWidth,
           minWidth: sidebarWidth,
           display: "flex",
           flexDirection: "column",
           borderRight: "1px solid var(--border-subtle)",
-          background: "linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 92%, transparent), color-mix(in srgb, var(--surface-1) 94%, transparent))",
         }}
       >
         <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-subtle)" }}>
@@ -779,11 +779,11 @@ export default function IdeWorkbench({ sessionId, rootPath, theme }: IdeWorkbenc
       </aside>
 
       <div
+        className="ide-workbench-drag-handle"
         onMouseDown={startSidebarDrag}
         style={{
           width: 6,
           cursor: "col-resize",
-          background: "linear-gradient(180deg, transparent, rgba(148, 163, 184, 0.18), transparent)",
           flexShrink: 0,
         }}
       />
@@ -934,6 +934,7 @@ export default function IdeWorkbench({ sessionId, rootPath, theme }: IdeWorkbenc
         <div ref={editorHostRef} style={{ flex: 1, minHeight: 0, display: editorBootError ? "none" : "block" }} />
 
         <div
+          className="ide-workbench-statusbar"
           style={{
             display: "flex",
             alignItems: "center",
@@ -941,7 +942,6 @@ export default function IdeWorkbench({ sessionId, rootPath, theme }: IdeWorkbenc
             gap: 12,
             padding: "8px 12px",
             borderTop: "1px solid var(--border-subtle)",
-            background: "linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 90%, transparent), var(--surface-1))",
             fontSize: 11,
             color: "var(--text-secondary)",
           }}
