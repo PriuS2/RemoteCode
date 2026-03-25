@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -16,6 +17,10 @@ _executor = ThreadPoolExecutor(max_workers=20)
 # ---------------------------------------------------------------------------
 
 if sys.platform == "win32":
+    import subprocess
+    from shutil import which as _which_command
+
+    from winpty import PTY as _WinPTY
     from winpty import PtyProcess as _WinPtyProcess
 
     class _PtyAdapter:
@@ -39,6 +44,13 @@ if sys.platform == "win32":
         def terminate(self) -> None:
             self._proc.terminate()
 
+        @property
+        def exitstatus(self) -> int | None:
+            try:
+                return self._proc.exitstatus
+            except Exception:
+                return None
+
     def _create_pty(
         command: str,
         args: list[str],
@@ -46,9 +58,27 @@ if sys.platform == "win32":
         rows: int,
         cols: int,
     ) -> _PtyAdapter:
-        full_args = [command] + args
-        cmd_line = " ".join(full_args)
-        proc = _WinPtyProcess.spawn(cmd_line, cwd=cwd, dimensions=(rows, cols))
+        resolved = _which_command(command)
+        if resolved is None:
+            raise FileNotFoundError(f"Command not found: {command}")
+
+        logger.info(f"[SPAWN-DETAIL] resolved={resolved}, cwd={cwd}")
+
+        pty = _WinPTY(cols, rows)
+
+        ext = os.path.splitext(resolved)[1].lower()
+        if ext in (".cmd", ".bat"):
+            comspec = os.environ.get("COMSPEC", "cmd.exe")
+            full_cmd = subprocess.list2cmdline([resolved] + args)
+            pty.spawn(comspec, cmdline=f" /c {full_cmd}", cwd=cwd)
+        else:
+            cmdline = (" " + subprocess.list2cmdline(args)) if args else None
+            pty.spawn(resolved, cmdline=cmdline, cwd=cwd)
+
+        proc = _WinPtyProcess(pty)
+        proc.argv = [resolved] + args
+        proc.launch_dir = cwd
+
         return _PtyAdapter(proc)
 
 else:
@@ -82,6 +112,13 @@ else:
 
         def terminate(self) -> None:
             self._proc.terminate(force=True)
+
+        @property
+        def exitstatus(self) -> int | None:
+            try:
+                return self._proc.exitstatus
+            except Exception:
+                return None
 
     def _create_pty(
         command: str,
@@ -120,11 +157,19 @@ class PtyInstance:
             data = self.process.read(length)
             return data if data else ""
         except EOFError:
-            logger.info(f"[READ] {self.session_id}: EOFError -> PTY dead")
+            exit_status = getattr(self.process, "exitstatus", None)
+            logger.info(
+                f"[READ] {self.session_id}: EOFError -> PTY dead "
+                f"(exit_status={exit_status})"
+            )
             self._closed = True
             return None
         except Exception as e:
-            logger.warning(f"[READ] {self.session_id}: {type(e).__name__}: {e}")
+            exit_status = getattr(self.process, "exitstatus", None)
+            logger.warning(
+                f"[READ] {self.session_id}: {type(e).__name__}: {e} "
+                f"(exit_status={exit_status})"
+            )
             self._closed = True
             return None
 

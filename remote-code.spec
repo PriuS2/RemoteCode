@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PyInstaller.building.build_main import Analysis, COLLECT, EXE, PYZ
 from PyInstaller.building.osx import BUNDLE
-from PyInstaller.utils.hooks import collect_submodules, copy_metadata
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules, copy_metadata
 
 
 project_root = Path(SPECPATH)
@@ -21,15 +21,19 @@ for package_name in ("fastapi", "pydantic", "pydantic_settings", "slowapi", "sta
 hiddenimports = collect_submodules("uvicorn")
 hiddenimports += collect_submodules("backend")
 
+binaries = []
+
 if sys.platform == "win32":
     hiddenimports += collect_submodules("winpty")
+    datas += collect_data_files("winpty")
+    binaries += collect_dynamic_libs("winpty")
 else:
     hiddenimports += collect_submodules("pexpect")
 
 a = Analysis(
     ["remote_code_launcher.py"],
     pathex=[str(project_root)],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
