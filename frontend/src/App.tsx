@@ -75,6 +75,7 @@ export default function App() {
   const [webFontSize, setWebFontSize] = useState(() => getStoredFontSize("webFontSize", 14));
   const [terminalFontSize, setTerminalFontSize] = useState(() => getStoredFontSize("terminalFontSize", 14));
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  const [openingConfigPath, setOpeningConfigPath] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
@@ -90,6 +91,7 @@ export default function App() {
   });
   const splitDragging = useRef(false);
   const terminalAreaRef = useRef<HTMLElement>(null);
+  const canOpenConfigPath = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
 
   useEffect(() => {
     const vv = window.visualViewport;
@@ -321,6 +323,25 @@ export default function App() {
       resetClientState(false);
     }
   }, [resetClientState]);
+
+  const handleOpenConfigPath = useCallback(async () => {
+    setOpeningConfigPath(true);
+    try {
+      const res = await apiFetch("/api/open-config-path", {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const detail = await readErrorDetail(res, "Failed to open config path.");
+        throw new Error(detail.message);
+      }
+    } catch (error) {
+      console.error("Failed to open config path:", error);
+      const message = error instanceof Error ? error.message : "Failed to open config path.";
+      window.alert(message);
+    } finally {
+      setOpeningConfigPath(false);
+    }
+  }, []);
 
   const isMobile = () => window.innerWidth <= 768;
 
@@ -671,6 +692,20 @@ export default function App() {
                 </div>
               </div>
               <div className="settings-divider" />
+              {canOpenConfigPath && (
+                <>
+                  <button
+                    className="settings-action"
+                    onClick={() => {
+                      void handleOpenConfigPath();
+                    }}
+                    disabled={openingConfigPath}
+                  >
+                    {openingConfigPath ? "Opening..." : "Open config path"}
+                  </button>
+                  <div className="settings-divider" />
+                </>
+              )}
               <button className="settings-logout" onClick={handleLogout}>
                 Logout
               </button>

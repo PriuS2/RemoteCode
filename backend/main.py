@@ -34,7 +34,7 @@ from .database import close_db, init_db, mark_all_active_as_suspended
 from .language_registry import detect_language_id, list_language_statuses
 from .language_server import language_server_manager
 from .pty_manager import pty_manager
-from .runtime_paths import get_static_dir
+from .runtime_paths import get_config_open_path, get_static_dir
 from .session_manager import SessionValidationError, session_manager
 from .git_utils import GitError, run_git, is_git_repo
 from .websocket import handle_terminal_ws
@@ -490,6 +490,16 @@ class OpenExplorerRequest(BaseModel):
     path: str
 
 
+def _open_directory_in_system(path: str) -> None:
+    system = platform.system()
+    if system == "Windows":
+        os.startfile(path)
+    elif system == "Darwin":
+        subprocess.Popen(["open", path])
+    else:
+        subprocess.Popen(["xdg-open", path])
+
+
 @app.post("/api/open-explorer")
 async def open_in_explorer(
     req: OpenExplorerRequest, _user: str = Depends(get_current_user)
@@ -499,17 +509,25 @@ async def open_in_explorer(
         raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
 
     try:
-        system = platform.system()
-        if system == "Windows":
-            os.startfile(path)
-        elif system == "Darwin":
-            subprocess.Popen(["open", path])
-        else:
-            subprocess.Popen(["xdg-open", path])
+        _open_directory_in_system(path)
         return {"success": True}
     except Exception as e:
         logger.error(f"open_in_explorer error: {e}")
         raise HTTPException(status_code=500, detail="Failed to open explorer")
+
+
+@app.post("/api/open-config-path")
+async def open_config_path(_user: str = Depends(get_current_user)):
+    path = get_config_open_path().resolve()
+    if not path.is_dir():
+        raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
+
+    try:
+        _open_directory_in_system(str(path))
+        return {"success": True, "path": str(path)}
+    except Exception as e:
+        logger.error(f"open_config_path error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to open config path")
 
 
 @app.get("/api/file-content")

@@ -28,6 +28,36 @@ class LauncherError(RuntimeError):
     pass
 
 
+CLAUDE_PROVIDER_ENV_LINES = [
+    "# ============================================================",
+    "# Claude Code Provider",
+    "# ============================================================",
+    "",
+    "# --- Option 1: AWS Bedrock ---",
+    "# CLAUDE_CODE_USE_BEDROCK=1",
+    "# AWS_REGION=us-west-2",
+    "# AWS_ACCESS_KEY_ID=your-access-key",
+    "# AWS_SECRET_ACCESS_KEY=your-secret-key",
+    "# ANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-20250514-v1:0",
+    "",
+    "# --- Option 2: Anthropic API (Direct) ---",
+    "# ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxxxxxx",
+    "# ANTHROPIC_MODEL=claude-sonnet-4-20250514",
+    "",
+    "# --- Option 3: LM Studio / OpenAI-compatible API ---",
+    "# ANTHROPIC_BASE_URL=http://localhost:1234/v1",
+    "# ANTHROPIC_API_KEY=lm-studio",
+    "# ANTHROPIC_MODEL=your-model-name",
+    "",
+    "# --- Option 4: OpenRouter ---",
+    '# ANTHROPIC_API_KEY=""',
+    "# ANTHROPIC_BASE_URL=https://openrouter.ai/api",
+    "# OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxx",
+    "# ANTHROPIC_AUTH_TOKEN=sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxx",
+    "# ANTHROPIC_MODEL=moonshotai/kimi-k2.5",
+]
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=f"Launch {APP_NAME}.")
     parser.add_argument("--no-browser", action="store_true", help="Do not open the browser automatically.")
@@ -118,6 +148,8 @@ def default_env_lines(data_dir: Path) -> list[str]:
         "",
         "# Optional",
         "# CCR_ALLOWED_ORIGINS=http://127.0.0.1:8080",
+        "",
+        *CLAUDE_PROVIDER_ENV_LINES,
     ]
 
 

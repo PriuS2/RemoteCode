@@ -374,6 +374,23 @@ button {
   font-weight: 600;
 }
 
+.settings-action {
+  width: 100%;
+  min-height: 38px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: calc(13px * var(--web-scale));
+  font-weight: 600;
+}
+
+.settings-action:hover {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+}
+
 .settings-logout:hover {
   background: rgba(240, 141, 168, 0.22);
 }
@@ -1752,6 +1769,7 @@ body {
 
 .settings-control,
 .size-btn,
+.settings-action,
 .settings-logout,
 .dialog-button,
 .primary-button,
@@ -1775,6 +1793,11 @@ body {
   border: 1px solid var(--border-subtle);
   background: var(--surface-2);
   color: var(--text-secondary);
+}
+
+.settings-action {
+  background: var(--surface-2);
+  color: var(--text-primary);
 }
 
 .settings-logout {
