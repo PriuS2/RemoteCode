@@ -96,6 +96,7 @@ Runtime data is stored outside the repository:
 - macOS: `~/Library/Application Support/Remote Code`
 
 The packaged launcher stores its runtime `.env` and `sessions.db` there. It also generates a secure JWT secret automatically when needed.
+That runtime `.env` can contain both `CCR_*` app settings and Claude Code provider variables such as `CLAUDE_CODE_USE_BEDROCK`, `AWS_*`, `ANTHROPIC_*`, and `OPENROUTER_*`. Remote Code only parses `CCR_*`; the provider variables are passed through to Claude Code sessions.
 
 ### Option B: Run from Source
 
@@ -139,6 +140,8 @@ Minimum changes before real use:
 - Set `CCR_PASSWORD` to a real password.
 - Set `CCR_JWT_SECRET` to a secure random string.
 - Set `CCR_ALLOWED_ORIGINS` in production if you expose the app behind a domain.
+
+You can also keep Claude Code provider variables in the same `.env`. Remote Code ignores them for its own config and passes them to the Claude CLI process.
 
 4. Start the app.
 

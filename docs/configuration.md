@@ -1,6 +1,7 @@
 ﻿# Configuration
 
-Remote Code uses Pydantic settings with the `CCR_` prefix.
+Remote Code uses Pydantic settings with the `CCR_` prefix for app-level settings.
+Other environment variables may coexist in the same `.env` file and are passed through to child CLI processes such as Claude Code.
 
 ## Core settings
 
@@ -39,7 +40,7 @@ class Settings(BaseSettings):
     db_path: str = "sessions.db"
     allowed_origins: str = "*"
 
-    model_config = {"env_prefix": "CCR_"}
+    model_config = {"env_prefix": "CCR_", "extra": "ignore"}
 ```
 
 ## Example `.env`
@@ -57,7 +58,21 @@ CCR_JWT_SECRET=replace-with-random-secret
 CCR_JWT_EXPIRE_HOURS=72
 CCR_DB_PATH=sessions.db
 CCR_ALLOWED_ORIGINS=https://your-domain.com
+
+# Claude Code provider variables can live in the same file.
+# Remote Code ignores them for app settings and passes them to the Claude CLI.
+# ANTHROPIC_API_KEY=sk-ant-...
+# ANTHROPIC_MODEL=claude-sonnet-4-20250514
 ```
+
+## Claude Code provider variables
+
+You can keep Claude Code provider variables in the same runtime `.env`, including the packaged app runtime file:
+
+- Windows: `%APPDATA%\Remote Code\.env`
+- macOS: `~/Library/Application Support/Remote Code/.env`
+
+Remote Code only parses `CCR_*` as its own settings. Variables such as `CLAUDE_CODE_USE_BEDROCK`, `AWS_*`, `ANTHROPIC_*`, and `OPENROUTER_*` are loaded into the process environment and inherited by Claude Code sessions.
 
 ## Security notes
 
