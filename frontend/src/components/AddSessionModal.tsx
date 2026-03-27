@@ -59,7 +59,11 @@ export default function AddSessionModal({
 
   const isMobile = viewportWidth <= 768;
   const isNarrow = viewportWidth <= 380;
-  const cliColumns = isNarrow ? 1 : isMobile ? 2 : CLI_OPTIONS.length;
+  const cliColumns = isNarrow ? 1 : isMobile ? 2 : 4;
+  const selectedOption = useMemo(
+    () => CLI_OPTIONS.find((option) => option.type === cliType) ?? CLI_OPTIONS[0],
+    [cliType],
+  );
 
   useEffect(() => {
     const onResize = () => setViewportWidth(window.innerWidth);
@@ -273,7 +277,7 @@ export default function AddSessionModal({
                 style={{
                   display: "grid",
                   gridTemplateColumns: `repeat(${cliColumns}, minmax(0, 1fr))`,
-                  gap: 10,
+                  gap: 8,
                 }}
               >
                 {CLI_OPTIONS.map((option) => {
@@ -284,40 +288,55 @@ export default function AddSessionModal({
                       key={option.type}
                       type="button"
                       onClick={() => setCliType(option.type)}
+                      aria-pressed={active}
                       style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
                         textAlign: "left",
-                        padding: "12px 12px 11px",
+                        width: "100%",
+                        minWidth: 0,
+                        padding: "12px 14px",
                         borderRadius: 10,
                         border: active ? `1px solid ${tone.border}` : "1px solid var(--input-border)",
                         background: active ? tone.soft : "var(--surface-2)",
                         color: "var(--text-primary)",
                         cursor: "pointer",
-                        minHeight: 88,
+                        minHeight: 58,
                         transition: "border-color 0.18s ease, background 0.18s ease, transform 0.18s ease",
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                        <span
-                          style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: "50%",
-                            background: active ? tone.hover : "var(--text-muted)",
-                            flexShrink: 0,
-                          }}
-                        />
-                        <span style={{ fontSize: uiPx(13), fontWeight: 700, color: active ? tone.hover : "var(--text-primary)" }}>{option.label}</span>
-                      </div>
-                      <div style={{ fontSize: uiPx(11), color: "var(--text-secondary)", lineHeight: 1.45 }}>
-                        {option.description}
-                      </div>
+                      <span
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: "50%",
+                          background: active ? tone.hover : "var(--text-muted)",
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span
+                        style={{
+                          minWidth: 0,
+                          fontSize: uiPx(13),
+                          fontWeight: 700,
+                          lineHeight: 1.3,
+                          color: active ? tone.hover : "var(--text-primary)",
+                          overflowWrap: "anywhere",
+                        }}
+                      >
+                        {option.label}
+                      </span>
                     </button>
                   );
                 })}
               </div>
 
               <div className="ui-note" style={{ marginTop: 10 }}>
-                <div style={{ fontSize: uiPx(12), color: preflightSummary.ok ? "var(--success)" : preflightSummary.loading ? "var(--info)" : "var(--warn)", fontWeight: 600 }}>
+                <div style={{ fontSize: uiPx(12), color: "var(--text-secondary)", lineHeight: 1.45 }}>
+                  {selectedOption.description}
+                </div>
+                <div style={{ marginTop: 6, fontSize: uiPx(12), color: preflightSummary.ok ? "var(--success)" : preflightSummary.loading ? "var(--info)" : "var(--warn)", fontWeight: 600 }}>
                   {preflightSummary.title}
                 </div>
                 {preflightSummary.detail && (
