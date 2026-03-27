@@ -13,6 +13,8 @@ interface AddSessionModalProps {
 }
 
 type CliType = "claude" | "kilo" | "opencode" | "terminal" | "folder" | "git" | "ide" | "custom";
+const OPTION_ENABLED_CLI_TYPES: CliType[] = ["claude", "kilo", "opencode", "terminal"];
+const CLAUDE_SKIP_PERMISSIONS_OPTION = "--dangerously-skip-permissions";
 
 const CLI_OPTIONS: Array<{
   type: CliType;
@@ -39,6 +41,42 @@ function badgeStyle(ok: boolean, loading: boolean): React.CSSProperties {
   return { background: "var(--warn-soft)", color: "var(--warn)", border: "1px solid color-mix(in srgb, var(--warn) 35%, transparent)" };
 }
 
+function supportsCliOptions(cliType: CliType): boolean {
+  return OPTION_ENABLED_CLI_TYPES.includes(cliType);
+}
+
+function hasOptionToken(value: string, token: string): boolean {
+  const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|\\s)${escaped}(?=\\s|$)`).test(value.trim());
+}
+
+function countOptionToken(value: string, token: string): number {
+  const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return value.trim().match(new RegExp(`(^|\\s)${escaped}(?=\\s|$)`, "g"))?.length ?? 0;
+}
+
+function addOptionToken(value: string, token: string): string {
+  if (hasOptionToken(value, token)) {
+    return value.trim();
+  }
+  return `${value.trim()} ${token}`.trim();
+}
+
+function removeOptionToken(value: string, token: string): string {
+  const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return value
+    .replace(new RegExp(`(^|\\s)${escaped}(?=\\s|$)`, "g"), " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeCliOptionsInput(cliType: CliType, value: string): string {
+  if (cliType !== "claude" || countOptionToken(value, CLAUDE_SKIP_PERMISSIONS_OPTION) <= 1) {
+    return value;
+  }
+  return addOptionToken(removeOptionToken(value, CLAUDE_SKIP_PERMISSIONS_OPTION), CLAUDE_SKIP_PERMISSIONS_OPTION);
+}
+
 export default function AddSessionModal({
   projectId,
   projectName,
@@ -49,6 +87,7 @@ export default function AddSessionModal({
   const isPanelSession = (type: CliType) => type === "folder" || type === "git";
   const [name, setName] = useState("");
   const [cliType, setCliType] = useState<CliType>("claude");
+  const [cliOptions, setCliOptions] = useState("");
   const [customCommand, setCustomCommand] = useState("");
   const [customExitCommand, setCustomExitCommand] = useState("");
   const [loading, setLoading] = useState(false);
@@ -60,9 +99,18 @@ export default function AddSessionModal({
   const isMobile = viewportWidth <= 768;
   const isNarrow = viewportWidth <= 380;
   const cliColumns = isNarrow ? 1 : isMobile ? 2 : 4;
+  const optionsEnabled = supportsCliOptions(cliType);
   const selectedOption = useMemo(
     () => CLI_OPTIONS.find((option) => option.type === cliType) ?? CLI_OPTIONS[0],
     [cliType],
+  );
+  const normalizedCliOptions = useMemo(
+    () => optionsEnabled ? cliOptions.trim() || null : null,
+    [cliOptions, optionsEnabled],
+  );
+  const skipPermissionsEnabled = useMemo(
+    () => cliType === "claude" && hasOptionToken(cliOptions, CLAUDE_SKIP_PERMISSIONS_OPTION),
+    [cliOptions, cliType],
   );
 
   useEffect(() => {
@@ -94,6 +142,7 @@ export default function AddSessionModal({
             work_path: workPath,
             create_folder: false,
             cli_type: cliType,
+            cli_options: normalizedCliOptions,
             custom_command: cliType === "custom" ? customCommand.trim() || null : null,
           }),
         });
@@ -134,7 +183,7 @@ export default function AddSessionModal({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [cliType, customCommand, workPath]);
+  }, [cliType, customCommand, normalizedCliOptions, workPath]);
 
   const preflightSummary = useMemo(() => {
     if (preflightLoading) {
@@ -185,6 +234,7 @@ export default function AddSessionModal({
         body: JSON.stringify({
           name: name.trim() || null,
           cli_type: cliType,
+          cli_options: normalizedCliOptions,
           custom_command: cliType === "custom" ? customCommand.trim() || null : null,
           custom_exit_command: cliType === "custom" ? customExitCommand.trim() || null : null,
         }),
@@ -336,6 +386,11 @@ export default function AddSessionModal({
                 <div style={{ fontSize: uiPx(12), color: "var(--text-secondary)", lineHeight: 1.45 }}>
                   {selectedOption.description}
                 </div>
+                {normalizedCliOptions && (
+                  <div style={{ marginTop: 6, fontSize: uiPx(11), color: "var(--text-muted)", fontFamily: "'Cascadia Code', 'Consolas', monospace" }}>
+                    Options: {normalizedCliOptions}
+                  </div>
+                )}
                 <div style={{ marginTop: 6, fontSize: uiPx(12), color: preflightSummary.ok ? "var(--success)" : preflightSummary.loading ? "var(--info)" : "var(--warn)", fontWeight: 600 }}>
                   {preflightSummary.title}
                 </div>
@@ -375,6 +430,42 @@ export default function AddSessionModal({
                     style={{ width: "100%", fontSize: uiPx(14) }}
                   />
                 </div>
+              </>
+            )}
+
+            {optionsEnabled && (
+              <>
+                <div className="sheet-field">
+                  <label className="sheet-label" style={{ fontSize: uiPx(12) }}>
+                    Options
+                  </label>
+                  <input
+                    type="text"
+                    value={cliOptions}
+                    onChange={(e) => setCliOptions(normalizeCliOptionsInput(cliType, e.target.value))}
+                    placeholder="Example: --verbose --model sonnet"
+                    className="ui-input"
+                    style={{ width: "100%", fontSize: uiPx(14) }}
+                  />
+                </div>
+
+                {cliType === "claude" && (
+                  <label className="sheet-checkbox" style={{ fontSize: uiPx(13) }}>
+                    <input
+                      type="checkbox"
+                      checked={skipPermissionsEnabled}
+                      onChange={(e) => {
+                        setCliOptions((current) => (
+                          e.target.checked
+                            ? addOptionToken(current, CLAUDE_SKIP_PERMISSIONS_OPTION)
+                            : removeOptionToken(current, CLAUDE_SKIP_PERMISSIONS_OPTION)
+                        ));
+                      }}
+                      style={{ accentColor: "var(--accent)" }}
+                    />
+                    claude {CLAUDE_SKIP_PERMISSIONS_OPTION} (Skip permissions)
+                  </label>
+                )}
               </>
             )}
 

@@ -38,6 +38,7 @@ const STATUS_META: Record<string, { label: string; color: string; chipClass: str
   suspended: { label: "Suspended", color: "var(--warn)", chipClass: "session-chip--suspended" },
   closed: { label: "Closed", color: "var(--text-muted)", chipClass: "session-chip--closed" },
 };
+const CLAUDE_SKIP_PERMISSIONS_OPTION = "--dangerously-skip-permissions";
 
 function getCliMeta(cliType: string) {
   return getCliTone(cliType);
@@ -49,6 +50,12 @@ function isProcessSession(session: Session) {
 
 function canSuspendSession(session: Session) {
   return (isProcessSession(session) && session.cli_type !== "kilo") || session.cli_type === "ide";
+}
+
+function isSkipPermissionsSession(session: Session) {
+  return session.cli_type === "claude" && Boolean(
+    session.cli_options && new RegExp(`(^|\\s)${CLAUDE_SKIP_PERMISSIONS_OPTION}(?=\\s|$)`).test(session.cli_options.trim()),
+  );
 }
 
 function reorderList<T extends { id: string }>(items: T[], draggedId: string, targetId: string): T[] {
@@ -598,6 +605,7 @@ export default function SessionList({
                     const isActive = isFocused || isActiveNotFocused;
                     const statusMeta = STATUS_META[session.status] ?? STATUS_META.closed;
                     const cliMeta = getCliMeta(session.cli_type);
+                    const isSkipPerm = isSkipPermissionsSession(session);
                     const sessionDragOver = dragOverKey === `session:${project.id}:${session.id}`;
                     const rowClassName = [
                       "session-row",
@@ -676,6 +684,14 @@ export default function SessionList({
                             >
                               {cliMeta.label}
                             </span>
+                            {isSkipPerm && (
+                              <span
+                                className="session-chip session-chip--skip-perm"
+                                title="Claude session uses --dangerously-skip-permissions"
+                              >
+                                SKIP PERM
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>

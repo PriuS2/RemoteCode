@@ -226,12 +226,14 @@ class SessionPreflightRequest(BaseModel):
     work_path: str
     create_folder: bool = False
     cli_type: str = "claude"
+    cli_options: str | None = None
     custom_command: str | None = None
     
 
 class CreateProjectSessionRequest(BaseModel):
     name: str | None = None
     cli_type: str = "claude"
+    cli_options: str | None = None
     custom_command: str | None = None
     custom_exit_command: str | None = None
 
@@ -266,6 +268,7 @@ class SessionResponse(BaseModel):
     created_at: str
     last_accessed_at: str
     status: str
+    cli_options: str | None = None
     custom_command: str | None = None
     custom_exit_command: str | None = None
     order_index: int
@@ -931,6 +934,7 @@ async def preflight_session(
             work_path=req.work_path,
             create_folder=req.create_folder,
             cli_type=req.cli_type,
+            cli_options=req.cli_options,
             custom_command=req.custom_command,
         )
         return SessionPreflightResponse(**result)
@@ -1036,6 +1040,7 @@ async def create_project_session(
             project_id=project_id,
             name=req.name,
             cli_type=req.cli_type,
+            cli_options=req.cli_options,
             custom_command=req.custom_command,
             custom_exit_command=req.custom_exit_command,
         )

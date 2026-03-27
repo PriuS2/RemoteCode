@@ -845,6 +845,12 @@ button {
   color: var(--text-primary);
 }
 
+.session-chip--skip-perm {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 34%, transparent);
+}
+
 .session-chip--active {
   color: var(--success);
   background: color-mix(in srgb, var(--success) 14%, transparent);

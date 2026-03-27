@@ -8,6 +8,7 @@ export interface Session {
   created_at: string;
   last_accessed_at: string;
   claude_session_id: string | null;
+  cli_options: string | null;
   custom_command: string | null;
   custom_exit_command: string | null;
   order_index: number;

@@ -96,6 +96,7 @@ async def init_db() -> None:
             created_at TEXT NOT NULL,
             last_accessed_at TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'active',
+            cli_options TEXT,
             custom_command TEXT,
             custom_exit_command TEXT,
             order_index INTEGER NOT NULL DEFAULT 0
@@ -109,6 +110,10 @@ async def init_db() -> None:
     if not await _column_exists(db, "sessions", "custom_command"):
         await db.execute("ALTER TABLE sessions ADD COLUMN custom_command TEXT")
         logger.info("Migrated database: added sessions.custom_command")
+
+    if not await _column_exists(db, "sessions", "cli_options"):
+        await db.execute("ALTER TABLE sessions ADD COLUMN cli_options TEXT")
+        logger.info("Migrated database: added sessions.cli_options")
 
     if not await _column_exists(db, "sessions", "custom_exit_command"):
         await db.execute("ALTER TABLE sessions ADD COLUMN custom_exit_command TEXT")
@@ -259,6 +264,7 @@ async def create_session(
     name: str,
     work_path: str,
     cli_type: str = "claude",
+    cli_options: str | None = None,
     custom_command: str | None = None,
     custom_exit_command: str | None = None,
 ) -> dict:
@@ -275,9 +281,9 @@ async def create_session(
         """
         INSERT INTO sessions (
             id, project_id, cli_type, name, work_path, created_at,
-            last_accessed_at, status, custom_command, custom_exit_command, order_index
+            last_accessed_at, status, cli_options, custom_command, custom_exit_command, order_index
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             session_id,
@@ -288,6 +294,7 @@ async def create_session(
             now,
             now,
             "active",
+            cli_options,
             custom_command,
             custom_exit_command,
             order_index,
@@ -304,6 +311,7 @@ async def create_session(
         "created_at": now,
         "last_accessed_at": now,
         "status": "active",
+        "cli_options": cli_options,
         "custom_command": custom_command,
         "custom_exit_command": custom_exit_command,
         "order_index": order_index,
@@ -339,6 +347,7 @@ _SESSION_ALLOWED_COLUMNS = {
     "work_path",
     "last_accessed_at",
     "status",
+    "cli_options",
     "custom_command",
     "custom_exit_command",
     "order_index",

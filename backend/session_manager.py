@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 NON_PTY_CLI_TYPES = {"folder", "git", "ide"}
 SUPPORTED_CLI_TYPES = {"claude", "kilo", "opencode", "terminal", "custom", "folder", "git", "ide"}
+CLI_TYPES_WITH_OPTIONS = {"claude", "kilo", "opencode", "terminal"}
 
 
 class SessionValidationError(ValueError):
@@ -45,6 +46,15 @@ class SessionManager:
     def _validate_cli_type(self, cli_type: str) -> None:
         if cli_type not in SUPPORTED_CLI_TYPES:
             raise SessionValidationError("invalid_command", f"Unsupported session type: {cli_type}")
+
+    def _normalize_cli_options(self, cli_type: str, cli_options: Optional[str] = None) -> Optional[str]:
+        normalized = cli_options.strip() if cli_options and cli_options.strip() else None
+        if normalized and cli_type not in CLI_TYPES_WITH_OPTIONS:
+            raise SessionValidationError(
+                "invalid_command",
+                f"Options are not supported for {cli_type} sessions.",
+            )
+        return normalized
 
     def _default_command(self, cli_type: str, custom_command: Optional[str] = None) -> Optional[str]:
         self._validate_cli_type(cli_type)
@@ -67,6 +77,22 @@ class SessionManager:
             return None
         return settings.claude_command
 
+    def _command_parts(
+        self,
+        cli_type: str,
+        custom_command: Optional[str] = None,
+        cli_options: Optional[str] = None,
+    ) -> list[str]:
+        normalized_options = self._normalize_cli_options(cli_type, cli_options)
+        command = self._default_command(cli_type, custom_command)
+        if command is None:
+            return []
+
+        parts = self._split_command(command)
+        if normalized_options:
+            parts.extend(self._split_command(normalized_options))
+        return parts
+
     def _split_command(self, command: str) -> list[str]:
         try:
             parts = shlex.split(command, posix=os.name != "nt")
@@ -75,6 +101,27 @@ class SessionManager:
         if not parts:
             raise SessionValidationError("invalid_command", "Command is empty.")
         return parts
+
+    def _validate_command_parts(self, parts: list[str]) -> list[str]:
+        if not parts:
+            raise SessionValidationError("invalid_command", "Command is empty.")
+
+        executable = parts[0]
+
+        resolved = shutil.which(executable)
+        if resolved:
+            return parts
+
+        has_path_separator = any(sep in executable for sep in (os.sep, "/", "\\"))
+        if has_path_separator or os.path.isabs(executable):
+            candidate = os.path.abspath(executable)
+            if os.path.exists(candidate) and not os.access(candidate, os.X_OK):
+                raise SessionValidationError(
+                    "permission_denied",
+                    f"Permission denied: {candidate}",
+                )
+
+        raise SessionValidationError("cli_not_found", f"CLI not found: {executable}")
 
     def _validate_work_path(self, work_path: str, create_folder: bool) -> str:
         normalized = work_path.strip()
@@ -117,35 +164,20 @@ class SessionManager:
         return absolute_path
 
     def _validate_command_available(self, command: str) -> list[str]:
-        parts = self._split_command(command)
-        executable = parts[0]
-
-        resolved = shutil.which(executable)
-        if resolved:
-            return parts
-
-        has_path_separator = any(sep in executable for sep in (os.sep, "/", "\\"))
-        if has_path_separator or os.path.isabs(executable):
-            candidate = os.path.abspath(executable)
-            if os.path.exists(candidate) and not os.access(candidate, os.X_OK):
-                raise SessionValidationError(
-                    "permission_denied",
-                    f"Permission denied: {candidate}",
-                )
-
-        raise SessionValidationError("cli_not_found", f"CLI not found: {executable}")
+        return self._validate_command_parts(self._split_command(command))
 
     def preflight_session(
         self,
         work_path: str,
         create_folder: bool = False,
         cli_type: str = "claude",
+        cli_options: Optional[str] = None,
         custom_command: Optional[str] = None,
     ) -> dict:
         validated_path = self._validate_work_path(work_path, create_folder)
-        command = self._default_command(cli_type, custom_command)
+        parts = self._command_parts(cli_type, custom_command, cli_options)
 
-        if command is None:
+        if not parts:
             ready_messages = {
                 "folder": "Folder session is ready.",
                 "git": "Git session is ready.",
@@ -159,7 +191,7 @@ class SessionManager:
                 "work_path": validated_path,
             }
 
-        parts = self._validate_command_available(command)
+        parts = self._validate_command_parts(parts)
         resolved_command = " ".join(parts)
         ready_messages = {
             "claude": "Claude Code CLI is available.",
@@ -240,6 +272,7 @@ class SessionManager:
         project_id: str,
         name: Optional[str] = None,
         cli_type: str = "claude",
+        cli_options: Optional[str] = None,
         custom_command: Optional[str] = None,
         custom_exit_command: Optional[str] = None,
     ) -> dict:
@@ -252,6 +285,7 @@ class SessionManager:
             work_path=work_path,
             create_folder=False,
             cli_type=cli_type,
+            cli_options=cli_options,
             custom_command=custom_command,
         )
         work_path = preflight["work_path"]
@@ -262,10 +296,11 @@ class SessionManager:
         session_id = str(uuid.uuid4())
         display_name = name or f"{project['name']} Session"
 
-        command = self._default_command(cli_type, custom_command)
+        parts = self._command_parts(cli_type, custom_command, cli_options)
+        command = None
         command_args: list[str] = []
-        if command is not None:
-            parts = self._validate_command_available(command)
+        if parts:
+            parts = self._validate_command_parts(parts)
             command = parts[0]
             command_args = parts[1:]
 
@@ -276,6 +311,7 @@ class SessionManager:
             display_name,
             work_path,
             cli_type,
+            self._normalize_cli_options(cli_type, cli_options),
             custom_command,
             custom_exit_command,
         )
@@ -411,6 +447,36 @@ class SessionManager:
         if existing:
             pty_manager.remove(session_id)
 
+        parts = self._validate_command_parts(
+            self._command_parts(
+                cli_type,
+                custom_command=session.get("custom_command"),
+                cli_options=session.get("cli_options"),
+            ),
+        )
+        command = parts[0]
+        command_args = parts[1:]
+
+        args: list[str] = []
+        if session["status"] == "suspended" and session.get("claude_session_id"):
+            if cli_type == "opencode":
+                args = ["-s", session["claude_session_id"]]
+            elif cli_type == "claude":
+                args = ["--resume", session["claude_session_id"]]
+
+        await pty_manager.async_spawn(
+            session_id=session_id,
+            work_path=session["work_path"],
+            command=command,
+            args=command_args + args,
+        )
+
+        await db_update_session(session_id, status="active")
+        await update_last_accessed(session_id)
+
+        logger.info(f"Session resumed: {session_id}")
+        return await db_get_session(session_id)
+
         # Determine which command to use based on cli_type
         cli_type = session.get("cli_type", "claude")
         if cli_type == "kilo":
@@ -434,8 +500,15 @@ class SessionManager:
             command = parts[0]
             command_args = parts[1:]
         else:
-            command = settings.claude_command
-            command_args = []
+            parts = self._validate_command_parts(
+                self._command_parts(
+                    cli_type,
+                    custom_command=session.get("custom_command"),
+                    cli_options=session.get("cli_options"),
+                ),
+            )
+            command = parts[0]
+            command_args = parts[1:]
 
         # suspended + claude_session_id가 있으면 resume으로 대화 이어가기
         args = []
