@@ -1,5 +1,12 @@
-import { useRef, type DragEvent, type ReactNode } from "react";
+import { useMemo, useRef, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import type { PaneDropZone } from "../utils/layout";
+import {
+  DROP_ZONE_RENDER_ORDER,
+  getDropZoneAtPoint,
+  getDropZoneGeometry,
+  isDropZoneInvalid,
+  type DropZoneRect,
+} from "../utils/layoutDropGeometry";
 
 export interface LayoutDropIndicator {
   targetPaneId: string | null;
@@ -19,56 +26,6 @@ interface LayoutDropSurfaceProps {
   children: ReactNode;
 }
 
-function getBandSize(length: number): number {
-  return Math.max(56, Math.min(96, length * 0.25));
-}
-
-function getZone(rect: DOMRect, clientX: number, clientY: number): PaneDropZone {
-  const leftBand = getBandSize(rect.width);
-  const topBand = getBandSize(rect.height);
-  const candidates: Array<{ zone: PaneDropZone; distance: number }> = [];
-
-  const left = clientX - rect.left;
-  const right = rect.right - clientX;
-  const top = clientY - rect.top;
-  const bottom = rect.bottom - clientY;
-
-  if (left <= leftBand) {
-    candidates.push({ zone: "left", distance: left / leftBand });
-  }
-  if (right <= leftBand) {
-    candidates.push({ zone: "right", distance: right / leftBand });
-  }
-  if (top <= topBand) {
-    candidates.push({ zone: "top", distance: top / topBand });
-  }
-  if (bottom <= topBand) {
-    candidates.push({ zone: "bottom", distance: bottom / topBand });
-  }
-
-  if (candidates.length === 0) {
-    return "center";
-  }
-
-  candidates.sort((leftCandidate, rightCandidate) => leftCandidate.distance - rightCandidate.distance);
-  return candidates[0].zone;
-}
-
-function isInvalidZone(
-  zone: PaneDropZone,
-  size: { width: number; height: number },
-  minPaneWidth: number,
-  minPaneHeight: number,
-): boolean {
-  if (zone === "left" || zone === "right") {
-    return size.width < minPaneWidth * 2;
-  }
-  if (zone === "top" || zone === "bottom") {
-    return size.height < minPaneHeight * 2;
-  }
-  return false;
-}
-
 function zoneClassName(
   zone: PaneDropZone,
   activeZone: PaneDropZone | null,
@@ -77,7 +34,7 @@ function zoneClassName(
   minPaneWidth: number,
   minPaneHeight: number,
 ): string {
-  const invalid = isInvalidZone(zone, size, minPaneWidth, minPaneHeight);
+  const invalid = isDropZoneInvalid(zone, size, minPaneWidth, minPaneHeight);
   const classes = ["pane-drop-overlay__zone", `pane-drop-overlay__zone--${zone}`];
   if (zone === activeZone) {
     classes.push(activeInvalid ? "is-invalid" : "is-active");
@@ -85,6 +42,15 @@ function zoneClassName(
     classes.push("is-disabled");
   }
   return classes.join(" ");
+}
+
+function zoneStyle(rect: DropZoneRect): CSSProperties {
+  return {
+    left: `${rect.left}px`,
+    top: `${rect.top}px`,
+    width: `${rect.width}px`,
+    height: `${rect.height}px`,
+  };
 }
 
 export default function LayoutDropSurface({
@@ -101,6 +67,10 @@ export default function LayoutDropSurface({
   const activeZone = indicator?.targetPaneId === paneId ? indicator.zone : null;
   const activeInvalid = indicator?.targetPaneId === paneId ? indicator.invalid : false;
   const lastIndicatorRef = useRef<LayoutDropIndicator | null>(null);
+  const geometry = useMemo(
+    () => getDropZoneGeometry(size),
+    [size.height, size.width],
+  );
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
     if (!dragging) {
@@ -108,8 +78,20 @@ export default function LayoutDropSurface({
     }
     event.preventDefault();
     const rect = event.currentTarget.getBoundingClientRect();
-    const zone = getZone(rect, event.clientX, event.clientY);
-    const invalid = isInvalidZone(zone, size, minPaneWidth, minPaneHeight);
+    const zone = getDropZoneAtPoint(
+      {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      },
+      { width: rect.width, height: rect.height },
+    );
+    if (!zone) {
+      event.dataTransfer.dropEffect = "none";
+      lastIndicatorRef.current = null;
+      onIndicatorChange(null);
+      return;
+    }
+    const invalid = isDropZoneInvalid(zone, size, minPaneWidth, minPaneHeight);
     event.dataTransfer.dropEffect = invalid ? "none" : "move";
     const nextIndicator: LayoutDropIndicator = {
       targetPaneId: paneId,
@@ -143,8 +125,17 @@ export default function LayoutDropSurface({
           : null
     ) ?? (() => {
       const rect = event.currentTarget.getBoundingClientRect();
-      const zone = getZone(rect, event.clientX, event.clientY);
-      const invalid = isInvalidZone(zone, size, minPaneWidth, minPaneHeight);
+      const zone = getDropZoneAtPoint(
+        {
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
+        },
+        { width: rect.width, height: rect.height },
+      );
+      if (!zone) {
+        return null;
+      }
+      const invalid = isDropZoneInvalid(zone, size, minPaneWidth, minPaneHeight);
       return {
         targetPaneId: paneId,
         zone,
@@ -154,7 +145,7 @@ export default function LayoutDropSurface({
 
     lastIndicatorRef.current = null;
     onIndicatorChange(null);
-    if (!nextIndicator.invalid) {
+    if (nextIndicator && !nextIndicator.invalid) {
       onDropIndicator(nextIndicator);
     }
   };
@@ -170,11 +161,14 @@ export default function LayoutDropSurface({
       {children}
       {dragging && (
         <div className="pane-drop-overlay" aria-hidden="true">
-          <div data-drop-zone="left" className={zoneClassName("left", activeZone, activeInvalid, size, minPaneWidth, minPaneHeight)} />
-          <div data-drop-zone="right" className={zoneClassName("right", activeZone, activeInvalid, size, minPaneWidth, minPaneHeight)} />
-          <div data-drop-zone="top" className={zoneClassName("top", activeZone, activeInvalid, size, minPaneWidth, minPaneHeight)} />
-          <div data-drop-zone="bottom" className={zoneClassName("bottom", activeZone, activeInvalid, size, minPaneWidth, minPaneHeight)} />
-          <div data-drop-zone="center" className={zoneClassName("center", activeZone, activeInvalid, size, minPaneWidth, minPaneHeight)} />
+          {DROP_ZONE_RENDER_ORDER.map((zone) => (
+            <div
+              key={zone}
+              data-drop-zone={zone}
+              className={zoneClassName(zone, activeZone, activeInvalid, size, minPaneWidth, minPaneHeight)}
+              style={zoneStyle(geometry[zone])}
+            />
+          ))}
         </div>
       )}
     </div>

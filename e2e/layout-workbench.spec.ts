@@ -9,6 +9,7 @@ type ResizeMessage = {
   rows: number | null;
   timestamp: number;
 };
+type ZonePointMode = "center" | "inside-edge" | "outside-edge";
 
 const tempRoot = path.join(process.cwd(), "e2e", ".tmp");
 const projectADir = path.join(tempRoot, "project-a");
@@ -64,25 +65,118 @@ async function createTerminalSession(page: Page, projectName: string, sessionNam
   await expect(sessionRow(page, sessionName)).toBeVisible();
 }
 
-async function dragSessionToPane(page: Page, sourceSessionName: string, targetSessionName: string, zone: DropZone) {
+async function withSessionDrag(
+  page: Page,
+  sourceSessionName: string,
+  targetSessionName: string,
+  action: (target: Locator, dataTransfer: Awaited<ReturnType<Page["evaluateHandle"]>>) => Promise<void>,
+) {
   const source = sessionRow(page, sourceSessionName);
   const target = paneLeaf(page, targetSessionName).locator("[data-pane-drop-surface]").first();
-  const box = await target.boundingBox();
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+
+  await source.dispatchEvent("dragstart", { dataTransfer });
+  await expect(target.locator(".pane-drop-overlay")).toBeVisible();
+
+  try {
+    await action(target, dataTransfer);
+  } finally {
+    await source.dispatchEvent("dragend", { dataTransfer });
+    await expect(page.locator(".pane-drop-overlay")).toHaveCount(0);
+  }
+}
+
+async function getZonePoint(target: Locator, zone: DropZone, mode: ZonePointMode) {
+  const zoneLocator = target.locator(`[data-drop-zone="${zone}"]`);
+  const box = await zoneLocator.boundingBox();
   if (!box) {
-    throw new Error(`Unable to resolve target pane bounds for ${targetSessionName}`);
+    throw new Error(`Unable to resolve visible drop zone bounds for ${zone}`);
   }
 
-  const centerX = Math.round(box.width / 2);
-  const centerY = Math.round(box.height / 2);
-  const targetPosition = {
-    left: { x: 14, y: centerY },
-    right: { x: Math.max(14, Math.round(box.width - 14)), y: centerY },
-    top: { x: centerX, y: 14 },
-    bottom: { x: centerX, y: Math.max(14, Math.round(box.height - 14)) },
-    center: { x: centerX, y: centerY },
-  }[zone];
+  if (mode === "center") {
+    return {
+      x: box.x + box.width / 2,
+      y: box.y + box.height / 2,
+    };
+  }
 
-  await source.dragTo(target, { targetPosition });
+  const insideOffset = 2;
+  const outsideOffset = 2;
+
+  if (mode === "inside-edge") {
+    if (zone === "left") {
+      return { x: box.x + box.width - insideOffset, y: box.y + box.height / 2 };
+    }
+    if (zone === "right") {
+      return { x: box.x + insideOffset, y: box.y + box.height / 2 };
+    }
+    if (zone === "top") {
+      return { x: box.x + box.width / 2, y: box.y + box.height - insideOffset };
+    }
+    if (zone === "bottom") {
+      return { x: box.x + box.width / 2, y: box.y + insideOffset };
+    }
+  }
+
+  if (zone === "left") {
+    return { x: box.x + box.width + outsideOffset, y: box.y + box.height / 2 };
+  }
+  if (zone === "right") {
+    return { x: box.x - outsideOffset, y: box.y + box.height / 2 };
+  }
+  if (zone === "top") {
+    return { x: box.x + box.width / 2, y: box.y + box.height + outsideOffset };
+  }
+  if (zone === "bottom") {
+    return { x: box.x + box.width / 2, y: box.y - outsideOffset };
+  }
+  return {
+    x: box.x + box.width / 2,
+    y: box.y + box.height / 2,
+  };
+}
+
+async function previewDropZone(
+  page: Page,
+  sourceSessionName: string,
+  targetSessionName: string,
+  zone: DropZone,
+  mode: ZonePointMode,
+  expectedZone: DropZone | null,
+) {
+  await withSessionDrag(page, sourceSessionName, targetSessionName, async (target, dataTransfer) => {
+    const point = await getZonePoint(target, zone, mode);
+    await target.dispatchEvent("dragover", {
+      dataTransfer,
+      clientX: point.x,
+      clientY: point.y,
+    });
+
+    const activeZones = target.locator(".pane-drop-overlay__zone.is-active");
+    if (!expectedZone) {
+      await expect(activeZones).toHaveCount(0);
+      return;
+    }
+
+    await expect(activeZones).toHaveCount(1);
+    await expect(target.locator(`[data-drop-zone="${expectedZone}"]`)).toHaveClass(/is-active/);
+  });
+}
+
+async function dragSessionToPane(page: Page, sourceSessionName: string, targetSessionName: string, zone: DropZone) {
+  await withSessionDrag(page, sourceSessionName, targetSessionName, async (target, dataTransfer) => {
+    const point = await getZonePoint(target, zone, "center");
+    await target.dispatchEvent("dragover", {
+      dataTransfer,
+      clientX: point.x,
+      clientY: point.y,
+    });
+    await target.dispatchEvent("drop", {
+      dataTransfer,
+      clientX: point.x,
+      clientY: point.y,
+    });
+  });
 }
 
 async function dragDivider(page: Page, delta: number) {
@@ -198,6 +292,11 @@ test("supports multi-pane layouts, autosave, restore, foreign-session prune, and
   await projectLayoutButton(page, "Layout Project A").click();
   await expect(page.locator('[data-layout-node="leaf"]')).toHaveCount(1);
   await expect(paneLeaf(page, "A-One")).toBeVisible();
+
+  await previewDropZone(page, "B-One", "A-One", "left", "inside-edge", "left");
+  await previewDropZone(page, "B-One", "A-One", "left", "outside-edge", "center");
+  await previewDropZone(page, "B-One", "A-One", "top", "inside-edge", "top");
+  await previewDropZone(page, "B-One", "A-One", "top", "outside-edge", "center");
 
   await dragSessionToPane(page, "B-One", "A-One", "left");
   await expect(page.locator('[data-layout-node="leaf"]')).toHaveCount(2);
