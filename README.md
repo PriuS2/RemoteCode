@@ -137,7 +137,7 @@ That runtime `.env` can contain both `CCR_*` app settings and Claude Code provid
 1. Clone the repository.
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/PriuS2/RemoteCode.git
 cd RemoteCode
 ```
 
