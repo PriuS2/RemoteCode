@@ -1535,6 +1535,27 @@ html[data-theme="light"],
   --danger-soft: rgba(179, 95, 102, 0.13);
   --info: #4b7ba4;
   --info-soft: rgba(75, 123, 164, 0.13);
+  --preview-toolbar-bg: var(--surface-inset);
+  --preview-toolbar-button-bg: color-mix(in srgb, var(--surface-3) 74%, var(--surface-2));
+  --preview-toolbar-button-fg: var(--text-primary);
+  --preview-toolbar-button-disabled-bg: color-mix(in srgb, var(--surface-2) 94%, transparent);
+  --preview-toolbar-button-disabled-fg: var(--text-muted);
+  --preview-toolbar-input-bg: var(--surface-1);
+  --preview-toolbar-input-fg: var(--text-primary);
+  --preview-toolbar-input-border: var(--border-strong);
+  --preview-gutter-bg: color-mix(in srgb, var(--surface-inset) 92%, var(--surface-2));
+  --preview-gutter-fg: var(--text-muted);
+  --preview-gutter-border: var(--border-subtle);
+  --preview-gutter-active-bg: color-mix(in srgb, var(--accent) 10%, var(--surface-inset));
+  --preview-gutter-active-fg: var(--accent);
+  --preview-line-selection-bg: color-mix(in srgb, var(--accent) 10%, transparent);
+  --preview-match-bg: color-mix(in srgb, var(--warn) 10%, transparent);
+  --preview-match-active-bg: color-mix(in srgb, var(--warn) 18%, transparent);
+  --preview-status-bg: color-mix(in srgb, var(--surface-2) 92%, var(--surface-1));
+  --preview-status-border: var(--border-subtle);
+  --preview-status-fg: var(--warn);
+  --preview-checker-base: #eef2f6;
+  --preview-checker-tile: #d7dbdf;
   --border-subtle: rgba(42, 39, 31, 0.13);
   --border-strong: rgba(42, 39, 31, 0.24);
   --border-accent: rgba(34, 33, 29, 0.28);
@@ -1642,6 +1663,27 @@ html[data-theme="dark"] {
   --danger-soft: rgba(239, 154, 160, 0.12);
   --info: #9bc3ef;
   --info-soft: rgba(155, 195, 239, 0.12);
+  --preview-toolbar-bg: var(--surface-inset);
+  --preview-toolbar-button-bg: color-mix(in srgb, var(--surface-3) 80%, var(--surface-2));
+  --preview-toolbar-button-fg: var(--text-primary);
+  --preview-toolbar-button-disabled-bg: color-mix(in srgb, var(--surface-2) 94%, transparent);
+  --preview-toolbar-button-disabled-fg: var(--text-muted);
+  --preview-toolbar-input-bg: var(--surface-2);
+  --preview-toolbar-input-fg: var(--text-primary);
+  --preview-toolbar-input-border: var(--border-strong);
+  --preview-gutter-bg: color-mix(in srgb, var(--surface-base) 88%, var(--surface-inset));
+  --preview-gutter-fg: var(--text-muted);
+  --preview-gutter-border: var(--border-subtle);
+  --preview-gutter-active-bg: color-mix(in srgb, var(--accent) 12%, var(--surface-base));
+  --preview-gutter-active-fg: var(--info);
+  --preview-line-selection-bg: color-mix(in srgb, var(--accent) 12%, transparent);
+  --preview-match-bg: color-mix(in srgb, var(--warn) 10%, transparent);
+  --preview-match-active-bg: color-mix(in srgb, var(--warn) 18%, transparent);
+  --preview-status-bg: color-mix(in srgb, var(--surface-1) 88%, var(--surface-base));
+  --preview-status-border: var(--border-subtle);
+  --preview-status-fg: var(--warn);
+  --preview-checker-base: #1a2025;
+  --preview-checker-tile: #2a3239;
   --border-subtle: rgba(238, 242, 246, 0.1);
   --border-strong: rgba(238, 242, 246, 0.18);
   --border-accent: rgba(238, 242, 246, 0.2);
@@ -2540,13 +2582,13 @@ body {
 
 .image-preview-canvas {
   background-image:
-    linear-gradient(45deg, #d7dbdf 25%, transparent 25%),
-    linear-gradient(-45deg, #d7dbdf 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #d7dbdf 75%),
-    linear-gradient(-45deg, transparent 75%, #d7dbdf 75%);
+    linear-gradient(45deg, var(--preview-checker-tile) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--preview-checker-tile) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--preview-checker-tile) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--preview-checker-tile) 75%);
   background-size: 16px 16px;
   background-position: 0 0, 0 8px, 8px -8px, -8px 0;
-  background-color: #eef2f6;
+  background-color: var(--preview-checker-base);
 }
 
 html[data-theme="dark"] .app-header,
@@ -2592,10 +2634,6 @@ html[data-theme="dark"] .ide-workbench-statusbar {
 
 html[data-theme="dark"] .ide-workbench-drag-handle {
   background: color-mix(in srgb, var(--surface-3) 72%, transparent);
-}
-
-html[data-theme="dark"] .image-preview-canvas {
-  background: var(--surface-base);
 }
 
 html[data-theme="dark"] .image-preview-canvas__image {

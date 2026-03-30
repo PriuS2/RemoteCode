@@ -2306,7 +2306,7 @@ function FilePreview({
           gap: 8,
           padding: "6px 8px",
           borderBottom: "1px solid var(--border-subtle)",
-          background: "var(--surface-inset)",
+          background: "var(--preview-toolbar-bg)",
           flexWrap: "wrap",
         }}
       >
@@ -2458,18 +2458,10 @@ function FilePreview({
               <button
                 onClick={clearSelection}
                 title="Clear selection"
+                className="panel-icon-button"
                 style={{
-                  background: "none",
-                  border: "none",
-                  color: "#6c7086",
-                  cursor: "pointer",
-                  padding: "2px 4px",
-                  display: "flex",
-                  alignItems: "center",
-                  borderRadius: 3,
+                  ...previewIconButtonStyle(),
                 }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
               >
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                   <line x1="3" y1="3" x2="9" y2="9" />
@@ -2520,12 +2512,12 @@ function FilePreview({
                         minWidth: gutterWidth,
                         padding: "0 8px 0 8px",
                         textAlign: "right",
-                        color: inRange ? "#89b4fa" : "#45475a",
+                        color: inRange ? "var(--preview-gutter-active-fg)" : "var(--preview-gutter-fg)",
                         userSelect: "none",
                         whiteSpace: "nowrap",
                         verticalAlign: "top",
-                        borderRight: "1px solid #313244",
-                        background: inRange ? "#1e1e2e" : "#11111b",
+                        borderRight: "1px solid var(--preview-gutter-border)",
+                        background: inRange ? "var(--preview-gutter-active-bg)" : "var(--preview-gutter-bg)",
                         position: "sticky",
                         left: 0,
                         cursor: "pointer",
@@ -2542,11 +2534,11 @@ function FilePreview({
                         verticalAlign: "top",
                         background:
                           inRange
-                            ? "rgba(137,180,250,0.08)"
+                            ? "var(--preview-line-selection-bg)"
                             : lineNum === activeMatchLine
-                              ? "rgba(249,226,175,0.18)"
+                              ? "var(--preview-match-active-bg)"
                               : matchLines.includes(lineNum)
-                                ? "rgba(249,226,175,0.08)"
+                                ? "var(--preview-match-bg)"
                                 : undefined,
                       }}
                       dangerouslySetInnerHTML={{ __html: line || " " }}
@@ -2561,9 +2553,9 @@ function FilePreview({
               style={{
                 padding: "6px 10px",
                 fontSize: uiPx(10),
-                color: "#f9e2af",
-                borderTop: "1px solid #313244",
-                background: "#181825",
+                color: "var(--preview-status-fg)",
+                borderTop: "1px solid var(--preview-status-border)",
+                background: "var(--preview-status-bg)",
                 textAlign: "center",
                 position: "sticky",
                 left: 0,
@@ -2581,9 +2573,9 @@ function FilePreview({
 
 function previewToolbarButton(disabled: boolean): React.CSSProperties {
   return {
-    background: disabled ? "#232336" : "#313244",
-    border: "1px solid #45475a",
-    color: disabled ? "#585b70" : "#cdd6f4",
+    background: disabled ? "var(--preview-toolbar-button-disabled-bg)" : "var(--preview-toolbar-button-bg)",
+    border: "1px solid var(--preview-toolbar-input-border)",
+    color: disabled ? "var(--preview-toolbar-button-disabled-fg)" : "var(--preview-toolbar-button-fg)",
     borderRadius: 6,
     padding: "4px 8px",
     fontSize: uiPx(11),
@@ -2594,13 +2586,73 @@ function previewToolbarButton(disabled: boolean): React.CSSProperties {
 const previewToolbarInput: React.CSSProperties = {
   padding: "4px 8px",
   borderRadius: 6,
-  border: "1px solid #45475a",
-  background: "#313244",
-  color: "#cdd6f4",
+  border: "1px solid var(--preview-toolbar-input-border)",
+  background: "var(--preview-toolbar-input-bg)",
+  color: "var(--preview-toolbar-input-fg)",
   fontSize: uiPx(11),
   outline: "none",
   boxSizing: "border-box",
 };
+
+const previewHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "4px 8px",
+  borderBottom: "1px solid var(--border-subtle)",
+  flexShrink: 0,
+  background: "var(--surface-1)",
+};
+
+const previewTitleStyle: React.CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  fontSize: uiPx(11),
+  fontWeight: 600,
+  color: "var(--text-primary)",
+};
+
+const previewMetaStyle: React.CSSProperties = {
+  fontSize: uiPx(10),
+  color: "var(--text-muted)",
+  flexShrink: 0,
+};
+
+function previewIconButtonStyle(extra?: React.CSSProperties): React.CSSProperties {
+  return {
+    ["--panel-fg" as any]: "var(--text-muted)",
+    ["--panel-hover-fg" as any]: "var(--text-primary)",
+    padding: "2px 4px",
+    display: "flex",
+    alignItems: "center",
+    borderRadius: 3,
+    flexShrink: 0,
+    ...extra,
+  };
+}
+
+function previewChipButtonStyle(
+  foreground: string,
+  hoverBackground: string,
+  extra?: React.CSSProperties,
+): React.CSSProperties {
+  return {
+    ["--panel-bg" as any]: "transparent",
+    ["--panel-border" as any]: "var(--border-strong)",
+    ["--panel-fg" as any]: foreground,
+    ["--panel-hover-bg" as any]: hoverBackground,
+    padding: "1px 6px",
+    fontSize: uiPx(10),
+    fontWeight: 600,
+    borderRadius: 3,
+    flexShrink: 0,
+    lineHeight: "16px",
+    ...extra,
+  };
+}
 
 /* ---- Image Preview ---- */
 
@@ -2804,35 +2856,13 @@ function ImagePreview({
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
       {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          padding: "4px 8px",
-          borderBottom: "1px solid #313244",
-          flexShrink: 0,
-          background: "#181825",
-        }}
-      >
+      <div style={previewHeaderStyle}>
         <FileIcon extension={file.extension} size={16} />
-        <span
-          style={{
-            flex: 1,
-            minWidth: 0,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            fontSize: uiPx(11),
-            fontWeight: 600,
-            color: "#cdd6f4",
-          }}
-          title={file.name}
-        >
+        <span style={previewTitleStyle} title={file.name}>
           {file.name}
         </span>
         {size > 0 && (
-          <span style={{ fontSize: uiPx(10), color: "#6c7086", flexShrink: 0 }}>
+          <span style={previewMetaStyle}>
             {formatSize(size)}
           </span>
         )}
@@ -2844,16 +2874,19 @@ function ImagePreview({
               if (c) zoomAtPoint(1 / 1.3, c.clientWidth / 2, c.clientHeight / 2);
             }}
             title="Zoom out"
+            className="panel-icon-button"
             style={{
-              background: "none", border: "none", color: "#6c7086", cursor: "pointer",
-              fontSize: uiPx(12), fontWeight: 700, padding: "0 3px", lineHeight: 1, borderRadius: 3,
+              ...previewIconButtonStyle({
+                fontSize: uiPx(12),
+                fontWeight: 700,
+                padding: "0 3px",
+                lineHeight: 1,
+              }),
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
           >
             -
           </button>
-          <span style={{ fontSize: uiPx(9), color: "#6c7086", minWidth: 28, textAlign: "center" }}>
+          <span style={{ fontSize: uiPx(9), color: "var(--text-muted)", minWidth: 28, textAlign: "center" }}>
             {zoomPercent}%
           </span>
           <button
@@ -2862,12 +2895,15 @@ function ImagePreview({
               if (c) zoomAtPoint(1.3, c.clientWidth / 2, c.clientHeight / 2);
             }}
             title="Zoom in"
+            className="panel-icon-button"
             style={{
-              background: "none", border: "none", color: "#6c7086", cursor: "pointer",
-              fontSize: uiPx(12), fontWeight: 700, padding: "0 3px", lineHeight: 1, borderRadius: 3,
+              ...previewIconButtonStyle({
+                fontSize: uiPx(12),
+                fontWeight: 700,
+                padding: "0 3px",
+                lineHeight: 1,
+              }),
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
           >
             +
           </button>
@@ -2876,23 +2912,9 @@ function ImagePreview({
         <button
           onClick={fitToView}
           title="Fit to view"
+          className="panel-icon-button panel-icon-button--chip"
           style={{
-            background: "none",
-            border: "1px solid #45475a",
-            color: "#89b4fa",
-            cursor: "pointer",
-            padding: "1px 6px",
-            fontSize: uiPx(10),
-            fontWeight: 600,
-            borderRadius: 3,
-            flexShrink: 0,
-            lineHeight: "16px",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "#89b4fa18";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "none";
+            ...previewChipButtonStyle("var(--info)", "var(--info-soft)"),
           }}
         >
           Fit
@@ -2901,23 +2923,9 @@ function ImagePreview({
         <button
           onClick={onInsertPath}
           title="Insert @path"
+          className="panel-icon-button panel-icon-button--chip"
           style={{
-            background: "none",
-            border: "1px solid #45475a",
-            color: "#a6e3a1",
-            cursor: "pointer",
-            padding: "1px 6px",
-            fontSize: uiPx(10),
-            fontWeight: 700,
-            borderRadius: 3,
-            flexShrink: 0,
-            lineHeight: "16px",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "#a6e3a118";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "none";
+            ...previewChipButtonStyle("var(--success)", "var(--success-soft)", { fontWeight: 700 }),
           }}
         >
           @
@@ -2926,19 +2934,10 @@ function ImagePreview({
         <button
           onClick={onClose}
           title="Close preview"
+          className="panel-icon-button"
           style={{
-            background: "none",
-            border: "none",
-            color: "#6c7086",
-            cursor: "pointer",
-            padding: "2px 4px",
-            display: "flex",
-            alignItems: "center",
-            borderRadius: 3,
-            flexShrink: 0,
+            ...previewIconButtonStyle(),
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <line x1="3" y1="3" x2="9" y2="9" />
@@ -2949,11 +2948,11 @@ function ImagePreview({
 
       {/* Body */}
       {loading ? (
-        <div style={{ padding: 20, textAlign: "center", color: "#6c7086", fontSize: uiPx(12) }}>
+        <div style={{ padding: 20, textAlign: "center", color: "var(--text-muted)", fontSize: uiPx(12) }}>
           Loading...
         </div>
       ) : errorMessage ? (
-        <div style={{ padding: 20, textAlign: "center", color: "#f38ba8", fontSize: uiPx(12) }}>
+        <div style={{ padding: 20, textAlign: "center", color: "var(--danger)", fontSize: uiPx(12) }}>
           {errorMessage}
         </div>
       ) : imageUrl ? (
@@ -3217,35 +3216,13 @@ function AudioPreview({
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
       {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          padding: "4px 8px",
-          borderBottom: "1px solid #313244",
-          flexShrink: 0,
-          background: "#181825",
-        }}
-      >
+      <div style={previewHeaderStyle}>
         <FileIcon extension={file.extension} size={16} />
-        <span
-          style={{
-            flex: 1,
-            minWidth: 0,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            fontSize: uiPx(11),
-            fontWeight: 600,
-            color: "#cdd6f4",
-          }}
-          title={file.name}
-        >
+        <span style={previewTitleStyle} title={file.name}>
           {file.name}
         </span>
         {size > 0 && (
-          <span style={{ fontSize: uiPx(10), color: "#6c7086", flexShrink: 0 }}>
+          <span style={previewMetaStyle}>
             {formatSize(size)}
           </span>
         )}
@@ -3253,23 +3230,9 @@ function AudioPreview({
         <button
           onClick={onInsertPath}
           title="Insert @path"
+          className="panel-icon-button panel-icon-button--chip"
           style={{
-            background: "none",
-            border: "1px solid #45475a",
-            color: "#a6e3a1",
-            cursor: "pointer",
-            padding: "1px 6px",
-            fontSize: uiPx(10),
-            fontWeight: 700,
-            borderRadius: 3,
-            flexShrink: 0,
-            lineHeight: "16px",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "#a6e3a118";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "none";
+            ...previewChipButtonStyle("var(--success)", "var(--success-soft)", { fontWeight: 700 }),
           }}
         >
           @
@@ -3278,19 +3241,10 @@ function AudioPreview({
         <button
           onClick={onClose}
           title="Close preview"
+          className="panel-icon-button"
           style={{
-            background: "none",
-            border: "none",
-            color: "#6c7086",
-            cursor: "pointer",
-            padding: "2px 4px",
-            display: "flex",
-            alignItems: "center",
-            borderRadius: 3,
-            flexShrink: 0,
+            ...previewIconButtonStyle(),
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <line x1="3" y1="3" x2="9" y2="9" />
