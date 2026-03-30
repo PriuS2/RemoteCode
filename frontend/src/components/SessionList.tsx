@@ -5,6 +5,7 @@ import type { ActivityState } from "./Terminal";
 import type { Project } from "../types/project";
 import type { Session } from "../types/session";
 import { getCliTone } from "../utils/cliTones";
+import { setSessionDragData } from "../utils/sessionDragData";
 
 interface SessionListProps {
   projects: Project[];
@@ -422,8 +423,7 @@ export default function SessionList({
 
   const handleSessionLayoutDragStart = useCallback((event: React.DragEvent, sessionId: string) => {
     event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("application/x-remote-code-session", sessionId);
-    event.dataTransfer.setData("text/plain", sessionId);
+    setSessionDragData(event.dataTransfer, sessionId);
     onSessionLayoutDragStart?.(sessionId);
   }, [onSessionLayoutDragStart]);
 

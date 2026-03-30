@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { getDropZoneGeometry } from "../frontend/src/utils/layoutDropGeometry";
 
 type DropZone = "left" | "right" | "top" | "bottom" | "center";
 type ResizeMessage = {
@@ -179,6 +180,47 @@ async function dragSessionToPane(page: Page, sourceSessionName: string, targetSe
   });
 }
 
+async function getActualDropTargetPosition(target: Locator, zone: DropZone) {
+  const box = await target.boundingBox();
+  if (!box) {
+    throw new Error(`Unable to resolve drop target bounds for ${zone}`);
+  }
+
+  const rect = getDropZoneGeometry({ width: box.width, height: box.height })[zone];
+  return {
+    x: Math.max(1, rect.left + rect.width / 2),
+    y: Math.max(1, rect.top + rect.height / 2),
+  };
+}
+
+async function dragSessionToPaneWithMouse(
+  page: Page,
+  sourceSessionName: string,
+  targetSessionName: string,
+  zone: DropZone,
+) {
+  const source = sessionRow(page, sourceSessionName);
+  const target = paneLeaf(page, targetSessionName).locator("[data-pane-drop-surface]").first();
+  const targetPosition = await getActualDropTargetPosition(target, zone);
+  await source.dragTo(target, { targetPosition });
+}
+
+async function dragSessionToEmptyWorkbench(page: Page, sourceSessionName: string) {
+  const source = sessionRow(page, sourceSessionName);
+  const target = page.locator("main.terminal-area").first();
+  const box = await target.boundingBox();
+  if (!box) {
+    throw new Error("Unable to resolve empty workbench bounds");
+  }
+
+  await source.dragTo(target, {
+    targetPosition: {
+      x: box.width / 2,
+      y: box.height / 2,
+    },
+  });
+}
+
 async function dragDivider(page: Page, delta: number) {
   const divider = page.locator(".pane-layout__divider").first();
   const box = await divider.boundingBox();
@@ -229,6 +271,60 @@ async function readTerminalSize(page: Page, sessionName: string) {
     cols: Number(match[1]),
     rows: Number(match[2]),
   };
+}
+
+async function terminalBufferHasText(page: Page, sessionName: string, text: string) {
+  return page.evaluate(({ sessionName: targetSessionName, text: targetText }) => {
+    const store = (
+      window as Window & {
+        __remoteCodeTerminalDebug?: Record<string, { sessionName: string; term: any }>;
+      }
+    ).__remoteCodeTerminalDebug ?? {};
+    const entry = Object.values(store).find((item) => item.sessionName === targetSessionName);
+    if (!entry) {
+      return false;
+    }
+
+    const buffer = entry.term.buffer.active;
+    for (let index = 0; index < buffer.length; index += 1) {
+      const line = buffer.getLine(index)?.translateToString(true) ?? "";
+      if (line.includes(targetText)) {
+        return true;
+      }
+    }
+    return false;
+  }, { sessionName, text });
+}
+
+async function terminalBufferLength(page: Page, sessionName: string) {
+  return page.evaluate((targetSessionName) => {
+    const store = (
+      window as Window & {
+        __remoteCodeTerminalDebug?: Record<string, { sessionName: string; term: any }>;
+      }
+    ).__remoteCodeTerminalDebug ?? {};
+    const entry = Object.values(store).find((item) => item.sessionName === targetSessionName);
+    return entry ? entry.term.buffer.active.length : 0;
+  }, sessionName);
+}
+
+async function waitForTerminalBufferText(page: Page, sessionName: string, text: string) {
+  await expect.poll(async () => {
+    return terminalBufferHasText(page, sessionName, text);
+  }, {
+    message: `Waiting for ${text} in ${sessionName} terminal buffer`,
+    timeout: 20_000,
+  }).toBe(true);
+}
+
+async function runTerminalCommand(page: Page, sessionName: string, command: string, expectedText?: string) {
+  const pane = paneLeaf(page, sessionName);
+  await pane.click();
+  await page.keyboard.insertText(command);
+  await page.keyboard.press("Enter");
+  if (expectedText) {
+    await waitForTerminalBufferText(page, sessionName, expectedText);
+  }
 }
 
 async function getResizeMessages(page: Page): Promise<ResizeMessage[]> {
@@ -292,6 +388,35 @@ test("supports multi-pane layouts, autosave, restore, foreign-session prune, and
   await projectLayoutButton(page, "Layout Project A").click();
   await expect(page.locator('[data-layout-node="leaf"]')).toHaveCount(1);
   await expect(paneLeaf(page, "A-One")).toBeVisible();
+
+  await dragSessionToPaneWithMouse(page, "A-Two", "A-One", "left");
+  await expect(page.locator('[data-layout-node="leaf"]')).toHaveCount(2);
+  await expect(paneLeaf(page, "A-Two")).toBeVisible();
+
+  await dragSessionToPaneWithMouse(page, "A-Two", "A-One", "center");
+  await expect(page.locator('[data-layout-node="leaf"]')).toHaveCount(1);
+  await expect(paneLeaf(page, "A-Two")).toBeVisible();
+  await expect(page.locator('[data-layout-node="leaf"]').filter({ hasText: "A-One" })).toHaveCount(0);
+
+  await paneLeaf(page, "A-Two").getByTitle("Close Pane").click();
+  await expect(page.locator('[data-layout-node="leaf"]')).toHaveCount(0);
+
+  await dragSessionToEmptyWorkbench(page, "A-One");
+  await expect(page.locator('[data-layout-node="leaf"]')).toHaveCount(1);
+  await expect(paneLeaf(page, "A-One")).toBeVisible();
+
+  await runTerminalCommand(
+    page,
+    "A-One",
+    '1..600 | ForEach-Object { Write-Output ("KEEPALIVE-LINE-{0:D3}" -f $_) }',
+    "KEEPALIVE-LINE-600",
+  );
+  await expect.poll(async () => {
+    return terminalBufferLength(page, "A-One");
+  }, {
+    message: "Waiting for A-One scrollback to grow after keep-alive output",
+    timeout: 20_000,
+  }).toBeGreaterThan(500);
 
   await previewDropZone(page, "B-One", "A-One", "left", "inside-edge", "left");
   await previewDropZone(page, "B-One", "A-One", "left", "outside-edge", "center");
@@ -362,6 +487,23 @@ test("supports multi-pane layouts, autosave, restore, foreign-session prune, and
   await expect(page.locator('[data-layout-node="leaf"]')).toHaveCount(2);
   await expect(paneLeaf(page, "A-One")).toBeVisible();
   await expect(paneLeaf(page, "B-One")).toBeVisible();
+  await expect.poll(async () => {
+    return terminalBufferLength(page, "A-One");
+  }, {
+    message: "Waiting for A-One scrollback to remain after layout restore",
+    timeout: 20_000,
+  }).toBeGreaterThan(500);
+  await runTerminalCommand(page, "A-One", 'Write-Output "KEEPALIVE-RESTORED"', "KEEPALIVE-RESTORED");
+
+  await paneLeaf(page, "A-One").getByTitle("Refresh").click();
+  await expect.poll(async () => {
+    return terminalBufferLength(page, "A-One");
+  }, {
+    message: "Waiting for A-One scrollback to remain after hard refresh",
+    timeout: 20_000,
+  }).toBeGreaterThan(500);
+  await runTerminalCommand(page, "A-One", 'Write-Output "KEEPALIVE-REFRESHED"', "KEEPALIVE-REFRESHED");
+  await expect(page.locator(".terminal-statusbar").filter({ hasText: "taken over" })).toHaveCount(0);
 
   await page.reload();
   await expect(page.locator(".session-list")).toBeVisible();

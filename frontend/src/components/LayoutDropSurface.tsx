@@ -1,4 +1,4 @@
-import { useMemo, useRef, type CSSProperties, type DragEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
 import type { PaneDropZone } from "../utils/layout";
 import {
   DROP_ZONE_RENDER_ORDER,
@@ -7,6 +7,7 @@ import {
   isDropZoneInvalid,
   type DropZoneRect,
 } from "../utils/layoutDropGeometry";
+import { getSessionDragData, hasSessionDragData } from "../utils/sessionDragData";
 
 export interface LayoutDropIndicator {
   targetPaneId: string | null;
@@ -18,11 +19,12 @@ interface LayoutDropSurfaceProps {
   paneId: string;
   size: { width: number; height: number };
   dragging: boolean;
+  draggedSessionId: string | null;
   indicator: LayoutDropIndicator | null;
   minPaneWidth: number;
   minPaneHeight: number;
   onIndicatorChange: (indicator: LayoutDropIndicator | null) => void;
-  onDropIndicator: (indicator: LayoutDropIndicator) => void;
+  onDropIndicator: (sessionId: string, indicator: LayoutDropIndicator) => void;
   children: ReactNode;
 }
 
@@ -53,10 +55,29 @@ function zoneStyle(rect: DropZoneRect): CSSProperties {
   };
 }
 
+function getIndicatorAtPoint(
+  paneId: string,
+  size: { width: number; height: number },
+  minPaneWidth: number,
+  minPaneHeight: number,
+  point: { x: number; y: number },
+): LayoutDropIndicator | null {
+  const zone = getDropZoneAtPoint(point, size);
+  if (!zone) {
+    return null;
+  }
+  return {
+    targetPaneId: paneId,
+    zone,
+    invalid: isDropZoneInvalid(zone, size, minPaneWidth, minPaneHeight),
+  };
+}
+
 export default function LayoutDropSurface({
   paneId,
   size,
   dragging,
+  draggedSessionId,
   indicator,
   minPaneWidth,
   minPaneHeight,
@@ -66,97 +87,118 @@ export default function LayoutDropSurface({
 }: LayoutDropSurfaceProps) {
   const activeZone = indicator?.targetPaneId === paneId ? indicator.zone : null;
   const activeInvalid = indicator?.targetPaneId === paneId ? indicator.invalid : false;
+  const surfaceRef = useRef<HTMLDivElement>(null);
   const lastIndicatorRef = useRef<LayoutDropIndicator | null>(null);
   const geometry = useMemo(
     () => getDropZoneGeometry(size),
     [size.height, size.width],
   );
 
-  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
-    if (!dragging) {
+  useEffect(() => {
+    const element = surfaceRef.current;
+    if (!element) {
       return;
     }
-    event.preventDefault();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const zone = getDropZoneAtPoint(
-      {
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
-      },
-      { width: rect.width, height: rect.height },
-    );
-    if (!zone) {
-      event.dataTransfer.dropEffect = "none";
-      lastIndicatorRef.current = null;
-      onIndicatorChange(null);
-      return;
-    }
-    const invalid = isDropZoneInvalid(zone, size, minPaneWidth, minPaneHeight);
-    event.dataTransfer.dropEffect = invalid ? "none" : "move";
-    const nextIndicator: LayoutDropIndicator = {
-      targetPaneId: paneId,
-      zone,
-      invalid,
-    };
-    lastIndicatorRef.current = nextIndicator;
-    onIndicatorChange(nextIndicator);
-  };
 
-  const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
-    const nextTarget = event.relatedTarget as Node | null;
-    if (nextTarget && event.currentTarget.contains(nextTarget)) {
-      return;
-    }
-    lastIndicatorRef.current = null;
-    onIndicatorChange(null);
-  };
-
-  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    if (!dragging) {
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    const nextIndicator = (
-      indicator?.targetPaneId === paneId
-        ? indicator
-        : lastIndicatorRef.current?.targetPaneId === paneId
-          ? lastIndicatorRef.current
-          : null
-    ) ?? (() => {
-      const rect = event.currentTarget.getBoundingClientRect();
-      const zone = getDropZoneAtPoint(
+    const handleDragOver = (event: DragEvent) => {
+      if (!hasSessionDragData(event.dataTransfer)) {
+        return;
+      }
+      event.preventDefault();
+      const rect = element.getBoundingClientRect();
+      const nextIndicator = getIndicatorAtPoint(
+        paneId,
+        size,
+        minPaneWidth,
+        minPaneHeight,
         {
           x: event.clientX - rect.left,
           y: event.clientY - rect.top,
         },
-        { width: rect.width, height: rect.height },
       );
-      if (!zone) {
-        return null;
+      if (!nextIndicator) {
+        if (event.dataTransfer) {
+          event.dataTransfer.dropEffect = "none";
+        }
+        lastIndicatorRef.current = null;
+        onIndicatorChange(null);
+        return;
       }
-      const invalid = isDropZoneInvalid(zone, size, minPaneWidth, minPaneHeight);
-      return {
-        targetPaneId: paneId,
-        zone,
-        invalid,
-      } satisfies LayoutDropIndicator;
-    })();
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = nextIndicator.invalid ? "none" : "move";
+      }
+      lastIndicatorRef.current = nextIndicator;
+      onIndicatorChange(nextIndicator);
+    };
 
-    lastIndicatorRef.current = null;
-    onIndicatorChange(null);
-    if (nextIndicator && !nextIndicator.invalid) {
-      onDropIndicator(nextIndicator);
-    }
-  };
+    const handleDragLeave = (event: DragEvent) => {
+      const nextTarget = event.relatedTarget as Node | null;
+      if (nextTarget && element.contains(nextTarget)) {
+        return;
+      }
+      lastIndicatorRef.current = null;
+      onIndicatorChange(null);
+    };
+
+    const handleDrop = (event: DragEvent) => {
+      const sessionId = getSessionDragData(event.dataTransfer) ?? draggedSessionId;
+      if (!sessionId) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const nextIndicator = (
+        indicator?.targetPaneId === paneId
+          ? indicator
+          : lastIndicatorRef.current?.targetPaneId === paneId
+            ? lastIndicatorRef.current
+            : null
+      ) ?? (() => {
+        const rect = element.getBoundingClientRect();
+        return getIndicatorAtPoint(
+          paneId,
+          size,
+          minPaneWidth,
+          minPaneHeight,
+          {
+            x: event.clientX - rect.left,
+            y: event.clientY - rect.top,
+          },
+        );
+      })();
+
+      lastIndicatorRef.current = null;
+      onIndicatorChange(null);
+      if (nextIndicator && !nextIndicator.invalid) {
+        onDropIndicator(sessionId, nextIndicator);
+      }
+    };
+
+    element.addEventListener("dragover", handleDragOver);
+    element.addEventListener("dragleave", handleDragLeave);
+    element.addEventListener("drop", handleDrop);
+
+    return () => {
+      element.removeEventListener("dragover", handleDragOver);
+      element.removeEventListener("dragleave", handleDragLeave);
+      element.removeEventListener("drop", handleDrop);
+    };
+  }, [
+    draggedSessionId,
+    indicator,
+    minPaneHeight,
+    minPaneWidth,
+    onDropIndicator,
+    onIndicatorChange,
+    paneId,
+    size,
+  ]);
 
   return (
     <div
+      ref={surfaceRef}
       className="pane-drop-surface"
       data-pane-drop-surface={paneId}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
     >
       {children}
       {dragging && (

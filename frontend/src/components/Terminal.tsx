@@ -162,10 +162,19 @@ export default function Terminal({
   const sendResizeRef = useRef<((cols: number, rows: number) => void) | null>(null);
   const sendMouseRef = useRef<((data: MouseEventData) => void) | null>(null);
   const onActivityChangeRef = useRef(onActivityChange);
+  const visibleRef = useRef(visible);
+  const focusedRef = useRef(isFocused);
+  const themeRef = useRef(theme);
+  const fontSizeRef = useRef(fontSize);
   onActivityChangeRef.current = onActivityChange;
+  visibleRef.current = visible;
+  focusedRef.current = isFocused;
+  themeRef.current = theme;
+  fontSizeRef.current = fontSize;
 
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [gitPanelOpen, setGitPanelOpen] = useState(false);
+  const [shouldInitialize, setShouldInitialize] = useState(visible);
   const [explorerWidth, setExplorerWidth] = useState(() => {
     const stored = localStorage.getItem("explorerWidth");
     return stored ? Number(stored) : 240;
@@ -176,14 +185,13 @@ export default function Terminal({
   });
   const explorerDragRef = useRef(false);
   const gitPanelDragRef = useRef(false);
-  const nudgeFramesRef = useRef<number[]>([]);
+  const refreshFramesRef = useRef<number[]>([]);
   const isMobileDevice = () => window.innerWidth <= 768;
   const isMobile = isMobileDevice;
   const [scrollThumb, setScrollThumb] = useState<{ top: number; height: number } | null>(null);
   const [scrollbarActive, setScrollbarActive] = useState(false);
-  const [layoutNudgeOffset, setLayoutNudgeOffset] = useState(0);
 
-  const refitAndRefresh = useCallback(() => {
+  const refitAndRefresh = useCallback((restoreFocus = false) => {
     const term = termRef.current;
     const fitAddon = fitAddonRef.current;
     if (!term || !fitAddon) return;
@@ -195,54 +203,49 @@ export default function Terminal({
     }
 
     try {
+      term.clearTextureAtlas();
+    } catch {
+      // ignore
+    }
+
+    try {
       term.refresh(0, Math.max(term.rows - 1, 0));
     } catch {
       // ignore
     }
 
     sendResizeRef.current?.(term.cols, term.rows);
+    if (restoreFocus && visible && isFocused) {
+      term.focus();
+    }
+  }, [isFocused, visible]);
+
+  const cancelScheduledHardRefresh = useCallback(() => {
+    refreshFramesRef.current.forEach((frame) => cancelAnimationFrame(frame));
+    refreshFramesRef.current = [];
   }, []);
 
-  const cancelScheduledLayoutNudge = useCallback(() => {
-    nudgeFramesRef.current.forEach((frame) => cancelAnimationFrame(frame));
-    nudgeFramesRef.current = [];
-    setLayoutNudgeOffset(0);
-  }, []);
-
-  const scheduleLayoutNudge = useCallback(() => {
+  const scheduleHardRefresh = useCallback((restoreFocus = false) => {
     if (!visible || !termRef.current || !fitAddonRef.current) return;
 
-    cancelScheduledLayoutNudge();
-    const offsets = [50, 0, 50, 0, 50];
+    cancelScheduledHardRefresh();
     const frameIds: number[] = [];
 
-    const runStep = (index: number) => {
-      const frameId = requestAnimationFrame(() => {
-        setLayoutNudgeOffset(offsets[index]);
-        if (index + 1 < offsets.length) {
-          runStep(index + 1);
-          return;
-        }
-
-        const resetFrameId = requestAnimationFrame(() => {
-          setLayoutNudgeOffset(0);
-          const refreshFrameId = requestAnimationFrame(() => {
-            refitAndRefresh();
-            nudgeFramesRef.current = [];
-          });
-          frameIds.push(refreshFrameId);
-          nudgeFramesRef.current = [...frameIds];
-        });
-        frameIds.push(resetFrameId);
-        nudgeFramesRef.current = [...frameIds];
+    const firstFrame = requestAnimationFrame(() => {
+      const secondFrame = requestAnimationFrame(() => {
+        refitAndRefresh(restoreFocus);
+        refreshFramesRef.current = [];
       });
+      frameIds.push(secondFrame);
+      refreshFramesRef.current = [...frameIds];
+    });
 
-      frameIds.push(frameId);
-      nudgeFramesRef.current = [...frameIds];
-    };
+    frameIds.push(firstFrame);
+    refreshFramesRef.current = [...frameIds];
+  }, [cancelScheduledHardRefresh, refitAndRefresh, visible]);
 
-    runStep(0);
-  }, [cancelScheduledLayoutNudge, refitAndRefresh, visible]);
+  const scheduleHardRefreshRef = useRef(scheduleHardRefresh);
+  scheduleHardRefreshRef.current = scheduleHardRefresh;
 
   const wsUrl = sessionId ? getWsUrl(sessionId) : null;
 
@@ -284,13 +287,19 @@ export default function Terminal({
   });
 
   useEffect(() => {
-    if (!innerRef.current) return;
+    if (visible) {
+      setShouldInitialize(true);
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (!shouldInitialize || !innerRef.current || termRef.current) return;
 
     const term = new XTerm({
       cursorBlink: true,
-      fontSize,
+      fontSize: fontSizeRef.current,
       fontFamily: "'Cascadia Code', 'Consolas', monospace",
-      theme: getTerminalPalette(theme),
+      theme: getTerminalPalette(themeRef.current),
       allowProposedApi: true,
     });
 
@@ -314,6 +323,16 @@ export default function Terminal({
     sendInputRef.current = sendInput;
     sendResizeRef.current = sendResize;
     sendMouseRef.current = sendMouse;
+    (
+      window as Window & {
+        __remoteCodeTerminalDebug?: Record<string, { sessionId: string; sessionName: string; term: XTerm }>;
+      }
+    ).__remoteCodeTerminalDebug ??= {};
+    (
+      window as Window & {
+        __remoteCodeTerminalDebug?: Record<string, { sessionId: string; sessionName: string; term: XTerm }>;
+      }
+    ).__remoteCodeTerminalDebug![sessionId] = { sessionId, sessionName, term };
 
     term.onData((data) => {
       const sendInput = sendInputRef.current;
@@ -392,7 +411,7 @@ export default function Terminal({
     });
 
     const observer = new ResizeObserver(() => {
-      refitAndRefresh();
+      scheduleHardRefreshRef.current(focusedRef.current);
     });
     observer.observe(innerRef.current);
 
@@ -490,17 +509,38 @@ export default function Terminal({
       container.removeEventListener("touchend", onTouchEnd, { capture: true });
       container.removeEventListener("touchcancel", onTouchEnd, { capture: true });
       if (activityTimerRef.current) clearTimeout(activityTimerRef.current);
+      cancelScheduledHardRefresh();
+      const debugStore = (
+        window as Window & {
+          __remoteCodeTerminalDebug?: Record<string, { sessionId: string; sessionName: string; term: XTerm }>;
+        }
+      ).__remoteCodeTerminalDebug;
+      if (debugStore) {
+        delete debugStore[sessionId];
+      }
       termRef.current = null;
       fitAddonRef.current = null;
       term.dispose();
     };
-  }, [refitAndRefresh, sendInput, sendResize, sendMouse]);
+  }, [cancelScheduledHardRefresh, sendInput, sendMouse, sendResize, sessionId, shouldInitialize]);
 
   useEffect(() => {
     return () => {
-      cancelScheduledLayoutNudge();
+      cancelScheduledHardRefresh();
     };
-  }, [cancelScheduledLayoutNudge]);
+  }, [cancelScheduledHardRefresh]);
+
+  useEffect(() => {
+    const debugStore = (
+      window as Window & {
+        __remoteCodeTerminalDebug?: Record<string, { sessionId: string; sessionName: string; term: XTerm }>;
+      }
+    ).__remoteCodeTerminalDebug;
+    const entry = debugStore?.[sessionId];
+    if (entry) {
+      entry.sessionName = sessionName;
+    }
+  }, [sessionId, sessionName]);
 
   useEffect(() => {
     const term = termRef.current;
@@ -522,22 +562,17 @@ export default function Terminal({
     if (rows) rows.style.color = palette.foreground;
 
     requestAnimationFrame(() => {
-      try {
-        term.clearTextureAtlas();
-      } catch {
-        // ignore renderer-specific failures
-      }
-      refitAndRefresh();
+      refitAndRefresh(isFocused);
     });
-  }, [refitAndRefresh, theme]);
+  }, [isFocused, refitAndRefresh, theme]);
 
   // fontSize change -> update terminal
   useEffect(() => {
-    if (termRef.current && fitAddonRef.current) {
+    if (termRef.current && fitAddonRef.current && visible) {
       termRef.current.options.fontSize = fontSize;
-      refitAndRefresh();
+      scheduleHardRefresh(isFocused);
     }
-  }, [fontSize, refitAndRefresh]);
+  }, [fontSize, isFocused, scheduleHardRefresh, visible]);
 
   // visible / panel toggles -> refit + refresh
   useEffect(() => {
@@ -548,17 +583,17 @@ export default function Terminal({
         if (cancelled) return;
         requestAnimationFrame(() => {
           if (cancelled) return;
-          refitAndRefresh();
+          refitAndRefresh(isFocused);
         });
       });
       return () => { cancelled = true; };
     }
-  }, [explorerOpen, explorerWidth, gitPanelOpen, gitPanelWidth, refitAndRefresh, visible]);
+  }, [explorerOpen, explorerWidth, gitPanelOpen, gitPanelWidth, isFocused, refitAndRefresh, visible]);
 
   useEffect(() => {
     if (!visible || !termRef.current || !fitAddonRef.current) return;
-    scheduleLayoutNudge();
-  }, [refreshNonce, scheduleLayoutNudge, visible]);
+    scheduleHardRefresh(true);
+  }, [refreshNonce, scheduleHardRefresh, visible]);
 
   // Mobile custom scrollbar — track viewport scroll position
   useEffect(() => {
@@ -593,11 +628,11 @@ export default function Terminal({
   // Refit terminal when any panel resize drag ends
   useEffect(() => {
     const handleResizeEnd = () => {
-      scheduleLayoutNudge();
+      scheduleHardRefresh(isFocused);
     };
     window.addEventListener("panel-resize-end", handleResizeEnd);
     return () => window.removeEventListener("panel-resize-end", handleResizeEnd);
-  }, [scheduleLayoutNudge]);
+  }, [isFocused, scheduleHardRefresh]);
 
   // Focus management
   useEffect(() => {
@@ -777,7 +812,7 @@ export default function Terminal({
             fontSize={fontSize}
             onClick={(e) => {
               e.stopPropagation();
-              scheduleLayoutNudge();
+              scheduleHardRefresh(true);
             }}
           />
           {canSuspend && (
@@ -855,9 +890,7 @@ export default function Terminal({
           />
         )}
         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-          <div style={{ width: layoutNudgeOffset > 0 ? `calc(100% - ${layoutNudgeOffset}px)` : "100%", height: "100%" }}>
-            <div ref={innerRef} data-testid="terminal-xterm" style={{ width: "100%", height: "100%" }} />
-          </div>
+          <div ref={innerRef} data-testid="terminal-xterm" style={{ width: "100%", height: "100%" }} />
           {/* Mobile custom scrollbar */}
           {scrollThumb && isMobile() && (
             <div
