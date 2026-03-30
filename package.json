@@ -2,7 +2,8 @@
   "name": "remote-code-e2e",
   "private": true,
   "scripts": {
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "screenshots:readme": "playwright test e2e/readme-screenshots.spec.ts --reporter=list"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.2"

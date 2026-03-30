@@ -4,27 +4,30 @@
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Node.js 18+](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
 
-Remote Code is a self-hosted browser workbench for terminal-based coding workflows.
-It gives you a persistent web workspace for Claude Code sessions, split views, file browsing, Git review, and IDE panels without moving your project off your machine.
+Remote Code is a self-hosted browser workbench for terminal-first coding workflows.
+It keeps your terminals, File Explorer, Git tools, and Monaco-based editor attached to local projects while letting you arrange them as reusable multi-pane layouts in the browser.
 
 ## Why Remote Code
 
-- Run coding sessions in the browser while keeping files and CLI tools on your own host.
-- Reopen projects and sessions without rebuilding your workspace every time.
-- Combine terminal, File Explorer, Git, and IDE panels in one interface.
-- Use split view when you want two active contexts side by side.
-- Ship it as a source install or as a packaged desktop launcher.
+- Run coding sessions in the browser while files, Git state, and CLI tools stay on your own host.
+- Keep multiple working contexts open at once with drag-and-drop pane layouts.
+- Save and reopen project layouts instead of rebuilding your workspace every time.
+- Mix terminal, File Explorer, Git, and IDE panels in one workbench.
+- Preserve long-running terminal sessions in the same tab while you resize panes or switch views.
 
 ## Key Capabilities
 
 | Capability | What it does |
 | --- | --- |
-| Claude Code Sessions | Start and reopen browser-based Claude Code workspaces backed by a real local CLI process. |
-| Persistent Projects | Group sessions under a fixed workspace path so terminals and panels stay attached to the same codebase. |
-| Split View | Open two active sessions side by side for parallel work, review, or debugging. |
+| Terminal-Backed Sessions | Start `ClaudeCode`, `Opencode`, `KiloCode`, plain terminal, or custom CLI sessions in the browser while the real process runs locally. |
+| Multi-Pane Workbench | Drag any session into the left, right, top, bottom, or center of a pane to split, replace, and rearrange your layout. |
+| Saved Project Layouts | Store one layout per project and reopen it from the project rail with the `Layout` button. |
+| Mixed Session Layouts | Build a saved layout from sessions in the current project and from other projects in the same workspace. |
+| Keep-Alive Terminals | Keep xterm instances, scrollback, and terminal state alive in the same browser tab while switching views and resizing panes. |
 | File Explorer | Browse folders, preview files, upload, download, rename, delete, and create folders from the UI. |
 | Git Panel | Inspect status, diffs, history, branches, stash, pull, push, and commit actions without leaving the browser. |
 | IDE Workspace | Open a Monaco-based editor session with file editing and language-aware tooling. |
+| Open Alone and Restore | Focus on one pane temporarily, then jump back to the previous multi-pane layout with one click. |
 | Flexible Session Types | Use `claude`, `kilo`, `opencode`, `terminal`, `custom`, `folder`, `git`, and `ide` sessions from the same app. |
 
 ## Feature Tour
@@ -35,25 +38,37 @@ It gives you a persistent web workspace for Claude Code sessions, split views, f
 
 *Password-protected entry keeps the browser client simple while the backend owns the authenticated session cookie.*
 
-* initial passward : changeme
+*Initial password: `changeme`*
 
-### Create a Session
+### Create a Project and Session
 
 ![Add Session modal](docs/screenshots/readme-new-session.png)
 
-*Create a Claude Code, terminal, File Explorer, Git, IDE, or custom CLI session inside a project workspace.*
+*Create terminal, File Explorer, Git, IDE, or custom CLI sessions inside a project workspace.*
 
-### Claude Code Session
+### Terminal Session
 
-![Claude Code session](docs/screenshots/readme-claude-session.png)
+![Terminal session](docs/screenshots/readme-claude-session.png)
 
-*Use Claude Code in the browser while the real CLI continues to run on your host machine.*
+*Run `ClaudeCode`, `Opencode`, or `KiloCode` in the browser while the real process stays on your host. Same-tab keep-alive helps preserve terminal state and scrollback while you move around the workbench.*
 
-### Split View
+### Drag-and-Drop Layout Editing
 
-![Split view with Git and Claude Code](docs/screenshots/readme-split-view.png)
+![Layout editor with drag-and-drop overlay](docs/screenshots/readme-layout-editor.png)
 
-*Shift-click a second session to open two active panels side by side.*
+*Drag sessions into any edge or center region to split panes, replace panes, and build larger multi-pane layouts.*
+
+### Saved Project Layout
+
+![Saved project layout](docs/screenshots/readme-project-layout.png)
+
+*Project layouts reopen from the `Layout` button and can include mixed session types, including sessions from other projects.*
+
+### Open Alone and Restore Layout
+
+![Open Alone and Restore Layout](docs/screenshots/readme-open-alone-restore.png)
+
+*Focus on a single pane with `Open Alone`, then jump back to the previous layout with `Restore Layout`.*
 
 ### File Explorer
 
@@ -63,9 +78,28 @@ It gives you a persistent web workspace for Claude Code sessions, split views, f
 
 ### Git Panel
 
-![Git panel](docs/screenshots/readme-git-panel.png)
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/readme-git-status.png" alt="Git status panel" />
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/readme-git-log.png" alt="Git log panel" />
+    </td>
+  </tr>
+  <tr>
+    <td><em>Status view with a changed file selected and its diff preview open.</em></td>
+    <td><em>Log view with a commit selected, changed files listed, and a file diff visible.</em></td>
+  </tr>
+</table>
 
-*Review changes, inspect diffs, and manage repository actions from a dedicated Git session.*
+*Review working tree changes and commit history from the same Git session without leaving the browser.*
+
+### IDE Workspace
+
+![IDE workspace](docs/screenshots/readme-ide-workspace.png)
+
+*Open a Monaco-based editor workspace beside your terminal workflows when you need structured file editing.*
 
 ## Requirements
 
@@ -188,10 +222,13 @@ python remote_code_launcher.py
 
 1. Sign in with the configured password.
 2. Create a project and point it at a workspace folder.
-3. Add a `Claude Code` session to start a browser terminal backed by the local CLI.
-4. Add `Folder`, `Git`, or `IDE` sessions for the same project when you need dedicated panels.
-5. Shift-click a second active session in the sidebar to open split view.
-6. Suspend, resume, rename, reorder, or delete sessions from the project rail.
+3. Add a terminal-backed session such as `ClaudeCode`, `Opencode`, `KiloCode`, `Terminal`, or `Custom`.
+4. Add `Folder`, `Git`, or `IDE` sessions when you want dedicated project panels alongside terminals.
+5. Single-click a session in the sidebar to open a temporary one-pane workspace.
+6. Drag sessions into any pane edge or center to split, replace, and rearrange the layout.
+7. Use the project `Layout` button to reopen the saved project layout at any time.
+8. Use `Open Alone` when you want to focus on one pane, then `Restore Layout` to return.
+9. Suspend, resume, rename, reorder, or delete sessions from the project rail.
 
 ## Configuration
 
@@ -212,6 +249,8 @@ For the full list, see [docs/configuration.md](docs/configuration.md).
 
 ## Session Types
 
+`folder`, `git`, and `ide` sessions are saved panel sessions. The others are terminal-backed sessions that attach to a running local process.
+
 | Session Type | Description |
 | --- | --- |
 | `claude` | Claude Code CLI session |
@@ -219,9 +258,9 @@ For the full list, see [docs/configuration.md](docs/configuration.md).
 | `opencode` | OpenCode terminal session |
 | `terminal` | Plain shell session |
 | `custom` | User-provided command with optional custom exit command |
-| `folder` | Saved File Explorer panel |
-| `git` | Saved Git panel |
-| `ide` | Monaco-based editor workspace |
+| `folder` | Saved File Explorer panel session |
+| `git` | Saved Git panel session |
+| `ide` | Monaco-based editor workspace session |
 
 ## Build a Release
 
