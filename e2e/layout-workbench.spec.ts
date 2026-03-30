@@ -388,9 +388,22 @@ test("supports multi-pane layouts, autosave, restore, foreign-session prune, and
   await projectLayoutButton(page, "Layout Project A").click();
   await expect(page.locator('[data-layout-node="leaf"]')).toHaveCount(1);
   await expect(paneLeaf(page, "A-One")).toBeVisible();
+  await expect(paneLeaf(page, "A-One").locator(".terminal-toolbar__chip")).toHaveText("Terminal");
+  await expect(paneLeaf(page, "A-One").locator(".terminal-toolbar__path")).toHaveCount(0);
+  const toolbarBox = await paneLeaf(page, "A-One").locator(".terminal-toolbar").boundingBox();
+  expect(toolbarBox?.height ?? 0).toBeLessThan(44);
 
   await dragSessionToPaneWithMouse(page, "A-Two", "A-One", "left");
   await expect(page.locator('[data-layout-node="leaf"]')).toHaveCount(2);
+  await expect(paneLeaf(page, "A-Two")).toBeVisible();
+
+  await paneLeaf(page, "A-One").getByTitle("Open Alone").click();
+  await expect(page.locator('[data-layout-node="leaf"]')).toHaveCount(1);
+  await expect(paneLeaf(page, "A-One")).toBeVisible();
+  await expect(paneLeaf(page, "A-One").getByTitle("Restore Layout")).toBeVisible();
+  await paneLeaf(page, "A-One").getByTitle("Restore Layout").click();
+  await expect(page.locator('[data-layout-node="leaf"]')).toHaveCount(2);
+  await expect(paneLeaf(page, "A-One")).toBeVisible();
   await expect(paneLeaf(page, "A-Two")).toBeVisible();
 
   await dragSessionToPaneWithMouse(page, "A-Two", "A-One", "center");
@@ -482,6 +495,7 @@ test("supports multi-pane layouts, autosave, restore, foreign-session prune, and
   await sessionRow(page, "A-Two").click();
   await expect(page.locator('[data-layout-node="leaf"]')).toHaveCount(1);
   await expect(paneLeaf(page, "A-Two")).toBeVisible();
+  await expect(paneLeaf(page, "A-Two").getByTitle("Restore Layout")).toHaveCount(0);
 
   await projectLayoutButton(page, "Layout Project A").click();
   await expect(page.locator('[data-layout-node="leaf"]')).toHaveCount(2);

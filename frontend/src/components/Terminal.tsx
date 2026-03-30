@@ -45,6 +45,8 @@ interface TerminalProps {
   canSuspend?: boolean;
   onSuspend: () => void;
   onMaximize?: () => void;
+  showRestoreLayout?: boolean;
+  onRestoreLayout?: () => void;
   onTerminate: () => void;
   showMobileKeyBar?: boolean;
 }
@@ -148,6 +150,8 @@ export default function Terminal({
   canSuspend = true,
   onSuspend,
   onMaximize,
+  showRestoreLayout = false,
+  onRestoreLayout,
   onTerminate,
   showMobileKeyBar = true,
 }: TerminalProps) {
@@ -751,6 +755,7 @@ export default function Terminal({
         : "status-danger";
 
   const iconSize = Math.round(fontSize * 0.86);
+  const toolbarTitle = workPath ? `${sessionName} | ${paneLabel} | ${workPath}` : `${sessionName} | ${paneLabel}`;
 
   return (
     <div
@@ -766,27 +771,17 @@ export default function Terminal({
       <div
         className={`terminal-toolbar${isFocused ? " is-focused" : ""}`}
         style={{
-          minHeight: 50,
-          padding: `8px ${Math.max(12, Math.round(fontSize * 0.6))}px`,
+          minHeight: Math.max(34, Math.round(fontSize * 2.2)),
+          padding: `${Math.max(4, Math.round(fontSize * 0.25))}px ${Math.max(10, Math.round(fontSize * 0.5))}px`,
         }}
+        title={toolbarTitle}
       >
         <div className="terminal-toolbar__meta">
-          <span className="terminal-toolbar__eyebrow">{paneLabel}</span>
-          <div className="terminal-toolbar__title-row">
-            <span className="terminal-toolbar__title">{sessionName}</span>
-          </div>
-          <span className="terminal-toolbar__path" title={workPath}>
-            {workPath || "No work path"}
-          </span>
+          <span className="terminal-toolbar__title">{sessionName}</span>
+          <span className="terminal-toolbar__separator" aria-hidden="true">|</span>
+          <span className="terminal-toolbar__chip">{paneLabel}</span>
         </div>
         <div className="terminal-toolbar__actions">
-          {onFontSizeChange && (
-            <div className="terminal-font-controls">
-              <FontSizeBtn label="-" title="Font Size -" fontSize={fontSize} onClick={(e) => { e.stopPropagation(); onFontSizeChange(-1); }} />
-              <span className="terminal-font-value">{fontSize}</span>
-              <FontSizeBtn label="+" title="Font Size +" fontSize={fontSize} onClick={(e) => { e.stopPropagation(); onFontSizeChange(1); }} />
-            </div>
-          )}
           <TitleBarBtn
             icon={<FolderIcon size={iconSize} />}
             title="File Explorer"
@@ -815,6 +810,13 @@ export default function Terminal({
               scheduleHardRefresh(true);
             }}
           />
+          {onFontSizeChange && (
+            <div className="terminal-font-controls">
+              <FontSizeBtn label="-" title="Font Size -" fontSize={fontSize} onClick={(e) => { e.stopPropagation(); onFontSizeChange(-1); }} />
+              <span className="terminal-font-value">{fontSize}</span>
+              <FontSizeBtn label="+" title="Font Size +" fontSize={fontSize} onClick={(e) => { e.stopPropagation(); onFontSizeChange(1); }} />
+            </div>
+          )}
           {canSuspend && (
             <TitleBarBtn
               icon={<MinimizeIcon size={iconSize} />}
@@ -833,7 +835,18 @@ export default function Terminal({
               onClick={(e) => { e.stopPropagation(); onClosePanel(); }}
             />
           )}
-          {onMaximize && (
+          {showRestoreLayout && onRestoreLayout ? (
+            <TitleBarBtn
+              icon={<RestoreLayoutIcon size={iconSize} />}
+              title="Restore Layout"
+              hoverColor="var(--accent)"
+              fontSize={fontSize}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRestoreLayout();
+              }}
+            />
+          ) : onMaximize && (
             <TitleBarBtn
               icon={<MaximizeIcon size={iconSize} />}
               title="Open Alone"
@@ -934,6 +947,7 @@ function FontSizeBtn({ label, title, fontSize = 14, onClick }: { label: string; 
       className="terminal-tool-button"
       onClick={onClick}
       title={title}
+      aria-label={title}
       style={{
         padding: `${Math.round(fontSize * 0.07)}px ${Math.round(fontSize * 0.2)}px`,
         fontSize: Math.round(fontSize * 0.86),
@@ -970,6 +984,7 @@ function TitleBarBtn({
       className={`terminal-tool-button${active ? " is-active" : ""}`}
       onClick={onClick}
       title={title}
+      aria-label={title}
       style={{
         background: active ? activeBackground : "none",
         color: active ? hoverColor : "var(--text-muted)",
@@ -1001,6 +1016,13 @@ const MinimizeIcon = ({ size = 12 }: { size?: number }) => (
 const MaximizeIcon = ({ size = 12 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="2" width="8" height="8" />
+  </svg>
+);
+
+const RestoreLayoutIcon = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 4.5V2.5h6v6h-2" />
+    <rect x="2" y="4" width="6" height="5" rx="0.6" />
   </svg>
 );
 

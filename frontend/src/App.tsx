@@ -46,6 +46,13 @@ import "./App.css";
 type ThemeMode = "light" | "dark";
 type WorkspaceMode = "ephemeral" | "project-layout";
 type PanelSession = Session & { cli_type: "folder" | "git" | "ide" };
+interface OpenAloneSnapshot {
+  layout: LayoutNode | null;
+  focusedPaneId: string | null;
+  workspaceMode: WorkspaceMode;
+  layoutOwnerProjectId: string | null;
+  sourceSessionId: string;
+}
 
 function flattenProjects(projects: Project[]): Session[] {
   return projects.flatMap((project) => project.sessions);
@@ -79,21 +86,21 @@ function getStoredTheme(): ThemeMode {
 function getPaneTitle(session: Session): string {
   switch (session.cli_type) {
     case "folder":
-      return "Folder Session";
+      return "Folder";
     case "git":
-      return "Git Session";
+      return "Git";
     case "ide":
-      return "IDE Session";
+      return "IDE";
     case "claude":
-      return "Claude Session";
+      return "Claude";
     case "kilo":
-      return "Kilo Session";
+      return "Kilo";
     case "opencode":
-      return "OpenCode Session";
+      return "OpenCode";
     case "terminal":
-      return "Terminal Session";
+      return "Terminal";
     case "custom":
-      return "Custom Session";
+      return "Custom";
     default:
       return "Session";
   }
@@ -132,6 +139,7 @@ export default function App() {
   const [persistentTerminalSessionIds, setPersistentTerminalSessionIds] = useState<string[]>([]);
   const [terminalHostElements, setTerminalHostElements] = useState<Record<string, { element: HTMLDivElement; paneId: string }>>({});
   const [terminalKeepAliveRoot, setTerminalKeepAliveRoot] = useState<HTMLDivElement | null>(null);
+  const [openAloneSnapshot, setOpenAloneSnapshot] = useState<OpenAloneSnapshot | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [webFontSize, setWebFontSize] = useState(() => getStoredFontSize("webFontSize", 14));
   const [terminalFontSize, setTerminalFontSize] = useState(() => getStoredFontSize("terminalFontSize", 14));
@@ -157,6 +165,15 @@ export default function App() {
     [focusedPaneId, layoutRoot],
   );
   const focusedSessionId = focusedLeaf?.sessionId ?? null;
+  const restoreLayoutSessionId = useMemo(() => {
+    if (!openAloneSnapshot) {
+      return null;
+    }
+    if (workspaceMode !== "ephemeral" || layoutRoot?.type !== "leaf") {
+      return null;
+    }
+    return layoutRoot.sessionId === openAloneSnapshot.sourceSessionId ? layoutRoot.sessionId : null;
+  }, [layoutRoot, openAloneSnapshot, workspaceMode]);
   const persistentTerminalSessions = useMemo(() => {
     return persistentTerminalSessionIds
       .map((sessionId) => findSession(projects, sessionId))
@@ -175,6 +192,10 @@ export default function App() {
       clearTimeout(layoutSaveTimerRef.current);
       layoutSaveTimerRef.current = null;
     }
+  }, []);
+
+  const clearOpenAloneSnapshot = useCallback(() => {
+    setOpenAloneSnapshot(null);
   }, []);
 
   const bumpSessionRefresh = useCallback((sessionIds: string[]) => {
@@ -288,6 +309,7 @@ export default function App() {
     setSessionRefreshNonce({});
     setPersistentTerminalSessionIds([]);
     setTerminalHostElements({});
+    setOpenAloneSnapshot(null);
     pendingLayoutSaveRef.current = null;
     skipNextAutosaveRef.current = false;
     clearLayoutSaveTimer();
@@ -483,6 +505,17 @@ export default function App() {
       }
       return next;
     });
+
+    setOpenAloneSnapshot((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const snapshotSessionIds = collectSessionIds(prev.layout);
+      if (!validIds.has(prev.sourceSessionId) || snapshotSessionIds.some((sessionId) => !validIds.has(sessionId))) {
+        return null;
+      }
+      return prev;
+    });
   }, [sessions]);
 
   useEffect(() => {
@@ -635,6 +668,7 @@ export default function App() {
   const removeSessionsFromWorkspace = useCallback((sessionIds: string[]) => {
     if (sessionIds.length === 0) return;
     const removed = new Set(sessionIds);
+    clearOpenAloneSnapshot();
     removePersistentTerminals(sessionIds);
     setLayoutRoot((prev) => {
       let next = prev;
@@ -656,7 +690,7 @@ export default function App() {
     if (focusedSessionId && removed.has(focusedSessionId)) {
       setFocusedPaneId(null);
     }
-  }, [focusedSessionId, removePersistentTerminals]);
+  }, [clearOpenAloneSnapshot, focusedSessionId, removePersistentTerminals]);
 
   const handleActivityChange = useCallback((sessionId: string, state: ActivityState) => {
     const isViewing = visibleSessionIdsRef.current.includes(sessionId);
@@ -776,12 +810,62 @@ export default function App() {
       return;
     }
 
+    clearOpenAloneSnapshot();
     applyWorkspaceLayout(createSingleLayout(sessionId), {
       mode: "ephemeral",
       ownerProjectId: null,
       refreshSessionIds: [sessionId],
     });
-  }, [applyWorkspaceLayout, bumpSessionRefresh, ensureSessionReady, isMobileViewport, layoutRoot, workspaceMode]);
+  }, [applyWorkspaceLayout, bumpSessionRefresh, clearOpenAloneSnapshot, ensureSessionReady, isMobileViewport, layoutRoot, workspaceMode]);
+
+  const openSessionAlone = useCallback(async (sessionId: string) => {
+    if (!layoutRoot || layoutSessionIds.length <= 1 || isMobileViewport) {
+      await openSessionEphemeral(sessionId);
+      return;
+    }
+
+    const snapshot: OpenAloneSnapshot = {
+      layout: layoutRoot,
+      focusedPaneId,
+      workspaceMode,
+      layoutOwnerProjectId,
+      sourceSessionId: sessionId,
+    };
+
+    await ensureSessionReady(sessionId);
+    setOpenAloneSnapshot(snapshot);
+    applyWorkspaceLayout(createSingleLayout(sessionId), {
+      mode: "ephemeral",
+      ownerProjectId: null,
+      refreshSessionIds: [sessionId],
+    });
+  }, [
+    applyWorkspaceLayout,
+    ensureSessionReady,
+    focusedPaneId,
+    isMobileViewport,
+    layoutOwnerProjectId,
+    layoutRoot,
+    layoutSessionIds.length,
+    openSessionEphemeral,
+    workspaceMode,
+  ]);
+
+  const handleRestoreOpenAloneLayout = useCallback(() => {
+    if (!openAloneSnapshot) {
+      return;
+    }
+
+    const snapshot = openAloneSnapshot;
+    clearOpenAloneSnapshot();
+    applyWorkspaceLayout(snapshot.layout, {
+      mode: snapshot.workspaceMode,
+      ownerProjectId: snapshot.layoutOwnerProjectId,
+      focusedPaneId: snapshot.focusedPaneId,
+      skipAutosave: snapshot.workspaceMode === "project-layout",
+      refreshSessionIds: collectSessionIds(snapshot.layout),
+    });
+  }, [applyWorkspaceLayout, clearOpenAloneSnapshot, openAloneSnapshot]);
 
   const handleProjectCreated = useCallback((projectId: string) => {
     setShowNewProject(false);
@@ -977,6 +1061,7 @@ export default function App() {
         window.alert(`일부 세션을 열지 못해 제외했습니다: ${failedNames.join(", ")}`);
       }
 
+      clearOpenAloneSnapshot();
       applyWorkspaceLayout(availableLayout, {
         mode: "project-layout",
         ownerProjectId: projectId,
@@ -988,23 +1073,25 @@ export default function App() {
       const message = error instanceof Error ? error.message : "Failed to open project layout.";
       window.alert(message);
     }
-  }, [applyWorkspaceLayout, ensureSessionsReady, fetchProjects, projects]);
+  }, [applyWorkspaceLayout, clearOpenAloneSnapshot, ensureSessionsReady, fetchProjects, projects]);
 
   const handleResizeSplit = useCallback((splitId: string, ratio: number) => {
     setLayoutRoot((prev) => updateSplitRatio(prev, splitId, ratio));
   }, []);
 
   const handleClosePane = useCallback((paneId: string) => {
+    clearOpenAloneSnapshot();
     setLayoutRoot((prev) => {
       const leaf = findLeafByPaneId(prev, paneId);
       if (!prev || !leaf) return prev;
       return removeSessionFromLayout(prev, leaf.sessionId);
     });
-  }, []);
+  }, [clearOpenAloneSnapshot]);
 
   const handleDropIndicator = useCallback(async (sessionId: string, indicator: LayoutDropIndicator) => {
     try {
       await ensureSessionReady(sessionId);
+      clearOpenAloneSnapshot();
       let nextFocusedPaneId: string | null = null;
       setLayoutRoot((prev) => {
         const next = placeSessionInPane(prev, sessionId, indicator.targetPaneId, indicator.zone);
@@ -1022,11 +1109,12 @@ export default function App() {
       setLayoutIndicator(null);
       setDraggedLayoutSessionId(null);
     }
-  }, [ensureSessionReady]);
+  }, [clearOpenAloneSnapshot, ensureSessionReady]);
 
   const handleDropIntoEmptyWorkspace = useCallback(async (sessionId: string) => {
     try {
       await ensureSessionReady(sessionId);
+      clearOpenAloneSnapshot();
       applyWorkspaceLayout(createSingleLayout(sessionId), {
         mode: workspaceMode,
         ownerProjectId: layoutOwnerProjectId,
@@ -1040,7 +1128,7 @@ export default function App() {
       setLayoutIndicator(null);
       setDraggedLayoutSessionId(null);
     }
-  }, [applyWorkspaceLayout, ensureSessionReady, layoutOwnerProjectId, workspaceMode]);
+  }, [applyWorkspaceLayout, clearOpenAloneSnapshot, ensureSessionReady, layoutOwnerProjectId, workspaceMode]);
 
   useEffect(() => {
     const element = workbenchAreaRef.current;
@@ -1090,11 +1178,13 @@ export default function App() {
   const renderLeaf = useCallback((paneId: string, sessionId: string, size: { width: number; height: number }) => {
     const session = findSession(projects, sessionId);
     const canClosePane = !isMobileViewport || layoutSessionIds.length <= 1;
-    const onMaximize = layoutSessionIds.length > 1 && !isMobileViewport
+    const showRestoreLayout = restoreLayoutSessionId === sessionId;
+    const onMaximize = !showRestoreLayout && layoutSessionIds.length > 1 && !isMobileViewport
       ? () => {
-          void openSessionEphemeral(sessionId);
+          void openSessionAlone(sessionId);
         }
       : undefined;
+    const onRestoreLayout = showRestoreLayout ? handleRestoreOpenAloneLayout : undefined;
 
     let content: React.ReactNode;
 
@@ -1130,6 +1220,8 @@ export default function App() {
           onClosePanel={() => handleClosePane(paneId)}
           canClosePanel={canClosePane}
           onMaximize={onMaximize}
+          showRestoreLayout={showRestoreLayout}
+          onRestoreLayout={onRestoreLayout}
           renderContent={(refreshKey) => (
             session.cli_type === "folder" ? (
               <FileExplorer
@@ -1200,14 +1292,16 @@ export default function App() {
     handleClosePane,
     handleCopyPath,
     handleDropIndicator,
+    handleRestoreOpenAloneLayout,
     handleSuspend,
     handleTerminalHostChange,
     handleTerminate,
     isMobileViewport,
     layoutIndicator,
     layoutSessionIds.length,
-    openSessionEphemeral,
+    openSessionAlone,
     projects,
+    restoreLayoutSessionId,
     theme,
   ]);
 
@@ -1436,9 +1530,10 @@ export default function App() {
         const host = terminalHostElements[session.id];
         const paneId = host?.paneId ?? null;
         const canClosePane = paneId ? (!isMobileViewport || layoutSessionIds.length <= 1) : false;
-        const onMaximize = paneId && layoutSessionIds.length > 1 && !isMobileViewport
+        const showRestoreLayout = paneId ? restoreLayoutSessionId === session.id : false;
+        const onMaximize = paneId && !showRestoreLayout && layoutSessionIds.length > 1 && !isMobileViewport
           ? () => {
-              void openSessionEphemeral(session.id);
+              void openSessionAlone(session.id);
             }
           : undefined;
 
@@ -1473,6 +1568,8 @@ export default function App() {
               void handleSuspend(session.id);
             }}
             onMaximize={onMaximize}
+            showRestoreLayout={showRestoreLayout}
+            onRestoreLayout={showRestoreLayout ? handleRestoreOpenAloneLayout : undefined}
             onTerminate={() => {
               void handleTerminate(session.id).catch(() => {});
             }}
