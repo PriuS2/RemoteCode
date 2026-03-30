@@ -33,20 +33,22 @@ interface TerminalProps {
   fontSize?: number;
   onFontSizeChange?: (delta: number) => void;
   onActivityChange?: (sessionId: string, state: ActivityState) => void;
-  panelIndex: number;
-  splitMode: boolean;
-  splitRatio?: number;
   refreshNonce: number;
   isFocused: boolean;
   onFocus: () => void;
   theme: ThemeMode;
   sessionName: string;
+  paneLabel?: string;
   workPath: string;
   onClosePanel: () => void;
+  canClosePanel?: boolean;
   canSuspend?: boolean;
   onSuspend: () => void;
-  onMaximize: () => void;
+  onMaximize?: () => void;
+  showRestoreLayout?: boolean;
+  onRestoreLayout?: () => void;
   onTerminate: () => void;
+  showMobileKeyBar?: boolean;
 }
 
 const STATUS_STYLE: Record<string, React.CSSProperties> = {
@@ -136,20 +138,22 @@ export default function Terminal({
   fontSize = 14,
   onFontSizeChange,
   onActivityChange,
-  panelIndex,
-  splitMode,
-  splitRatio = 0.5,
   refreshNonce,
   isFocused,
   onFocus,
   theme,
   sessionName,
+  paneLabel = "Terminal",
   workPath,
   onClosePanel,
+  canClosePanel = true,
   canSuspend = true,
   onSuspend,
   onMaximize,
+  showRestoreLayout = false,
+  onRestoreLayout,
   onTerminate,
+  showMobileKeyBar = true,
 }: TerminalProps) {
   const innerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
@@ -162,10 +166,19 @@ export default function Terminal({
   const sendResizeRef = useRef<((cols: number, rows: number) => void) | null>(null);
   const sendMouseRef = useRef<((data: MouseEventData) => void) | null>(null);
   const onActivityChangeRef = useRef(onActivityChange);
+  const visibleRef = useRef(visible);
+  const focusedRef = useRef(isFocused);
+  const themeRef = useRef(theme);
+  const fontSizeRef = useRef(fontSize);
   onActivityChangeRef.current = onActivityChange;
+  visibleRef.current = visible;
+  focusedRef.current = isFocused;
+  themeRef.current = theme;
+  fontSizeRef.current = fontSize;
 
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [gitPanelOpen, setGitPanelOpen] = useState(false);
+  const [shouldInitialize, setShouldInitialize] = useState(visible);
   const [explorerWidth, setExplorerWidth] = useState(() => {
     const stored = localStorage.getItem("explorerWidth");
     return stored ? Number(stored) : 240;
@@ -176,14 +189,13 @@ export default function Terminal({
   });
   const explorerDragRef = useRef(false);
   const gitPanelDragRef = useRef(false);
-  const nudgeFramesRef = useRef<number[]>([]);
+  const refreshFramesRef = useRef<number[]>([]);
   const isMobileDevice = () => window.innerWidth <= 768;
   const isMobile = isMobileDevice;
   const [scrollThumb, setScrollThumb] = useState<{ top: number; height: number } | null>(null);
   const [scrollbarActive, setScrollbarActive] = useState(false);
-  const [layoutNudgeOffset, setLayoutNudgeOffset] = useState(0);
 
-  const refitAndRefresh = useCallback(() => {
+  const refitAndRefresh = useCallback((restoreFocus = false) => {
     const term = termRef.current;
     const fitAddon = fitAddonRef.current;
     if (!term || !fitAddon) return;
@@ -195,54 +207,49 @@ export default function Terminal({
     }
 
     try {
+      term.clearTextureAtlas();
+    } catch {
+      // ignore
+    }
+
+    try {
       term.refresh(0, Math.max(term.rows - 1, 0));
     } catch {
       // ignore
     }
 
     sendResizeRef.current?.(term.cols, term.rows);
+    if (restoreFocus && visible && isFocused) {
+      term.focus();
+    }
+  }, [isFocused, visible]);
+
+  const cancelScheduledHardRefresh = useCallback(() => {
+    refreshFramesRef.current.forEach((frame) => cancelAnimationFrame(frame));
+    refreshFramesRef.current = [];
   }, []);
 
-  const cancelScheduledLayoutNudge = useCallback(() => {
-    nudgeFramesRef.current.forEach((frame) => cancelAnimationFrame(frame));
-    nudgeFramesRef.current = [];
-    setLayoutNudgeOffset(0);
-  }, []);
-
-  const scheduleLayoutNudge = useCallback(() => {
+  const scheduleHardRefresh = useCallback((restoreFocus = false) => {
     if (!visible || !termRef.current || !fitAddonRef.current) return;
 
-    cancelScheduledLayoutNudge();
-    const offsets = [50, 0, 50, 0, 50];
+    cancelScheduledHardRefresh();
     const frameIds: number[] = [];
 
-    const runStep = (index: number) => {
-      const frameId = requestAnimationFrame(() => {
-        setLayoutNudgeOffset(offsets[index]);
-        if (index + 1 < offsets.length) {
-          runStep(index + 1);
-          return;
-        }
-
-        const resetFrameId = requestAnimationFrame(() => {
-          setLayoutNudgeOffset(0);
-          const refreshFrameId = requestAnimationFrame(() => {
-            refitAndRefresh();
-            nudgeFramesRef.current = [];
-          });
-          frameIds.push(refreshFrameId);
-          nudgeFramesRef.current = [...frameIds];
-        });
-        frameIds.push(resetFrameId);
-        nudgeFramesRef.current = [...frameIds];
+    const firstFrame = requestAnimationFrame(() => {
+      const secondFrame = requestAnimationFrame(() => {
+        refitAndRefresh(restoreFocus);
+        refreshFramesRef.current = [];
       });
+      frameIds.push(secondFrame);
+      refreshFramesRef.current = [...frameIds];
+    });
 
-      frameIds.push(frameId);
-      nudgeFramesRef.current = [...frameIds];
-    };
+    frameIds.push(firstFrame);
+    refreshFramesRef.current = [...frameIds];
+  }, [cancelScheduledHardRefresh, refitAndRefresh, visible]);
 
-    runStep(0);
-  }, [cancelScheduledLayoutNudge, refitAndRefresh, visible]);
+  const scheduleHardRefreshRef = useRef(scheduleHardRefresh);
+  scheduleHardRefreshRef.current = scheduleHardRefresh;
 
   const wsUrl = sessionId ? getWsUrl(sessionId) : null;
 
@@ -284,13 +291,19 @@ export default function Terminal({
   });
 
   useEffect(() => {
-    if (!innerRef.current) return;
+    if (visible) {
+      setShouldInitialize(true);
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (!shouldInitialize || !innerRef.current || termRef.current) return;
 
     const term = new XTerm({
       cursorBlink: true,
-      fontSize,
+      fontSize: fontSizeRef.current,
       fontFamily: "'Cascadia Code', 'Consolas', monospace",
-      theme: getTerminalPalette(theme),
+      theme: getTerminalPalette(themeRef.current),
       allowProposedApi: true,
     });
 
@@ -314,6 +327,16 @@ export default function Terminal({
     sendInputRef.current = sendInput;
     sendResizeRef.current = sendResize;
     sendMouseRef.current = sendMouse;
+    (
+      window as Window & {
+        __remoteCodeTerminalDebug?: Record<string, { sessionId: string; sessionName: string; term: XTerm }>;
+      }
+    ).__remoteCodeTerminalDebug ??= {};
+    (
+      window as Window & {
+        __remoteCodeTerminalDebug?: Record<string, { sessionId: string; sessionName: string; term: XTerm }>;
+      }
+    ).__remoteCodeTerminalDebug![sessionId] = { sessionId, sessionName, term };
 
     term.onData((data) => {
       const sendInput = sendInputRef.current;
@@ -392,14 +415,7 @@ export default function Terminal({
     });
 
     const observer = new ResizeObserver(() => {
-      if (fitAddonRef.current) {
-        try {
-          fitAddonRef.current.fit();
-          // termRef.current?.scrollToBottom();
-        } catch {
-          // ignore
-        }
-      }
+      scheduleHardRefreshRef.current(focusedRef.current);
     });
     observer.observe(innerRef.current);
 
@@ -497,17 +513,38 @@ export default function Terminal({
       container.removeEventListener("touchend", onTouchEnd, { capture: true });
       container.removeEventListener("touchcancel", onTouchEnd, { capture: true });
       if (activityTimerRef.current) clearTimeout(activityTimerRef.current);
+      cancelScheduledHardRefresh();
+      const debugStore = (
+        window as Window & {
+          __remoteCodeTerminalDebug?: Record<string, { sessionId: string; sessionName: string; term: XTerm }>;
+        }
+      ).__remoteCodeTerminalDebug;
+      if (debugStore) {
+        delete debugStore[sessionId];
+      }
       termRef.current = null;
       fitAddonRef.current = null;
       term.dispose();
     };
-  }, [sendInput, sendResize, sendMouse]);
+  }, [cancelScheduledHardRefresh, sendInput, sendMouse, sendResize, sessionId, shouldInitialize]);
 
   useEffect(() => {
     return () => {
-      cancelScheduledLayoutNudge();
+      cancelScheduledHardRefresh();
     };
-  }, [cancelScheduledLayoutNudge]);
+  }, [cancelScheduledHardRefresh]);
+
+  useEffect(() => {
+    const debugStore = (
+      window as Window & {
+        __remoteCodeTerminalDebug?: Record<string, { sessionId: string; sessionName: string; term: XTerm }>;
+      }
+    ).__remoteCodeTerminalDebug;
+    const entry = debugStore?.[sessionId];
+    if (entry) {
+      entry.sessionName = sessionName;
+    }
+  }, [sessionId, sessionName]);
 
   useEffect(() => {
     const term = termRef.current;
@@ -529,24 +566,19 @@ export default function Terminal({
     if (rows) rows.style.color = palette.foreground;
 
     requestAnimationFrame(() => {
-      try {
-        term.clearTextureAtlas();
-      } catch {
-        // ignore renderer-specific failures
-      }
-      refitAndRefresh();
+      refitAndRefresh(isFocused);
     });
-  }, [refitAndRefresh, theme]);
+  }, [isFocused, refitAndRefresh, theme]);
 
   // fontSize change -> update terminal
   useEffect(() => {
-    if (termRef.current && fitAddonRef.current) {
+    if (termRef.current && fitAddonRef.current && visible) {
       termRef.current.options.fontSize = fontSize;
-      refitAndRefresh();
+      scheduleHardRefresh(isFocused);
     }
-  }, [fontSize, refitAndRefresh]);
+  }, [fontSize, isFocused, scheduleHardRefresh, visible]);
 
-  // visible / splitMode / panelIndex / explorerOpen -> refit + refresh
+  // visible / panel toggles -> refit + refresh
   useEffect(() => {
     if (visible && termRef.current && fitAddonRef.current) {
       // Double-rAF: wait for browser to fully compute layout after DOM change
@@ -555,17 +587,17 @@ export default function Terminal({
         if (cancelled) return;
         requestAnimationFrame(() => {
           if (cancelled) return;
-          refitAndRefresh();
+          refitAndRefresh(isFocused);
         });
       });
       return () => { cancelled = true; };
     }
-  }, [explorerOpen, explorerWidth, gitPanelOpen, gitPanelWidth, panelIndex, refitAndRefresh, splitMode, splitRatio, visible]);
+  }, [explorerOpen, explorerWidth, gitPanelOpen, gitPanelWidth, isFocused, refitAndRefresh, visible]);
 
   useEffect(() => {
     if (!visible || !termRef.current || !fitAddonRef.current) return;
-    scheduleLayoutNudge();
-  }, [refreshNonce, scheduleLayoutNudge, visible]);
+    scheduleHardRefresh(true);
+  }, [refreshNonce, scheduleHardRefresh, visible]);
 
   // Mobile custom scrollbar — track viewport scroll position
   useEffect(() => {
@@ -600,11 +632,11 @@ export default function Terminal({
   // Refit terminal when any panel resize drag ends
   useEffect(() => {
     const handleResizeEnd = () => {
-      scheduleLayoutNudge();
+      scheduleHardRefresh(isFocused);
     };
     window.addEventListener("panel-resize-end", handleResizeEnd);
     return () => window.removeEventListener("panel-resize-end", handleResizeEnd);
-  }, [scheduleLayoutNudge]);
+  }, [isFocused, scheduleHardRefresh]);
 
   // Focus management
   useEffect(() => {
@@ -722,62 +754,34 @@ export default function Terminal({
         ? "status-warn"
         : "status-danger";
 
-  // Compute position style
-  const positionStyle: React.CSSProperties = splitMode
-      ? {
-        position: "absolute",
-        top: 0,
-        bottom: 0,
-        width: panelIndex === 0 ? `${splitRatio * 100}%` : `${(1 - splitRatio) * 100}%`,
-        left: panelIndex === 0 ? 0 : `${splitRatio * 100}%`,
-        borderLeft: panelIndex === 1 ? "1px solid var(--border-subtle)" : undefined,
-      }
-    : {
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-      };
-
   const iconSize = Math.round(fontSize * 0.86);
+  const toolbarTitle = workPath ? `${sessionName} | ${paneLabel} | ${workPath}` : `${sessionName} | ${paneLabel}`;
 
   return (
     <div
       className="terminal-panel"
+      data-testid="terminal-panel"
       style={{
-        ...positionStyle,
         display: visible ? "flex" : "none",
         flexDirection: "column",
+        height: "100%",
       }}
       onMouseDown={onFocus}
     >
       <div
         className={`terminal-toolbar${isFocused ? " is-focused" : ""}`}
         style={{
-          minHeight: 50,
-          padding: `8px ${Math.max(12, Math.round(fontSize * 0.6))}px`,
+          minHeight: Math.max(34, Math.round(fontSize * 2.2)),
+          padding: `${Math.max(4, Math.round(fontSize * 0.25))}px ${Math.max(10, Math.round(fontSize * 0.5))}px`,
         }}
+        title={toolbarTitle}
       >
         <div className="terminal-toolbar__meta">
-          <span className="terminal-toolbar__eyebrow">
-            {splitMode ? `Split ${panelIndex + 1}` : "Primary Terminal"}
-          </span>
-          <div className="terminal-toolbar__title-row">
-            <span className="terminal-toolbar__title">{sessionName}</span>
-          </div>
-          <span className="terminal-toolbar__path" title={workPath}>
-            {workPath || "No work path"}
-          </span>
+          <span className="terminal-toolbar__title">{sessionName}</span>
+          <span className="terminal-toolbar__separator" aria-hidden="true">|</span>
+          <span className="terminal-toolbar__chip">{paneLabel}</span>
         </div>
         <div className="terminal-toolbar__actions">
-          {onFontSizeChange && (
-            <div className="terminal-font-controls">
-              <FontSizeBtn label="-" title="Font Size -" fontSize={fontSize} onClick={(e) => { e.stopPropagation(); onFontSizeChange(-1); }} />
-              <span className="terminal-font-value">{fontSize}</span>
-              <FontSizeBtn label="+" title="Font Size +" fontSize={fontSize} onClick={(e) => { e.stopPropagation(); onFontSizeChange(1); }} />
-            </div>
-          )}
           <TitleBarBtn
             icon={<FolderIcon size={iconSize} />}
             title="File Explorer"
@@ -803,9 +807,16 @@ export default function Terminal({
             fontSize={fontSize}
             onClick={(e) => {
               e.stopPropagation();
-              scheduleLayoutNudge();
+              scheduleHardRefresh(true);
             }}
           />
+          {onFontSizeChange && (
+            <div className="terminal-font-controls">
+              <FontSizeBtn label="-" title="Font Size -" fontSize={fontSize} onClick={(e) => { e.stopPropagation(); onFontSizeChange(-1); }} />
+              <span className="terminal-font-value">{fontSize}</span>
+              <FontSizeBtn label="+" title="Font Size +" fontSize={fontSize} onClick={(e) => { e.stopPropagation(); onFontSizeChange(1); }} />
+            </div>
+          )}
           {canSuspend && (
             <TitleBarBtn
               icon={<MinimizeIcon size={iconSize} />}
@@ -815,10 +826,30 @@ export default function Terminal({
               onClick={(e) => { e.stopPropagation(); onSuspend(); }}
             />
           )}
-          {splitMode && (
+          {canClosePanel && (
+            <TitleBarBtn
+              icon={<PaneCloseIcon size={iconSize} />}
+              title="Close Pane"
+              hoverColor="var(--danger)"
+              fontSize={fontSize}
+              onClick={(e) => { e.stopPropagation(); onClosePanel(); }}
+            />
+          )}
+          {showRestoreLayout && onRestoreLayout ? (
+            <TitleBarBtn
+              icon={<RestoreLayoutIcon size={iconSize} />}
+              title="Restore Layout"
+              hoverColor="var(--accent)"
+              fontSize={fontSize}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRestoreLayout();
+              }}
+            />
+          ) : onMaximize && (
             <TitleBarBtn
               icon={<MaximizeIcon size={iconSize} />}
-              title="Maximize"
+              title="Open Alone"
               hoverColor="var(--accent)"
               fontSize={fontSize}
               onClick={(e) => { e.stopPropagation(); onMaximize(); }}
@@ -872,9 +903,7 @@ export default function Terminal({
           />
         )}
         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-          <div style={{ width: layoutNudgeOffset > 0 ? `calc(100% - ${layoutNudgeOffset}px)` : "100%", height: "100%" }}>
-            <div ref={innerRef} style={{ width: "100%", height: "100%" }} />
-          </div>
+          <div ref={innerRef} data-testid="terminal-xterm" style={{ width: "100%", height: "100%" }} />
           {/* Mobile custom scrollbar */}
           {scrollThumb && isMobile() && (
             <div
@@ -905,7 +934,7 @@ export default function Terminal({
           )}
         </div>
       </div>
-      {!splitMode && <MobileKeyBar onKey={handleKeyBarInput} />}
+      {showMobileKeyBar && <MobileKeyBar onKey={handleKeyBarInput} />}
     </div>
   );
 }
@@ -918,6 +947,7 @@ function FontSizeBtn({ label, title, fontSize = 14, onClick }: { label: string; 
       className="terminal-tool-button"
       onClick={onClick}
       title={title}
+      aria-label={title}
       style={{
         padding: `${Math.round(fontSize * 0.07)}px ${Math.round(fontSize * 0.2)}px`,
         fontSize: Math.round(fontSize * 0.86),
@@ -954,6 +984,7 @@ function TitleBarBtn({
       className={`terminal-tool-button${active ? " is-active" : ""}`}
       onClick={onClick}
       title={title}
+      aria-label={title}
       style={{
         background: active ? activeBackground : "none",
         color: active ? hoverColor : "var(--text-muted)",
@@ -985,6 +1016,20 @@ const MinimizeIcon = ({ size = 12 }: { size?: number }) => (
 const MaximizeIcon = ({ size = 12 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="2" width="8" height="8" />
+  </svg>
+);
+
+const RestoreLayoutIcon = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 4.5V2.5h6v6h-2" />
+    <rect x="2" y="4" width="6" height="5" rx="0.6" />
+  </svg>
+);
+
+const PaneCloseIcon = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <line x1="3" y1="3" x2="9" y2="9" />
+    <line x1="9" y1="3" x2="3" y2="9" />
   </svg>
 );
 

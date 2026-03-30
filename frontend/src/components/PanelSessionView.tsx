@@ -1,77 +1,50 @@
 import { useState } from "react";
 
 interface PanelSessionViewProps {
-  visible?: boolean;
-  panelIndex: number;
-  splitMode: boolean;
-  splitRatio?: number;
   isFocused: boolean;
   onFocus: () => void;
   sessionName: string;
   workPath: string;
-  panelLabel: string;
+  paneLabel?: string;
   onClosePanel: () => void;
+  canClosePanel?: boolean;
   onMaximize?: () => void;
+  showRestoreLayout?: boolean;
+  onRestoreLayout?: () => void;
   renderContent: (refreshKey: number) => React.ReactNode;
 }
 
 export default function PanelSessionView({
-  visible = true,
-  panelIndex,
-  splitMode,
-  splitRatio = 0.5,
   isFocused,
   onFocus,
   sessionName,
   workPath,
-  panelLabel,
+  paneLabel = "Panel",
   onClosePanel,
+  canClosePanel = true,
   onMaximize,
+  showRestoreLayout = false,
+  onRestoreLayout,
   renderContent,
 }: PanelSessionViewProps) {
   const [refreshKey, setRefreshKey] = useState(0);
-
-  const positionStyle: React.CSSProperties = splitMode
-    ? {
-        position: "absolute",
-        top: 0,
-        bottom: 0,
-        width: panelIndex === 0 ? `${splitRatio * 100}%` : `${(1 - splitRatio) * 100}%`,
-        left: panelIndex === 0 ? 0 : `${splitRatio * 100}%`,
-        borderLeft: panelIndex === 1 ? "1px solid var(--border-subtle)" : undefined,
-      }
-    : {
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-      };
+  const toolbarTitle = workPath ? `${sessionName} | ${paneLabel} | ${workPath}` : `${sessionName} | ${paneLabel}`;
 
   return (
     <div
       className="terminal-panel"
-      style={{
-        ...positionStyle,
-        display: visible ? "flex" : "none",
-        flexDirection: "column",
-      }}
+      style={{ display: "flex", flexDirection: "column", height: "100%" }}
       onMouseDown={onFocus}
     >
       <div
         className={`terminal-toolbar${isFocused ? " is-focused" : ""}`}
-        style={{ minHeight: 50, padding: "8px 12px" }}
+        style={{ minHeight: 36, padding: "4px 10px" }}
+        title={toolbarTitle}
       >
         <div className="terminal-toolbar__meta">
-          <span className="terminal-toolbar__eyebrow">
-            {splitMode ? `Split ${panelIndex + 1}` : panelLabel}
-          </span>
-          <div className="terminal-toolbar__title-row">
-            <span className="terminal-toolbar__title">{sessionName}</span>
-          </div>
-          <span className="terminal-toolbar__path" title={workPath}>
-            {workPath || "No work path"}
-          </span>
+          <span className="terminal-toolbar__title">{sessionName}</span>
+          <span className="terminal-toolbar__separator" aria-hidden="true">|</span>
+          <span className="terminal-toolbar__chip">{paneLabel}</span>
         </div>
         <div className="terminal-toolbar__actions">
           <ToolbarButton
@@ -84,9 +57,20 @@ export default function PanelSessionView({
           >
             <RefreshIcon />
           </ToolbarButton>
-          {splitMode && onMaximize && (
+          {showRestoreLayout && onRestoreLayout ? (
             <ToolbarButton
-              title="Maximize"
+              title="Restore Layout"
+              hoverColor="var(--accent)"
+              onClick={(event) => {
+                event.stopPropagation();
+                onRestoreLayout();
+              }}
+            >
+              <RestoreLayoutIcon />
+            </ToolbarButton>
+          ) : onMaximize && (
+            <ToolbarButton
+              title="Open Alone"
               hoverColor="var(--accent)"
               onClick={(event) => {
                 event.stopPropagation();
@@ -96,16 +80,18 @@ export default function PanelSessionView({
               <MaximizeIcon />
             </ToolbarButton>
           )}
-          <ToolbarButton
-            title="Close Panel"
-            hoverColor="var(--danger)"
-            onClick={(event) => {
-              event.stopPropagation();
-              onClosePanel();
-            }}
-          >
-            <CloseIcon />
-          </ToolbarButton>
+          {canClosePanel && (
+            <ToolbarButton
+              title="Close Pane"
+              hoverColor="var(--danger)"
+              onClick={(event) => {
+                event.stopPropagation();
+                onClosePanel();
+              }}
+            >
+              <CloseIcon />
+            </ToolbarButton>
+          )}
         </div>
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>
@@ -130,6 +116,7 @@ function ToolbarButton({
     <button
       className="terminal-tool-button"
       title={title}
+      aria-label={title}
       onClick={onClick}
       onMouseEnter={(event) => {
         const button = event.currentTarget;
@@ -161,6 +148,15 @@ function MaximizeIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <rect x="2" y="2" width="8" height="8" />
+    </svg>
+  );
+}
+
+function RestoreLayoutIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 4.5V2.5h6v6h-2" />
+      <rect x="2" y="4" width="6" height="5" rx="0.6" />
     </svg>
   );
 }
