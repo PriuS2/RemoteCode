@@ -265,6 +265,7 @@ export default function AddSessionModal({
     >
       <div
         className={`sheet-panel${isMobile ? " is-mobile" : ""}`}
+        data-testid="add-session-modal"
         style={{
           maxWidth: isMobile ? "100%" : 620,
           maxHeight: isMobile ? "calc(100vh - 24px)" : "min(90vh, 760px)",
@@ -303,6 +304,7 @@ export default function AddSessionModal({
                 onChange={(e) => setName(e.target.value)}
                 placeholder="A default name will be used if left empty"
                 autoFocus
+                data-testid="add-session-name"
                 className="ui-input"
                 style={{ width: "100%", fontSize: uiPx(14) }}
               />
@@ -339,6 +341,7 @@ export default function AddSessionModal({
                       type="button"
                       onClick={() => setCliType(option.type)}
                       aria-pressed={active}
+                      data-testid={`cli-option-${option.type}`}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -444,6 +447,7 @@ export default function AddSessionModal({
                     value={cliOptions}
                     onChange={(e) => setCliOptions(normalizeCliOptionsInput(cliType, e.target.value))}
                     placeholder="Example: --verbose --model sonnet"
+                    data-testid="add-session-options"
                     className="ui-input"
                     style={{ width: "100%", fontSize: uiPx(14) }}
                   />
@@ -491,6 +495,7 @@ export default function AddSessionModal({
               type="submit"
               disabled={loading || hasBlockingPreflight}
               className="primary-button"
+              data-testid="add-session-submit"
               style={{ padding: "10px 16px", fontSize: uiPx(13), opacity: loading || hasBlockingPreflight ? 0.5 : 1 }}
             >
               {loading ? "Creating..." : "Create Session"}

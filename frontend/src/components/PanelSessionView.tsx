@@ -1,61 +1,34 @@
 import { useState } from "react";
 
 interface PanelSessionViewProps {
-  visible?: boolean;
-  panelIndex: number;
-  splitMode: boolean;
-  splitRatio?: number;
   isFocused: boolean;
   onFocus: () => void;
   sessionName: string;
   workPath: string;
-  panelLabel: string;
+  paneLabel?: string;
   onClosePanel: () => void;
+  canClosePanel?: boolean;
   onMaximize?: () => void;
   renderContent: (refreshKey: number) => React.ReactNode;
 }
 
 export default function PanelSessionView({
-  visible = true,
-  panelIndex,
-  splitMode,
-  splitRatio = 0.5,
   isFocused,
   onFocus,
   sessionName,
   workPath,
-  panelLabel,
+  paneLabel = "Panel",
   onClosePanel,
+  canClosePanel = true,
   onMaximize,
   renderContent,
 }: PanelSessionViewProps) {
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const positionStyle: React.CSSProperties = splitMode
-    ? {
-        position: "absolute",
-        top: 0,
-        bottom: 0,
-        width: panelIndex === 0 ? `${splitRatio * 100}%` : `${(1 - splitRatio) * 100}%`,
-        left: panelIndex === 0 ? 0 : `${splitRatio * 100}%`,
-        borderLeft: panelIndex === 1 ? "1px solid var(--border-subtle)" : undefined,
-      }
-    : {
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-      };
-
   return (
     <div
       className="terminal-panel"
-      style={{
-        ...positionStyle,
-        display: visible ? "flex" : "none",
-        flexDirection: "column",
-      }}
+      style={{ display: "flex", flexDirection: "column", height: "100%" }}
       onMouseDown={onFocus}
     >
       <div
@@ -63,9 +36,7 @@ export default function PanelSessionView({
         style={{ minHeight: 50, padding: "8px 12px" }}
       >
         <div className="terminal-toolbar__meta">
-          <span className="terminal-toolbar__eyebrow">
-            {splitMode ? `Split ${panelIndex + 1}` : panelLabel}
-          </span>
+          <span className="terminal-toolbar__eyebrow">{paneLabel}</span>
           <div className="terminal-toolbar__title-row">
             <span className="terminal-toolbar__title">{sessionName}</span>
           </div>
@@ -84,9 +55,9 @@ export default function PanelSessionView({
           >
             <RefreshIcon />
           </ToolbarButton>
-          {splitMode && onMaximize && (
+          {onMaximize && (
             <ToolbarButton
-              title="Maximize"
+              title="Open Alone"
               hoverColor="var(--accent)"
               onClick={(event) => {
                 event.stopPropagation();
@@ -96,16 +67,18 @@ export default function PanelSessionView({
               <MaximizeIcon />
             </ToolbarButton>
           )}
-          <ToolbarButton
-            title="Close Panel"
-            hoverColor="var(--danger)"
-            onClick={(event) => {
-              event.stopPropagation();
-              onClosePanel();
-            }}
-          >
-            <CloseIcon />
-          </ToolbarButton>
+          {canClosePanel && (
+            <ToolbarButton
+              title="Close Pane"
+              hoverColor="var(--danger)"
+              onClick={(event) => {
+                event.stopPropagation();
+                onClosePanel();
+              }}
+            >
+              <CloseIcon />
+            </ToolbarButton>
+          )}
         </div>
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>

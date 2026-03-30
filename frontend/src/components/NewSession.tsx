@@ -71,6 +71,7 @@ export default function NewProject({ onCreated, onCancel }: NewProjectProps) {
       >
         <div
           className={`sheet-panel${isMobile ? " is-mobile" : ""}`}
+          data-testid="new-project-modal"
           style={{
             maxWidth: isMobile ? "100%" : 540,
             maxHeight: isMobile ? "calc(100vh - 24px)" : "min(90vh, 640px)",
@@ -103,6 +104,7 @@ export default function NewProject({ onCreated, onCancel }: NewProjectProps) {
                     onChange={(e) => setWorkPath(e.target.value)}
                     placeholder="C:\\Users\\..."
                     autoFocus
+                    data-testid="new-project-path"
                     className="ui-input"
                     style={{ width: "100%", minWidth: 0, fontSize: uiPx(14) }}
                   />
@@ -127,6 +129,7 @@ export default function NewProject({ onCreated, onCancel }: NewProjectProps) {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Folder name will be used if left empty"
+                  data-testid="new-project-name"
                   className="ui-input"
                   style={{ width: "100%", fontSize: uiPx(14) }}
                 />
@@ -137,6 +140,7 @@ export default function NewProject({ onCreated, onCancel }: NewProjectProps) {
                   type="checkbox"
                   checked={createFolder}
                   onChange={(e) => setCreateFolder(e.target.checked)}
+                  data-testid="new-project-create-folder"
                   style={{ accentColor: "var(--accent)" }}
                 />
                 Create the folder if it does not exist
@@ -168,6 +172,7 @@ export default function NewProject({ onCreated, onCancel }: NewProjectProps) {
                 type="submit"
                 disabled={loading || !workPath.trim()}
                 className="primary-button"
+                data-testid="new-project-submit"
                 style={{ padding: "10px 16px", fontSize: uiPx(13), opacity: loading || !workPath.trim() ? 0.5 : 1 }}
               >
                 {loading ? "Creating..." : "Create Project"}

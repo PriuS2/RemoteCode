@@ -46,3 +46,28 @@ export interface IdeLanguageStatus {
   detail: string | null;
   extensions: string[];
 }
+
+export interface LayoutLeafNode {
+  type: "leaf";
+  paneId: string;
+  sessionId: string;
+}
+
+export interface LayoutSplitNode {
+  type: "split";
+  splitId: string;
+  direction: "row" | "column";
+  ratio: number;
+  first: ProjectLayoutNode;
+  second: ProjectLayoutNode;
+}
+
+export type ProjectLayoutNode = LayoutLeafNode | LayoutSplitNode;
+
+export interface ProjectLayoutResponse {
+  layout: ProjectLayoutNode | null;
+}
+
+export interface UpdateProjectLayoutRequest {
+  layout: ProjectLayoutNode | null;
+}

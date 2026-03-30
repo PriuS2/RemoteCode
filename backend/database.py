@@ -1,3 +1,4 @@
+import json
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -5,6 +6,7 @@ from datetime import datetime, timezone
 import aiosqlite
 
 from .config import settings
+from .project_layouts import LayoutNode, collect_session_ids, prune_sessions, sanitize_layout
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +84,8 @@ async def init_db() -> None:
             work_path TEXT NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
-            order_index INTEGER NOT NULL DEFAULT 0
+            order_index INTEGER NOT NULL DEFAULT 0,
+            layout_json TEXT
         )
     """)
     await db.execute("""
@@ -127,6 +130,10 @@ async def init_db() -> None:
         await db.execute("ALTER TABLE sessions ADD COLUMN project_id TEXT")
         logger.info("Migrated database: added sessions.project_id")
 
+    if not await _column_exists(db, "projects", "layout_json"):
+        await db.execute("ALTER TABLE projects ADD COLUMN layout_json TEXT")
+        logger.info("Migrated database: added projects.layout_json")
+
     await _migrate_sessions_to_projects(db)
     await db.commit()
     logger.info("Database initialized")
@@ -149,10 +156,10 @@ async def create_project(name: str, work_path: str) -> dict:
 
     await db.execute(
         """
-        INSERT INTO projects (id, name, work_path, created_at, updated_at, order_index)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO projects (id, name, work_path, created_at, updated_at, order_index, layout_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (project_id, name, work_path, now, now, order_index),
+        (project_id, name, work_path, now, now, order_index, None),
     )
     await db.commit()
     return {
@@ -162,6 +169,7 @@ async def create_project(name: str, work_path: str) -> dict:
         "created_at": now,
         "updated_at": now,
         "order_index": order_index,
+        "layout_json": None,
         "sessions": [],
     }
 
@@ -256,6 +264,98 @@ async def update_project_order(ordered_ids: list[str]) -> None:
         )
     await db.commit()
     logger.info("Updated order for %s projects", len(ordered_ids))
+
+
+def _encode_layout_json(layout: LayoutNode | None) -> str | None:
+    sanitized = sanitize_layout(layout)
+    if sanitized is None:
+        return None
+    return json.dumps(sanitized, separators=(",", ":"), ensure_ascii=True)
+
+
+def _decode_layout_json(layout_json: str | None) -> LayoutNode | None:
+    if not layout_json:
+        return None
+    try:
+        raw = json.loads(layout_json)
+    except json.JSONDecodeError:
+        logger.warning("Failed to decode stored layout JSON")
+        return None
+    return sanitize_layout(raw)
+
+
+async def list_existing_session_ids(session_ids: list[str] | set[str] | None = None) -> set[str]:
+    db = await get_db()
+    values: tuple[str, ...] = tuple(session_ids or [])
+    if values:
+        placeholders = ",".join("?" for _ in values)
+        cursor = await db.execute(
+            f"SELECT id FROM sessions WHERE id IN ({placeholders})",
+            values,
+        )
+    else:
+        cursor = await db.execute("SELECT id FROM sessions")
+    rows = await cursor.fetchall()
+    return {row["id"] for row in rows}
+
+
+async def get_project_layout(project_id: str) -> LayoutNode | None:
+    db = await get_db()
+    cursor = await db.execute("SELECT layout_json FROM projects WHERE id = ?", (project_id,))
+    row = await cursor.fetchone()
+    if not row:
+        return None
+    return _decode_layout_json(row["layout_json"])
+
+
+async def update_project_layout(project_id: str, layout: LayoutNode | None) -> None:
+    db = await get_db()
+    now = _now()
+    await db.execute(
+        "UPDATE projects SET layout_json = ?, updated_at = ? WHERE id = ?",
+        (_encode_layout_json(layout), now, project_id),
+    )
+    await db.commit()
+
+
+async def prune_project_layouts(
+    removed_session_ids: set[str],
+    *,
+    exclude_project_ids: set[str] | None = None,
+) -> int:
+    if not removed_session_ids:
+        return 0
+
+    db = await get_db()
+    cursor = await db.execute("SELECT id, layout_json FROM projects")
+    rows = await cursor.fetchall()
+    excluded = exclude_project_ids or set()
+    updated_count = 0
+
+    for row in rows:
+        project_id = row["id"]
+        if project_id in excluded:
+            continue
+
+        layout = _decode_layout_json(row["layout_json"])
+        if not layout:
+            continue
+
+        referenced_session_ids = set(collect_session_ids(layout))
+        if referenced_session_ids.isdisjoint(removed_session_ids):
+            continue
+
+        pruned_layout = prune_sessions(layout, removed_session_ids)
+        await db.execute(
+            "UPDATE projects SET layout_json = ?, updated_at = ? WHERE id = ?",
+            (_encode_layout_json(pruned_layout), _now(), project_id),
+        )
+        updated_count += 1
+
+    if updated_count:
+        await db.commit()
+        logger.info("Pruned layouts for %s projects after removing %s sessions", updated_count, len(removed_session_ids))
+    return updated_count
 
 
 async def create_session(

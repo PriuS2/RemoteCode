@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ConfirmDialog, PromptDialog } from "./Dialog";
 import type { ActivityState } from "./Terminal";
@@ -9,9 +9,11 @@ import { getCliTone } from "../utils/cliTones";
 interface SessionListProps {
   projects: Project[];
   activeSessions: string[];
+  activeLayoutProjectId?: string | null;
   focusedSessionId: string | null;
   sessionActivity: Record<string, ActivityState>;
   onSelect: (id: string, split?: boolean) => void;
+  onOpenLayout: (projectId: string) => void;
   onResume: (id: string) => void;
   onNewProject: () => void;
   onAddSession: (project: Project) => void;
@@ -23,6 +25,8 @@ interface SessionListProps {
   onRenameProject: (id: string, newName: string) => Promise<void>;
   onReorderProjects?: (orderedIds: string[]) => void;
   onReorderProjectSessions?: (projectId: string, orderedIds: string[]) => void;
+  onSessionLayoutDragStart?: (sessionId: string) => void;
+  onSessionLayoutDragEnd?: () => void;
 }
 
 type ContextMenuState
@@ -31,7 +35,7 @@ type ContextMenuState
 
 type DragState
   = { type: "project"; projectId: string }
-  | { type: "session"; projectId: string; sessionId: string };
+  | { type: "session-reorder"; projectId: string; sessionId: string };
 
 const STATUS_META: Record<string, { label: string; color: string; chipClass: string }> = {
   active: { label: "Active", color: "var(--success)", chipClass: "session-chip--active" },
@@ -145,9 +149,11 @@ function ContextMenu({
 export default function SessionList({
   projects,
   activeSessions,
+  activeLayoutProjectId = null,
   focusedSessionId,
   sessionActivity,
   onSelect,
+  onOpenLayout,
   onResume,
   onNewProject,
   onAddSession,
@@ -159,6 +165,8 @@ export default function SessionList({
   onRenameProject,
   onReorderProjects,
   onReorderProjectSessions,
+  onSessionLayoutDragStart,
+  onSessionLayoutDragEnd,
 }: SessionListProps) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -385,7 +393,7 @@ export default function SessionList({
   }, [draggedItem, localProjects, onReorderProjects]);
 
   const handleSessionDrop = useCallback((projectId: string, targetSessionId: string) => {
-    if (!draggedItem || draggedItem.type !== "session" || !onReorderProjectSessions) {
+    if (!draggedItem || draggedItem.type !== "session-reorder" || !onReorderProjectSessions) {
       setDraggedItem(null);
       setDragOverKey(null);
       return;
@@ -412,8 +420,26 @@ export default function SessionList({
     setDragOverKey(null);
   }, [draggedItem, localProjects, onReorderProjectSessions]);
 
+  const handleSessionLayoutDragStart = useCallback((event: React.DragEvent, sessionId: string) => {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("application/x-remote-code-session", sessionId);
+    event.dataTransfer.setData("text/plain", sessionId);
+    onSessionLayoutDragStart?.(sessionId);
+  }, [onSessionLayoutDragStart]);
+
+  const handleSessionLayoutDragEnd = useCallback(() => {
+    onSessionLayoutDragEnd?.();
+  }, [onSessionLayoutDragEnd]);
+
   const projectCountLabel = `${projects.length} total`;
   const projectMenuItems = contextMenu?.kind === "project" ? [
+    {
+      label: "Open Layout",
+      onClick: () => {
+        onOpenLayout(contextMenu.project.id);
+        closeContextMenu();
+      },
+    },
     {
       label: "Add Session",
       onClick: () => {
@@ -446,7 +472,7 @@ export default function SessionList({
       label: "Open",
       onClick: () => {
         if (contextMenu.session.status === "active") onSelect(contextMenu.session.id);
-        else onResume(contextMenu.session.id);
+        else onSelect(contextMenu.session.id);
         closeContextMenu();
       },
     },
@@ -530,6 +556,7 @@ export default function SessionList({
         {visibleProjects.map((project) => {
           const expanded = normalizedQuery ? true : expandedProjects.includes(project.id);
           const projectDragOver = dragOverKey === `project:${project.id}`;
+          const isActiveLayoutProject = activeLayoutProjectId === project.id;
           const activeCliCount = project.sessions.filter((session) => {
             return isProcessSession(session) && session.status === "active";
           }).length;
@@ -539,6 +566,7 @@ export default function SessionList({
             <div key={project.id} className="project-group">
               <div
                 className={`project-row${expanded ? " is-expanded" : ""}${projectDragOver ? " is-drag-over" : ""}${activeCliCount > 0 ? " has-active-cli" : ""}`}
+                data-testid={`project-row-${project.id}`}
                 draggable={reorderEnabled}
                 onClick={() => toggleExpanded(project.id)}
                 onContextMenu={(event) => openContextMenu(event, {
@@ -570,7 +598,7 @@ export default function SessionList({
                 }}
               >
                 <div className="project-row__top">
-                  <span className="project-row__toggle">{expanded ? "▾" : "▸"}</span>
+                  <span className="project-row__toggle">{expanded ? "v" : ">"}</span>
                   <span className="project-row__name">{project.name}</span>
                   <div className="project-row__actions">
                     <span className="project-row__stat" title={`${activeCliCount} active terminal sessions`}>
@@ -578,7 +606,20 @@ export default function SessionList({
                     </span>
                     <button
                       type="button"
+                      className={`ghost-button project-row__layout${isActiveLayoutProject ? " is-active" : ""}`}
+                      aria-label={`Open layout for ${project.name}`}
+                      data-testid={`project-layout-${project.id}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onOpenLayout(project.id);
+                      }}
+                    >
+                      Layout
+                    </button>
+                    <button
+                      type="button"
                       className="ghost-button project-row__add"
+                      data-testid={`project-add-session-${project.id}`}
                       onClick={(event) => {
                         event.stopPropagation();
                         onAddSession(project);
@@ -619,12 +660,12 @@ export default function SessionList({
                       <div
                         key={session.id}
                         className={rowClassName}
-                        draggable={reorderEnabled}
+                        draggable
+                        data-testid={`session-row-${session.id}`}
+                        aria-label={`Open session ${session.name}`}
                         onClick={(event) => {
-                          if (session.status === "active") onSelect(session.id, event.shiftKey);
-                          if (session.status === "closed" || session.status === "suspended") {
-                            onResume(session.id);
-                          }
+                          void event;
+                          onSelect(session.id);
                         }}
                         onContextMenu={(event) => openContextMenu(event, {
                           kind: "session",
@@ -643,17 +684,13 @@ export default function SessionList({
                         onTouchMove={clearTouchTimer}
                         onTouchEnd={clearTouchTimer}
                         onTouchCancel={clearTouchTimer}
-                        onDragStart={(event) => handleDragStart(event, {
-                          type: "session",
-                          projectId: project.id,
-                          sessionId: session.id,
-                        })}
-                        onDragEnd={handleDragEnd}
+                        onDragStart={(event) => handleSessionLayoutDragStart(event, session.id)}
+                        onDragEnd={handleSessionLayoutDragEnd}
                         onDragOver={(event) => {
                           event.preventDefault();
                           if (
                             !reorderEnabled
-                            || draggedItem?.type !== "session"
+                            || draggedItem?.type !== "session-reorder"
                             || draggedItem.projectId !== project.id
                             || draggedItem.sessionId === session.id
                           ) {
@@ -668,6 +705,29 @@ export default function SessionList({
                         }}
                       >
                         <div className="session-row__main">
+                          <button
+                            type="button"
+                            className={`session-row__drag-handle${reorderEnabled ? "" : " is-disabled"}`}
+                            title={reorderEnabled ? "Reorder session" : "Reordering disabled while filtering"}
+                            aria-label={`Reorder session ${session.name}`}
+                            draggable={reorderEnabled}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onClick={(event) => event.stopPropagation()}
+                            onDragStart={(event) => {
+                              event.stopPropagation();
+                              handleDragStart(event, {
+                                type: "session-reorder",
+                                projectId: project.id,
+                                sessionId: session.id,
+                              });
+                            }}
+                            onDragEnd={(event) => {
+                              event.stopPropagation();
+                              handleDragEnd();
+                            }}
+                          >
+                            ::
+                          </button>
                           <span className="session-row__name">{session.name}</span>
                           <div className="session-row__meta-group">
                             <span className={`session-chip session-chip--status ${statusMeta.chipClass}`}>
@@ -705,8 +765,8 @@ export default function SessionList({
       </div>
 
       <div className="session-list__footer">
-        {activeSessions.length === 1 && <div className="split-hint">Shift+Click to split view</div>}
-        <button className="primary-button" onClick={onNewProject}>
+        <div className="split-hint">Drag sessions into the workbench to place or replace panes.</div>
+        <button className="primary-button" data-testid="new-project-button" onClick={onNewProject}>
           + New Project
         </button>
       </div>
@@ -800,3 +860,4 @@ export default function SessionList({
     </div>
   );
 }
+

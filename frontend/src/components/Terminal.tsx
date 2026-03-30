@@ -33,20 +33,20 @@ interface TerminalProps {
   fontSize?: number;
   onFontSizeChange?: (delta: number) => void;
   onActivityChange?: (sessionId: string, state: ActivityState) => void;
-  panelIndex: number;
-  splitMode: boolean;
-  splitRatio?: number;
   refreshNonce: number;
   isFocused: boolean;
   onFocus: () => void;
   theme: ThemeMode;
   sessionName: string;
+  paneLabel?: string;
   workPath: string;
   onClosePanel: () => void;
+  canClosePanel?: boolean;
   canSuspend?: boolean;
   onSuspend: () => void;
-  onMaximize: () => void;
+  onMaximize?: () => void;
   onTerminate: () => void;
+  showMobileKeyBar?: boolean;
 }
 
 const STATUS_STYLE: Record<string, React.CSSProperties> = {
@@ -136,20 +136,20 @@ export default function Terminal({
   fontSize = 14,
   onFontSizeChange,
   onActivityChange,
-  panelIndex,
-  splitMode,
-  splitRatio = 0.5,
   refreshNonce,
   isFocused,
   onFocus,
   theme,
   sessionName,
+  paneLabel = "Terminal",
   workPath,
   onClosePanel,
+  canClosePanel = true,
   canSuspend = true,
   onSuspend,
   onMaximize,
   onTerminate,
+  showMobileKeyBar = true,
 }: TerminalProps) {
   const innerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
@@ -392,14 +392,7 @@ export default function Terminal({
     });
 
     const observer = new ResizeObserver(() => {
-      if (fitAddonRef.current) {
-        try {
-          fitAddonRef.current.fit();
-          // termRef.current?.scrollToBottom();
-        } catch {
-          // ignore
-        }
-      }
+      refitAndRefresh();
     });
     observer.observe(innerRef.current);
 
@@ -501,7 +494,7 @@ export default function Terminal({
       fitAddonRef.current = null;
       term.dispose();
     };
-  }, [sendInput, sendResize, sendMouse]);
+  }, [refitAndRefresh, sendInput, sendResize, sendMouse]);
 
   useEffect(() => {
     return () => {
@@ -546,7 +539,7 @@ export default function Terminal({
     }
   }, [fontSize, refitAndRefresh]);
 
-  // visible / splitMode / panelIndex / explorerOpen -> refit + refresh
+  // visible / panel toggles -> refit + refresh
   useEffect(() => {
     if (visible && termRef.current && fitAddonRef.current) {
       // Double-rAF: wait for browser to fully compute layout after DOM change
@@ -560,7 +553,7 @@ export default function Terminal({
       });
       return () => { cancelled = true; };
     }
-  }, [explorerOpen, explorerWidth, gitPanelOpen, gitPanelWidth, panelIndex, refitAndRefresh, splitMode, splitRatio, visible]);
+  }, [explorerOpen, explorerWidth, gitPanelOpen, gitPanelWidth, refitAndRefresh, visible]);
 
   useEffect(() => {
     if (!visible || !termRef.current || !fitAddonRef.current) return;
@@ -722,33 +715,16 @@ export default function Terminal({
         ? "status-warn"
         : "status-danger";
 
-  // Compute position style
-  const positionStyle: React.CSSProperties = splitMode
-      ? {
-        position: "absolute",
-        top: 0,
-        bottom: 0,
-        width: panelIndex === 0 ? `${splitRatio * 100}%` : `${(1 - splitRatio) * 100}%`,
-        left: panelIndex === 0 ? 0 : `${splitRatio * 100}%`,
-        borderLeft: panelIndex === 1 ? "1px solid var(--border-subtle)" : undefined,
-      }
-    : {
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-      };
-
   const iconSize = Math.round(fontSize * 0.86);
 
   return (
     <div
       className="terminal-panel"
+      data-testid="terminal-panel"
       style={{
-        ...positionStyle,
         display: visible ? "flex" : "none",
         flexDirection: "column",
+        height: "100%",
       }}
       onMouseDown={onFocus}
     >
@@ -760,9 +736,7 @@ export default function Terminal({
         }}
       >
         <div className="terminal-toolbar__meta">
-          <span className="terminal-toolbar__eyebrow">
-            {splitMode ? `Split ${panelIndex + 1}` : "Primary Terminal"}
-          </span>
+          <span className="terminal-toolbar__eyebrow">{paneLabel}</span>
           <div className="terminal-toolbar__title-row">
             <span className="terminal-toolbar__title">{sessionName}</span>
           </div>
@@ -815,10 +789,19 @@ export default function Terminal({
               onClick={(e) => { e.stopPropagation(); onSuspend(); }}
             />
           )}
-          {splitMode && (
+          {canClosePanel && (
+            <TitleBarBtn
+              icon={<PaneCloseIcon size={iconSize} />}
+              title="Close Pane"
+              hoverColor="var(--danger)"
+              fontSize={fontSize}
+              onClick={(e) => { e.stopPropagation(); onClosePanel(); }}
+            />
+          )}
+          {onMaximize && (
             <TitleBarBtn
               icon={<MaximizeIcon size={iconSize} />}
-              title="Maximize"
+              title="Open Alone"
               hoverColor="var(--accent)"
               fontSize={fontSize}
               onClick={(e) => { e.stopPropagation(); onMaximize(); }}
@@ -873,7 +856,7 @@ export default function Terminal({
         )}
         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
           <div style={{ width: layoutNudgeOffset > 0 ? `calc(100% - ${layoutNudgeOffset}px)` : "100%", height: "100%" }}>
-            <div ref={innerRef} style={{ width: "100%", height: "100%" }} />
+            <div ref={innerRef} data-testid="terminal-xterm" style={{ width: "100%", height: "100%" }} />
           </div>
           {/* Mobile custom scrollbar */}
           {scrollThumb && isMobile() && (
@@ -905,7 +888,7 @@ export default function Terminal({
           )}
         </div>
       </div>
-      {!splitMode && <MobileKeyBar onKey={handleKeyBarInput} />}
+      {showMobileKeyBar && <MobileKeyBar onKey={handleKeyBarInput} />}
     </div>
   );
 }
@@ -985,6 +968,13 @@ const MinimizeIcon = ({ size = 12 }: { size?: number }) => (
 const MaximizeIcon = ({ size = 12 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="2" width="8" height="8" />
+  </svg>
+);
+
+const PaneCloseIcon = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <line x1="3" y1="3" x2="9" y2="9" />
+    <line x1="9" y1="3" x2="3" y2="9" />
   </svg>
 );
 

@@ -14,12 +14,16 @@ from .database import (
     create_session as db_create_session,
     delete_project_record as db_delete_project_record,
     delete_session as db_delete_session,
+    get_project_layout as db_get_project_layout,
     get_project as db_get_project,
+    list_existing_session_ids as db_list_existing_session_ids,
     get_session as db_get_session,
     list_project_sessions as db_list_project_sessions,
     list_projects as db_list_projects,
     list_sessions as db_list_sessions,
+    prune_project_layouts as db_prune_project_layouts,
     update_last_accessed,
+    update_project_layout as db_update_project_layout,
     update_project as db_update_project,
     update_project_order as db_update_project_order,
     update_project_session_order as db_update_project_session_order,
@@ -27,6 +31,13 @@ from .database import (
 )
 from .language_server import language_server_manager
 from .pty_manager import PtyInstance, pty_manager
+from .project_layouts import (
+    LayoutNode,
+    LayoutValidationError,
+    collect_session_ids,
+    prune_sessions,
+    sanitize_layout,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -240,12 +251,59 @@ class SessionManager:
         await db_update_project(project_id, name=name.strip(), updated_at=self._timestamp())
         return await db_get_project(project_id)
 
+    async def _prune_missing_sessions_from_layout(self, layout: LayoutNode | None) -> LayoutNode | None:
+        if not layout:
+            return None
+
+        referenced_session_ids = collect_session_ids(layout)
+        if not referenced_session_ids:
+            return None
+
+        existing_session_ids = await db_list_existing_session_ids(referenced_session_ids)
+        removed_session_ids = set(referenced_session_ids) - existing_session_ids
+        if not removed_session_ids:
+            return layout
+        return prune_sessions(layout, removed_session_ids)
+
+    async def get_project_layout(self, project_id: str) -> LayoutNode | None:
+        project = await db_get_project(project_id)
+        if not project:
+            raise ValueError(f"Project not found: {project_id}")
+
+        layout = await db_get_project_layout(project_id)
+        if not layout:
+            return None
+
+        pruned_layout = await self._prune_missing_sessions_from_layout(layout)
+        if pruned_layout != layout:
+            await db_update_project_layout(project_id, pruned_layout)
+        return pruned_layout
+
+    async def save_project_layout(self, project_id: str, layout: LayoutNode | None) -> LayoutNode | None:
+        project = await db_get_project(project_id)
+        if not project:
+            raise ValueError(f"Project not found: {project_id}")
+
+        if layout is None:
+            await db_update_project_layout(project_id, None)
+            return None
+
+        try:
+            sanitized_layout = sanitize_layout(layout)
+        except LayoutValidationError as exc:
+            raise SessionValidationError(exc.code, exc.message) from exc
+
+        pruned_layout = await self._prune_missing_sessions_from_layout(sanitized_layout)
+        await db_update_project_layout(project_id, pruned_layout)
+        return pruned_layout
+
     async def delete_project(self, project_id: str) -> None:
         project = await db_get_project(project_id)
         if not project:
             raise ValueError(f"Project not found: {project_id}")
 
         sessions = await db_list_project_sessions(project_id)
+        removed_session_ids = {session["id"] for session in sessions}
         for session in sessions:
             if session.get("cli_type", "claude") not in NON_PTY_CLI_TYPES:
                 pty_manager.remove(session["id"])
@@ -253,6 +311,7 @@ class SessionManager:
                 await language_server_manager.close_session(session["id"])
 
         await db_delete_project_record(project_id)
+        await db_prune_project_layouts(removed_session_ids, exclude_project_ids={project_id})
         logger.info(f"Project deleted: {project_id}")
 
     async def update_project_order(self, ordered_ids: list[str]) -> None:
@@ -571,6 +630,7 @@ class SessionManager:
             await language_server_manager.close_session(session_id)
 
         await db_delete_session(session_id)
+        await db_prune_project_layouts({session_id})
         logger.info(f"Session deleted: {session_id}")
 
 session_manager = SessionManager()

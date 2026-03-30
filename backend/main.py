@@ -10,6 +10,7 @@ import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, WebSocket
@@ -314,6 +315,14 @@ class ProjectResponse(BaseModel):
     updated_at: str
     order_index: int
     sessions: list[SessionResponse]
+
+
+class ProjectLayoutResponse(BaseModel):
+    layout: dict[str, Any] | None = None
+
+
+class UpdateProjectLayoutRequest(BaseModel):
+    layout: dict[str, Any] | None = None
 
 
 # --- Auth API (인증 불필요) ---
@@ -992,6 +1001,42 @@ async def rename_project(
                 detail=ApiErrorDetail(code="invalid_request", message="Name cannot be empty").model_dump(),
             )
         return await session_manager.rename_project(project_id, name)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code="invalid_request", message=str(e)).model_dump(),
+        )
+
+
+@app.get("/api/projects/{project_id}/layout", response_model=ProjectLayoutResponse)
+async def get_project_layout(
+    project_id: str,
+    _user: str = Depends(get_current_user),
+):
+    try:
+        layout = await session_manager.get_project_layout(project_id)
+        return ProjectLayoutResponse(layout=layout)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code="invalid_request", message=str(e)).model_dump(),
+        )
+
+
+@app.put("/api/projects/{project_id}/layout", response_model=ProjectLayoutResponse)
+async def update_project_layout(
+    project_id: str,
+    req: UpdateProjectLayoutRequest,
+    _user: str = Depends(get_current_user),
+):
+    try:
+        layout = await session_manager.save_project_layout(project_id, req.layout)
+        return ProjectLayoutResponse(layout=layout)
+    except SessionValidationError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=ApiErrorDetail(code=e.code, message=e.message).model_dump(),
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=400,

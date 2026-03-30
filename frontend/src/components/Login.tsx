@@ -49,6 +49,7 @@ export default function Login({ onLogin }: LoginProps) {
             <label htmlFor="password">Password</label>
             <input
               id="password"
+              data-testid="login-password"
               className="ui-input"
               type="password"
               value={password}
@@ -62,6 +63,7 @@ export default function Login({ onLogin }: LoginProps) {
             className="primary-button login-submit"
             type="submit"
             disabled={loading || !password}
+            data-testid="login-submit"
           >
             {loading ? "Logging in..." : "Enter Workbench"}
           </button>

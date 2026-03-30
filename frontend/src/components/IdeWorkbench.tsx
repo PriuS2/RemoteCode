@@ -595,6 +595,20 @@ export default function IdeWorkbench({ sessionId, rootPath, theme }: IdeWorkbenc
   }, [theme]);
 
   useEffect(() => {
+    const host = editorHostRef.current;
+    const editor = editorRef.current;
+    if (!host || !editor) {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      editor.layout();
+    });
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [editorReady]);
+
+  useEffect(() => {
     if (!editorReady || restoredRef.current || persistedOpenPathsRef.current.length === 0) {
       return;
     }
