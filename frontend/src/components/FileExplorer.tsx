@@ -5,6 +5,7 @@ import { IconFolder, FileIcon } from "../utils/fileIcons";
 import { joinPath } from "../utils/pathUtils";
 import hljs from "highlight.js";
 import { apiFetch, readErrorMessage } from "../utils/api";
+import { canUseLocalDesktopFeatures } from "../runtime";
 import type { TextPreviewResponse } from "../types/api";
 import { uiPx } from "../utils/uiScale";
 
@@ -209,17 +210,7 @@ export default function FileExplorer({
     return () => { if (previewBlobUrlRef.current) URL.revokeObjectURL(previewBlobUrlRef.current); };
   }, []);
 
-  const isLocal = (() => {
-    const h = window.location.hostname;
-    return (
-      h === "localhost" ||
-      h === "127.0.0.1" ||
-      h === "::1" ||
-      h.startsWith("192.168.") ||
-      h.startsWith("10.") ||
-      /^172\.(1[6-9]|2\d|3[01])\./.test(h)
-    );
-  })();
+  const isLocal = canUseLocalDesktopFeatures();
 
   const handleOpenNative = useCallback(async (path?: string) => {
     try {

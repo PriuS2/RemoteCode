@@ -1,3 +1,5 @@
+import { isDesktopChromium, showDesktopNotification } from "../runtime";
+
 let audioCtx: AudioContext | null = null;
 
 function getAudioContext(): AudioContext {
@@ -33,12 +35,19 @@ export function playNotificationSound() {
 }
 
 export function requestNotificationPermission() {
+  if (isDesktopChromium()) {
+    return;
+  }
   if ("Notification" in window && Notification.permission === "default") {
     Notification.requestPermission();
   }
 }
 
 export function sendBrowserNotification(title: string, body: string) {
+  if (isDesktopChromium()) {
+    void showDesktopNotification(title, body);
+    return;
+  }
   if ("Notification" in window && Notification.permission === "granted") {
     try {
       const n = new Notification(title, {

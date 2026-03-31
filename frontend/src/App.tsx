@@ -41,6 +41,34 @@ import { getSessionDragData, hasSessionDragData } from "./utils/sessionDragData"
 import type { Project } from "./types/project";
 import type { Session } from "./types/session";
 import type { ProjectLayoutResponse } from "./types/api";
+import {
+  canUseLocalDesktopFeatures,
+  focusDesktopWindow,
+  getCurrentDesktopVersion,
+  getDesktopRuntimeInfo,
+  getDesktopPreferences,
+  getLaunchContext,
+  getLatestUpdateManifest,
+  isDesktopChromium,
+  installDesktopExternalLinkHandler,
+  installDesktopShortcutGuard,
+  listOpenWindows,
+  openProjectWindow as openDesktopProjectWindow,
+  openSessionWindow as openDesktopSessionWindow,
+  recordRecentProject,
+  removeRecentProject,
+  setDesktopBadgeCount,
+  setDesktopFocusContext,
+  subscribeDesktopCommand,
+  subscribeDesktopWindowRegistry,
+  syncDesktopPresence,
+  updateDesktopPreferences,
+  type DesktopFocusContext,
+  type DesktopLaunchContext,
+  type DesktopPreferences,
+  type DesktopWindowSummary,
+  type UpdateManifest,
+} from "./runtime";
 import "./App.css";
 
 type ThemeMode = "light" | "dark";
@@ -117,10 +145,65 @@ function getDisplayLayout(layout: LayoutNode | null, focusedPaneId: string | nul
   return findLeafByPaneId(layout, focusedPaneId) ?? getFirstLeaf(layout);
 }
 
+function describeDesktopWindow(entry: DesktopWindowSummary): string {
+  if (entry.role === "project") {
+    return entry.projectName ? `${entry.projectName} window` : "project window";
+  }
+  if (entry.role === "session") {
+    return entry.sessionName ? `${entry.sessionName} window` : "session window";
+  }
+  return "main window";
+}
+
+function normalizeOwnedSessionIds(values: string[]): string[] {
+  return Array.from(new Set(values.filter((value) => typeof value === "string" && value))).sort();
+}
+
+function buildDesktopPresencePayloadKey(payload: {
+  projectId?: string | null;
+  projectName?: string | null;
+  sessionId?: string | null;
+  sessionName?: string | null;
+  workPath?: string | null;
+  ownedSessionIds?: string[];
+}): string {
+  return JSON.stringify({
+    projectId: payload.projectId ?? null,
+    projectName: payload.projectName ?? null,
+    sessionId: payload.sessionId ?? null,
+    sessionName: payload.sessionName ?? null,
+    workPath: payload.workPath ?? null,
+    ownedSessionIds: normalizeOwnedSessionIds(payload.ownedSessionIds ?? []),
+  });
+}
+
+function buildDesktopWindowRegistryKey(windows: DesktopWindowSummary[]): string {
+  return JSON.stringify(
+    windows.map((entry) => ({
+      windowId: entry.windowId,
+      role: entry.role,
+      projectId: entry.projectId ?? null,
+      sessionId: entry.sessionId ?? null,
+      title: entry.title,
+      hidden: Boolean(entry.hidden),
+      focused: Boolean(entry.focused),
+      ownedSessionIds: normalizeOwnedSessionIds(entry.ownedSessionIds),
+    })),
+  );
+}
+
+function buildDesktopFocusContextKey(context: DesktopFocusContext): string {
+  return JSON.stringify({
+    kind: context.kind,
+    sessionType: context.sessionType ?? null,
+  });
+}
+
 export default function App() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [theme, setTheme] = useState<ThemeMode>(() => getStoredTheme());
   const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoadedOnce, setProjectsLoadedOnce] = useState(false);
   const [layoutRoot, setLayoutRoot] = useState<LayoutNode | null>(null);
   const [focusedPaneId, setFocusedPaneId] = useState<string | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("ephemeral");
@@ -146,13 +229,45 @@ export default function App() {
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const [isMobileViewport, setIsMobileViewport] = useState(() => window.innerWidth <= 768);
   const [openingConfigPath, setOpeningConfigPath] = useState(false);
+  const [desktopLaunchContext, setDesktopLaunchContext] = useState<DesktopLaunchContext | null>(null);
+  const [desktopWindows, setDesktopWindows] = useState<DesktopWindowSummary[]>([]);
+  const [desktopPreferencesState, setDesktopPreferencesState] = useState<DesktopPreferences | null>(null);
+  const [desktopVersion, setDesktopVersion] = useState<string | null>(null);
+  const [latestUpdateManifest, setLatestUpdateManifest] = useState<UpdateManifest | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
   const workbenchAreaRef = useRef<HTMLElement>(null);
   const draggingRef = useRef(false);
+  const launchContextHandledRef = useRef(false);
   const sessions = useMemo(() => flattenProjects(projects), [projects]);
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
+  const desktopFocusContextRef = useRef<DesktopFocusContext>({ kind: "form" });
+  const lastPresencePayloadRef = useRef("");
+  const lastBadgeCountRef = useRef<number | null>(null);
+  const lastRecordedRecentProjectIdRef = useRef<string | null>(null);
+  const lastFocusContextRef = useRef("");
+  const lastDesktopWindowsKeyRef = useRef("");
+  const desktopDebugPerfRef = useRef(false);
+  const desktopPerfCounterRef = useRef<Record<string, number>>({});
+  const logDesktopPerf = useCallback((eventName: string, detail?: Record<string, unknown>) => {
+    if (!desktopDebugPerfRef.current) {
+      return;
+    }
+    desktopPerfCounterRef.current[eventName] = (desktopPerfCounterRef.current[eventName] ?? 0) + 1;
+    const suffix = detail ? ` ${JSON.stringify(detail)}` : "";
+    console.info(`[remote-code-desktop][renderer][perf] ${eventName}#${desktopPerfCounterRef.current[eventName]}${suffix}`);
+  }, []);
+  const applyDesktopWindows = useCallback((windows: DesktopWindowSummary[]) => {
+    const key = buildDesktopWindowRegistryKey(windows);
+    if (key === lastDesktopWindowsKeyRef.current) {
+      logDesktopPerf("registry-skip", { windows: windows.length });
+      return;
+    }
+    lastDesktopWindowsKeyRef.current = key;
+    logDesktopPerf("registry-apply", { windows: windows.length });
+    setDesktopWindows(windows);
+  }, [logDesktopPerf]);
   const layoutSessionIds = useMemo(() => collectSessionIds(layoutRoot), [layoutRoot]);
   const visibleSessionIdsRef = useRef(layoutSessionIds);
   visibleSessionIdsRef.current = layoutSessionIds;
@@ -181,7 +296,55 @@ export default function App() {
         session && session.status === "active" && isPersistentTerminalSession(session),
       ));
   }, [persistentTerminalSessionIds, projects]);
-  const canOpenConfigPath = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  const canOpenConfigPath = canUseLocalDesktopFeatures();
+  const currentWindowId = desktopLaunchContext?.windowId ?? null;
+  const externalSessionOwners = useMemo(() => {
+    const next = new Map<string, DesktopWindowSummary>();
+    desktopWindows.forEach((entry) => {
+      if (entry.windowId === currentWindowId) {
+        return;
+      }
+      entry.ownedSessionIds.forEach((sessionId) => {
+        if (!next.has(sessionId)) {
+          next.set(sessionId, entry);
+        }
+      });
+    });
+    return next;
+  }, [currentWindowId, desktopWindows]);
+  const ownedSessionIds = useMemo(
+    () => layoutSessionIds.filter((sessionId) => !externalSessionOwners.has(sessionId)),
+    [externalSessionOwners, layoutSessionIds],
+  );
+  const readyBadgeCount = useMemo(
+    () => Object.values(sessionActivity).filter((state) => state === "done").length,
+    [sessionActivity],
+  );
+  const focusedSession = useMemo(
+    () => (focusedSessionId ? findSession(projects, focusedSessionId) : undefined),
+    [focusedSessionId, projects],
+  );
+  const desktopWindowProject = useMemo(() => {
+    if (desktopLaunchContext?.role === "project" && desktopLaunchContext.projectId) {
+      return findProject(projects, desktopLaunchContext.projectId) ?? null;
+    }
+    if (desktopLaunchContext?.role === "session" && desktopLaunchContext.projectId) {
+      return findProject(projects, desktopLaunchContext.projectId) ?? null;
+    }
+    if (workspaceMode === "project-layout" && layoutOwnerProjectId) {
+      return findProject(projects, layoutOwnerProjectId) ?? null;
+    }
+    if (focusedSession?.project_id) {
+      return findProject(projects, focusedSession.project_id) ?? null;
+    }
+    return null;
+  }, [desktopLaunchContext, focusedSession, layoutOwnerProjectId, projects, workspaceMode]);
+  const desktopWindowSession = useMemo(() => {
+    if (desktopLaunchContext?.role === "session" && desktopLaunchContext.sessionId) {
+      return findSession(projects, desktopLaunchContext.sessionId) ?? null;
+    }
+    return null;
+  }, [desktopLaunchContext, projects]);
   const layoutSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingLayoutSaveRef = useRef<{ projectId: string; layout: LayoutNode | null } | null>(null);
   const savingLayoutRef = useRef(false);
@@ -197,6 +360,19 @@ export default function App() {
   const clearOpenAloneSnapshot = useCallback(() => {
     setOpenAloneSnapshot(null);
   }, []);
+
+  const findExternalOwner = useCallback((sessionId: string) => {
+    return externalSessionOwners.get(sessionId) ?? null;
+  }, [externalSessionOwners]);
+
+  const focusExternalOwner = useCallback(async (sessionId: string) => {
+    const owner = externalSessionOwners.get(sessionId);
+    if (!owner) {
+      return false;
+    }
+    await focusDesktopWindow(owner.windowId);
+    return true;
+  }, [externalSessionOwners]);
 
   const bumpSessionRefresh = useCallback((sessionIds: string[]) => {
     if (sessionIds.length === 0) return;
@@ -295,8 +471,15 @@ export default function App() {
 
   const resetClientState = useCallback((isAuthenticated: boolean) => {
     localStorage.removeItem("token");
+    launchContextHandledRef.current = false;
+    lastPresencePayloadRef.current = "";
+    lastBadgeCountRef.current = null;
+    lastRecordedRecentProjectIdRef.current = null;
+    lastFocusContextRef.current = "";
+    lastDesktopWindowsKeyRef.current = "";
     setAuthenticated(isAuthenticated);
     setProjects([]);
+    setProjectsLoadedOnce(false);
     setLayoutRoot(null);
     setFocusedPaneId(null);
     setWorkspaceMode("ephemeral");
@@ -329,6 +512,7 @@ export default function App() {
       const data: Project[] = await response.json();
       setAuthenticated(true);
       setProjects(data);
+      setProjectsLoadedOnce(true);
       return data;
     } catch {
       return undefined;
@@ -434,6 +618,56 @@ export default function App() {
     return detach;
   }, [resetClientState]);
 
+  useEffect(() => installDesktopExternalLinkHandler(), []);
+
+  useEffect(() => installDesktopShortcutGuard(() => desktopFocusContextRef.current), []);
+
+  useEffect(() => {
+    if (!isDesktopChromium()) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      const [runtimeInfo, launchContext, windows, preferences, version, manifest] = await Promise.all([
+        getDesktopRuntimeInfo(),
+        getLaunchContext(),
+        listOpenWindows(),
+        getDesktopPreferences(),
+        getCurrentDesktopVersion(),
+        getLatestUpdateManifest(),
+      ]);
+
+      if (cancelled) {
+        return;
+      }
+
+      desktopDebugPerfRef.current = Boolean(runtimeInfo?.debugPerf);
+      setDesktopLaunchContext(launchContext);
+      applyDesktopWindows(windows);
+      setDesktopPreferencesState(preferences);
+      setDesktopVersion(version);
+      setLatestUpdateManifest(manifest);
+    })();
+
+    const unsubscribeCommand = subscribeDesktopCommand((payload) => {
+      if (payload.type === "new-project" && authenticated === true) {
+        setShowNewProject(true);
+      }
+    });
+
+    const unsubscribeRegistry = subscribeDesktopWindowRegistry((windows) => {
+      applyDesktopWindows(windows);
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribeCommand();
+      unsubscribeRegistry();
+    };
+  }, [applyDesktopWindows, authenticated]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -465,6 +699,33 @@ export default function App() {
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, [authenticated, fetchProjects]);
+
+  useEffect(() => {
+    let nextContext: DesktopFocusContext = { kind: authenticated === true ? "panel" : "form" };
+    if (authenticated === true && focusedSessionId) {
+      const session = findSession(projects, focusedSessionId);
+      if (session) {
+        if (session.cli_type === "ide") {
+          nextContext = { kind: "ide", sessionType: session.cli_type };
+        } else if (session.cli_type === "folder" || session.cli_type === "git") {
+          nextContext = { kind: "panel", sessionType: session.cli_type };
+        } else {
+          nextContext = { kind: "terminal", sessionType: session.cli_type };
+        }
+      }
+    }
+    const nextFocusContextKey = buildDesktopFocusContextKey(nextContext);
+    desktopFocusContextRef.current = nextContext;
+    if (nextFocusContextKey === lastFocusContextRef.current) {
+      return;
+    }
+    lastFocusContextRef.current = nextFocusContextKey;
+    logDesktopPerf("focus-context-send", {
+      kind: nextContext.kind,
+      sessionType: nextContext.sessionType ?? null,
+    });
+    setDesktopFocusContext(nextContext);
+  }, [authenticated, focusedSessionId, logDesktopPerf, projects]);
 
   useEffect(() => {
     const validIds = new Set(sessions.map((session) => session.id));
@@ -799,6 +1060,10 @@ export default function App() {
   }, [fetchProjects, projects]);
 
   const openSessionEphemeral = useCallback(async (sessionId: string, sourceProjects?: Project[]) => {
+    if (await focusExternalOwner(sessionId)) {
+      return;
+    }
+
     await ensureSessionReady(sessionId, sourceProjects);
 
     if (workspaceMode === "ephemeral" && layoutRoot?.type === "leaf" && layoutRoot.sessionId === sessionId) {
@@ -816,7 +1081,7 @@ export default function App() {
       ownerProjectId: null,
       refreshSessionIds: [sessionId],
     });
-  }, [applyWorkspaceLayout, bumpSessionRefresh, clearOpenAloneSnapshot, ensureSessionReady, isMobileViewport, layoutRoot, workspaceMode]);
+  }, [applyWorkspaceLayout, bumpSessionRefresh, clearOpenAloneSnapshot, ensureSessionReady, focusExternalOwner, isMobileViewport, layoutRoot, workspaceMode]);
 
   const openSessionAlone = useCallback(async (sessionId: string) => {
     if (!layoutRoot || layoutSessionIds.length <= 1 || isMobileViewport) {
@@ -985,6 +1250,7 @@ export default function App() {
     if (newSessionProjectId === projectId) {
       setNewSessionProjectId(null);
     }
+    void removeRecentProject(projectId);
     void fetchProjects();
   }, [fetchProjects, layoutOwnerProjectId, newSessionProjectId, projects, removeSessionsFromWorkspace]);
 
@@ -1016,6 +1282,14 @@ export default function App() {
 
   const handleAddSession = useCallback((project: Project) => {
     setNewSessionProjectId(project.id);
+  }, []);
+
+  const handleOpenProjectInNewWindow = useCallback((project: Project) => {
+    void openDesktopProjectWindow(project.id, project.name, project.work_path);
+  }, []);
+
+  const handleOpenSessionInNewWindow = useCallback((session: Session, project: Project) => {
+    void openDesktopSessionWindow(session.id, session.name, project.id, project.name, session.work_path);
   }, []);
 
   const handleOpenProjectLayout = useCallback(async (projectId: string) => {
@@ -1075,6 +1349,100 @@ export default function App() {
     }
   }, [applyWorkspaceLayout, clearOpenAloneSnapshot, ensureSessionsReady, fetchProjects, projects]);
 
+  useEffect(() => {
+    if (!isDesktopChromium() || authenticated !== true || !desktopLaunchContext || launchContextHandledRef.current) {
+      return;
+    }
+
+    launchContextHandledRef.current = true;
+    void (async () => {
+      await fetchProjects();
+      if (desktopLaunchContext.role === "project" && desktopLaunchContext.projectId) {
+        await handleOpenProjectLayout(desktopLaunchContext.projectId);
+        return;
+      }
+      if (desktopLaunchContext.role === "session" && desktopLaunchContext.sessionId) {
+        await openSessionAlone(desktopLaunchContext.sessionId);
+      }
+    })();
+  }, [authenticated, desktopLaunchContext, fetchProjects, handleOpenProjectLayout, openSessionAlone]);
+
+  useEffect(() => {
+    if (!isDesktopChromium() || !desktopLaunchContext) {
+      return;
+    }
+
+    const payload = {
+      projectId: desktopWindowProject?.id ?? desktopLaunchContext.projectId ?? null,
+      projectName: desktopWindowProject?.name ?? desktopLaunchContext.projectName ?? null,
+      sessionId: desktopWindowSession?.id ?? desktopLaunchContext.sessionId ?? null,
+      sessionName: desktopWindowSession?.name ?? desktopLaunchContext.sessionName ?? null,
+      workPath: desktopWindowProject?.work_path ?? desktopWindowSession?.work_path ?? desktopLaunchContext.workPath ?? null,
+      ownedSessionIds,
+    };
+    const nextPresencePayloadKey = buildDesktopPresencePayloadKey(payload);
+    if (nextPresencePayloadKey === lastPresencePayloadRef.current) {
+      return;
+    }
+    lastPresencePayloadRef.current = nextPresencePayloadKey;
+    logDesktopPerf("sync-presence-send", {
+      role: desktopLaunchContext.role,
+      ownedSessionCount: payload.ownedSessionIds.length,
+    });
+    syncDesktopPresence(payload);
+  }, [desktopLaunchContext, desktopWindowProject, desktopWindowSession, logDesktopPerf, ownedSessionIds]);
+
+  useEffect(() => {
+    if (!isDesktopChromium()) {
+      return;
+    }
+    if (lastBadgeCountRef.current === readyBadgeCount) {
+      return;
+    }
+    lastBadgeCountRef.current = readyBadgeCount;
+    logDesktopPerf("badge-send", { readyBadgeCount });
+    void setDesktopBadgeCount(readyBadgeCount);
+  }, [logDesktopPerf, readyBadgeCount]);
+
+  useEffect(() => {
+    if (!isDesktopChromium()) {
+      return;
+    }
+    if (!desktopWindowProject) {
+      lastRecordedRecentProjectIdRef.current = null;
+      return;
+    }
+    const recentProjectKey = JSON.stringify({
+      projectId: desktopWindowProject.id,
+      name: desktopWindowProject.name,
+      workPath: desktopWindowProject.work_path,
+    });
+    if (lastRecordedRecentProjectIdRef.current === recentProjectKey) {
+      return;
+    }
+    lastRecordedRecentProjectIdRef.current = recentProjectKey;
+    logDesktopPerf("recent-project-send", {
+      projectId: desktopWindowProject.id,
+    });
+    void recordRecentProject(desktopWindowProject.id, desktopWindowProject.name, desktopWindowProject.work_path);
+  }, [desktopWindowProject, logDesktopPerf]);
+
+  useEffect(() => {
+    if (!isDesktopChromium() || !desktopLaunchContext) {
+      return;
+    }
+    if (!projectsLoadedOnce) {
+      return;
+    }
+    if (desktopLaunchContext.role === "project" && desktopLaunchContext.projectId && !findProject(projects, desktopLaunchContext.projectId)) {
+      window.close();
+      return;
+    }
+    if (desktopLaunchContext.role === "session" && desktopLaunchContext.sessionId && !findSession(projects, desktopLaunchContext.sessionId)) {
+      window.close();
+    }
+  }, [desktopLaunchContext, projects, projectsLoadedOnce]);
+
   const handleResizeSplit = useCallback((splitId: string, ratio: number) => {
     setLayoutRoot((prev) => updateSplitRatio(prev, splitId, ratio));
   }, []);
@@ -1090,6 +1458,10 @@ export default function App() {
 
   const handleDropIndicator = useCallback(async (sessionId: string, indicator: LayoutDropIndicator) => {
     try {
+      if (await focusExternalOwner(sessionId)) {
+        return;
+      }
+
       await ensureSessionReady(sessionId);
       clearOpenAloneSnapshot();
       let nextFocusedPaneId: string | null = null;
@@ -1109,10 +1481,14 @@ export default function App() {
       setLayoutIndicator(null);
       setDraggedLayoutSessionId(null);
     }
-  }, [clearOpenAloneSnapshot, ensureSessionReady]);
+  }, [clearOpenAloneSnapshot, ensureSessionReady, focusExternalOwner]);
 
   const handleDropIntoEmptyWorkspace = useCallback(async (sessionId: string) => {
     try {
+      if (await focusExternalOwner(sessionId)) {
+        return;
+      }
+
       await ensureSessionReady(sessionId);
       clearOpenAloneSnapshot();
       applyWorkspaceLayout(createSingleLayout(sessionId), {
@@ -1128,7 +1504,7 @@ export default function App() {
       setLayoutIndicator(null);
       setDraggedLayoutSessionId(null);
     }
-  }, [applyWorkspaceLayout, clearOpenAloneSnapshot, ensureSessionReady, layoutOwnerProjectId, workspaceMode]);
+  }, [applyWorkspaceLayout, clearOpenAloneSnapshot, ensureSessionReady, focusExternalOwner, layoutOwnerProjectId, workspaceMode]);
 
   useEffect(() => {
     const element = workbenchAreaRef.current;
@@ -1187,6 +1563,7 @@ export default function App() {
     const onRestoreLayout = showRestoreLayout ? handleRestoreOpenAloneLayout : undefined;
 
     let content: React.ReactNode;
+    const externalOwner = session ? findExternalOwner(session.id) : null;
 
     if (!session) {
       content = (
@@ -1205,6 +1582,30 @@ export default function App() {
               label: "Close Pane",
               onClick: () => handleClosePane(paneId),
               danger: true,
+            },
+          ]}
+        />
+      );
+    } else if (externalOwner) {
+      content = (
+        <SessionStatePane
+          isFocused={paneId === focusedPaneId}
+          onFocus={() => setFocusedPaneId(paneId)}
+          paneLabel={getPaneTitle(session)}
+          sessionName={session.name}
+          workPath={session.work_path}
+          sourceBadge="External"
+          title="Already open in another window"
+          body={`${session.name} is currently active in ${describeDesktopWindow(externalOwner)}. Focus that window to continue using this session.`}
+          tone="info"
+          onClosePanel={() => handleClosePane(paneId)}
+          actions={[
+            {
+              label: "Focus Window",
+              primary: true,
+              onClick: () => {
+                void focusDesktopWindow(externalOwner.windowId);
+              },
             },
           ]}
         />
@@ -1296,6 +1697,7 @@ export default function App() {
     handleSuspend,
     handleTerminalHostChange,
     handleTerminate,
+    findExternalOwner,
     isMobileViewport,
     layoutIndicator,
     layoutSessionIds.length,
@@ -1402,6 +1804,54 @@ export default function App() {
                   <button className="size-btn" onClick={() => setTerminalFontSize((size) => Math.min(28, size + 1))}>+</button>
                 </div>
               </div>
+              {isDesktopChromium() && desktopPreferencesState && (
+                <>
+                  <div className="settings-section">
+                    <label className="settings-label">Desktop</label>
+                    <div className="theme-toggle-group">
+                      <button
+                        className={`theme-chip${desktopPreferencesState.closeBehavior === "tray" ? " is-active" : ""}`}
+                        onClick={() => {
+                          void updateDesktopPreferences({ closeBehavior: "tray" }).then((next) => {
+                            if (next) setDesktopPreferencesState(next);
+                          });
+                        }}
+                      >
+                        Hide to Tray
+                      </button>
+                      <button
+                        className={`theme-chip${desktopPreferencesState.closeBehavior === "quit" ? " is-active" : ""}`}
+                        onClick={() => {
+                          void updateDesktopPreferences({ closeBehavior: "quit" }).then((next) => {
+                            if (next) setDesktopPreferencesState(next);
+                          });
+                        }}
+                      >
+                        Quit App
+                      </button>
+                    </div>
+                    <button
+                      className="settings-action"
+                      onClick={() => {
+                        void updateDesktopPreferences({ launchAtLogin: !desktopPreferencesState.launchAtLogin }).then((next) => {
+                          if (next) setDesktopPreferencesState(next);
+                        });
+                      }}
+                    >
+                      {desktopPreferencesState.launchAtLogin ? "Disable launch at login" : "Enable launch at login"}
+                    </button>
+                  </div>
+                  <div className="settings-section">
+                    <label className="settings-label">Version</label>
+                    <div className="settings-control">
+                      <span className="size-value" style={{ textAlign: "left" }}>
+                        {desktopVersion ?? "Unknown"}
+                        {latestUpdateManifest?.version ? `  |  manifest ${latestUpdateManifest.version}` : ""}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
               <div className="settings-divider" />
               {canOpenConfigPath && (
                 <>
@@ -1445,11 +1895,13 @@ export default function App() {
                 onOpenLayout={(projectId) => {
                   void handleOpenProjectLayout(projectId);
                 }}
+                onOpenProjectInNewWindow={handleOpenProjectInNewWindow}
                 onResume={(sessionId) => {
                   void handleResume(sessionId).catch(() => {});
                 }}
                 onNewProject={() => setShowNewProject(true)}
                 onAddSession={handleAddSession}
+                onOpenSessionInNewWindow={handleOpenSessionInNewWindow}
                 onDeleteSession={handleDelete}
                 onRenameSession={handleRename}
                 onSuspendSession={handleSuspend}

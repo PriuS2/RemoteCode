@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import FolderBrowser from "./FolderBrowser";
 import { apiFetch, readErrorDetail } from "../utils/api";
+import { isDesktopChromium, openFolderDialog } from "../runtime";
 import { uiPx } from "../utils/uiScale";
 
 interface NewProjectProps {
@@ -16,6 +17,7 @@ export default function NewProject({ onCreated, onCancel }: NewProjectProps) {
   const [error, setError] = useState<string | null>(null);
   const [showBrowser, setShowBrowser] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+  const desktopChromium = isDesktopChromium();
 
   const isMobile = viewportWidth <= 768;
 
@@ -108,6 +110,22 @@ export default function NewProject({ onCreated, onCancel }: NewProjectProps) {
                     className="ui-input"
                     style={{ width: "100%", minWidth: 0, fontSize: uiPx(14) }}
                   />
+                  {desktopChromium && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const selectedPath = await openFolderDialog();
+                        if (selectedPath) {
+                          setWorkPath(selectedPath);
+                        }
+                      }}
+                      title="Choose a local folder with the desktop app"
+                      className="secondary-button"
+                      style={{ padding: "0 14px", minHeight: 42, fontSize: uiPx(13), fontWeight: 600 }}
+                    >
+                      Choose Local Folder
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setShowBrowser(true)}

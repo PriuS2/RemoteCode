@@ -97,22 +97,28 @@ docker run -d \
 
 ### Method 4: Desktop Executable (Windows/macOS)
 
-Use this when you want a browser-launching executable instead of a Python/Node runtime setup.
+Use this when you want a packaged local runtime instead of a Python/Node source setup.
+You can now build either a browser-launching `web` package or a `chromium` desktop-shell package.
 
 ```bash
 # Windows
-.\build-release.ps1
+.\build-release.ps1 -Target all
 
 # macOS
 chmod +x build-release.sh
-./build-release.sh
+./build-release.sh --target all
 ```
 
 Output archives are created in `release/`.
 
 - Windows: `remote-code-<version>-windows-x64.zip`
+- Windows Chromium: `remote-code-chromium-<version>-windows-x64.zip`
+- Windows Chromium manifest: `update-manifest-windows-x64.json`
 - macOS Intel: `remote-code-<version>-macos-x64.zip`
 - macOS Apple Silicon: `remote-code-<version>-macos-arm64.zip`
+- macOS Chromium Intel: `remote-code-chromium-<version>-macos-x64.zip`
+- macOS Chromium Apple Silicon: `remote-code-chromium-<version>-macos-arm64.zip`
+- macOS Chromium manifest: `update-manifest-macos-<arch>.json`
 
 The packaged launcher stores runtime files in the user app-data directory:
 
@@ -120,6 +126,7 @@ The packaged launcher stores runtime files in the user app-data directory:
 - macOS: `~/Library/Application Support/Remote Code`
 
 That directory contains the packaged-app `.env` and `sessions.db`.
+Chromium packages also embed an `update-manifest.json` resource that the desktop Settings panel can read to show the latest packaged version metadata.
 
 ## Platform-Specific Instructions
 
@@ -131,7 +138,8 @@ That directory contains the packaged-app `.env` and `sessions.db`.
 4. Run PowerShell setup script:
    ```powershell
    .\setup.ps1
-   .\start.ps1
+   .\start.ps1 -Runtime web
+   .\start.ps1 -Runtime chromium
    ```
 
 ### macOS

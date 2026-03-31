@@ -1,11 +1,52 @@
 {
   "name": "remote-code-e2e",
   "private": true,
+  "version": "1.0.0",
+  "main": "desktop/main.cjs",
   "scripts": {
     "test:e2e": "playwright test",
-    "screenshots:readme": "playwright test e2e/readme-screenshots.spec.ts --reporter=list"
+    "screenshots:readme": "playwright test e2e/readme-screenshots.spec.ts --reporter=list",
+    "desktop:start": "electron .",
+    "desktop:package:dir": "electron-builder --dir --publish never",
+    "desktop:package:win": "electron-builder --win dir --publish never",
+    "desktop:package:mac": "electron-builder --mac dir --publish never"
   },
   "devDependencies": {
-    "@playwright/test": "^1.54.2"
+    "@playwright/test": "^1.54.2",
+    "electron": "^41.1.0",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.remotecode.chromium",
+    "productName": "Remote Code Desktop",
+    "directories": {
+      "output": "desktop-dist"
+    },
+    "files": [
+      "desktop/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "desktop-build-resources",
+        "to": ".",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dir"
+      ]
+    },
+    "win": {
+      "target": [
+        "dir"
+      ]
+    }
   }
 }

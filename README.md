@@ -118,10 +118,14 @@ Remote Code does not bundle those CLIs for you. The packaged app and the source 
 
 1. Open the GitHub Releases page and download the archive for your platform.
 2. Extract the archive.
-3. Launch the packaged app.
-   - Windows: run `Remote Code/Remote Code.exe`
-   - macOS: open `Remote Code.app`
-4. On first launch, the app starts the local backend and opens the browser automatically.
+3. Choose the packaged runtime you want:
+   - `web`: starts the bundled backend and opens your default browser
+   - `chromium`: launches the bundled Remote Code Desktop shell directly
+4. Launch the packaged app.
+   - Windows `web`: run `Remote Code/Remote Code.exe`
+   - Windows `chromium`: run `Remote Code Desktop/Remote Code Desktop.exe`
+   - macOS `web`: open `Remote Code.app`
+   - macOS `chromium`: open `Remote Code Desktop.app`
 5. Sign in with the password stored in the runtime `.env` file and change it before exposing the app outside your machine.
 
 Runtime data is stored outside the repository:
@@ -180,12 +184,19 @@ You can also keep Claude Code provider variables in the same `.env`. Remote Code
 4. Start the app.
 
 ```bash
-# Production mode
+# Production mode (web runtime)
 # Windows
-.\start.ps1
+.\start.ps1 -Runtime web
 
 # Linux / macOS
-./start.sh
+./start.sh --runtime web
+
+# Chromium desktop runtime
+# Windows
+.\start.ps1 -Runtime chromium
+
+# Linux / macOS
+./start.sh --runtime chromium
 
 # Optional
 make start
@@ -199,10 +210,17 @@ Use development mode when you want the Vite frontend and the reloading backend:
 
 ```bash
 # Windows
-.\start-dev.ps1
+.\start-dev.ps1 -Runtime web
 
 # Linux / macOS
-./start-dev.sh
+./start-dev.sh --runtime web
+
+# Chromium desktop runtime
+# Windows
+.\start-dev.ps1 -Runtime chromium
+
+# Linux / macOS
+./start-dev.sh --runtime chromium
 
 # Optional
 make dev
@@ -212,11 +230,23 @@ Development mode serves the frontend at `http://localhost:5173` and proxies API 
 
 #### Optional Desktop Launcher in Source Mode
 
-You can also launch the local packaged-style runner directly from source:
+You can also launch the local packaged-style web runner directly from source:
 
 ```bash
 python remote_code_launcher.py
 ```
+
+The Chromium desktop runtime adds a few desktop-only behaviors on top of the same backend:
+
+- browser-default shortcut blocking for Claude Code and OpenCode terminal flows
+- window size and position restore
+- single-instance behavior
+- native folder picker for project creation
+- desktop notifications and external-link handoff to the system browser
+- tray/background keep-alive with `Hide to Tray` as the default close behavior
+- dedicated project windows and dedicated single-session windows
+- recent-project integration for tray, macOS dock menu, and Windows jump list/tasks
+- launch-at-login preference and desktop-only version/update-manifest visibility in Settings
 
 ## Basic Usage
 
@@ -268,17 +298,22 @@ If you want to produce distributable archives yourself:
 
 ```bash
 # Windows
-.\build-release.ps1
+.\build-release.ps1 -Target all
 
 # macOS
 chmod +x build-release.sh
-./build-release.sh
+./build-release.sh --target all
+
+# Build only one runtime
+.\build-release.ps1 -Target web
+.\build-release.ps1 -Target chromium
 
 # Optional
 make build-release
 ```
 
-The packaged output is written to `release/`.
+The packaged output is written to `release/` and now includes separate `web` and `chromium` archives.
+Chromium builds also emit a platform-specific `update-manifest-*.json` file for future in-app update checks.
 
 ## Deployment and Advanced Topics
 
