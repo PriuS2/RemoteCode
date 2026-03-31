@@ -45,6 +45,7 @@ import {
   canUseLocalDesktopFeatures,
   focusDesktopWindow,
   getCurrentDesktopVersion,
+  getDesktopRuntimeInfo,
   getDesktopPreferences,
   getLaunchContext,
   getLatestUpdateManifest,
@@ -154,6 +155,50 @@ function describeDesktopWindow(entry: DesktopWindowSummary): string {
   return "main window";
 }
 
+function normalizeOwnedSessionIds(values: string[]): string[] {
+  return Array.from(new Set(values.filter((value) => typeof value === "string" && value))).sort();
+}
+
+function buildDesktopPresencePayloadKey(payload: {
+  projectId?: string | null;
+  projectName?: string | null;
+  sessionId?: string | null;
+  sessionName?: string | null;
+  workPath?: string | null;
+  ownedSessionIds?: string[];
+}): string {
+  return JSON.stringify({
+    projectId: payload.projectId ?? null,
+    projectName: payload.projectName ?? null,
+    sessionId: payload.sessionId ?? null,
+    sessionName: payload.sessionName ?? null,
+    workPath: payload.workPath ?? null,
+    ownedSessionIds: normalizeOwnedSessionIds(payload.ownedSessionIds ?? []),
+  });
+}
+
+function buildDesktopWindowRegistryKey(windows: DesktopWindowSummary[]): string {
+  return JSON.stringify(
+    windows.map((entry) => ({
+      windowId: entry.windowId,
+      role: entry.role,
+      projectId: entry.projectId ?? null,
+      sessionId: entry.sessionId ?? null,
+      title: entry.title,
+      hidden: Boolean(entry.hidden),
+      focused: Boolean(entry.focused),
+      ownedSessionIds: normalizeOwnedSessionIds(entry.ownedSessionIds),
+    })),
+  );
+}
+
+function buildDesktopFocusContextKey(context: DesktopFocusContext): string {
+  return JSON.stringify({
+    kind: context.kind,
+    sessionType: context.sessionType ?? null,
+  });
+}
+
 export default function App() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [theme, setTheme] = useState<ThemeMode>(() => getStoredTheme());
@@ -198,6 +243,31 @@ export default function App() {
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
   const desktopFocusContextRef = useRef<DesktopFocusContext>({ kind: "form" });
+  const lastPresencePayloadRef = useRef("");
+  const lastBadgeCountRef = useRef<number | null>(null);
+  const lastRecordedRecentProjectIdRef = useRef<string | null>(null);
+  const lastFocusContextRef = useRef("");
+  const lastDesktopWindowsKeyRef = useRef("");
+  const desktopDebugPerfRef = useRef(false);
+  const desktopPerfCounterRef = useRef<Record<string, number>>({});
+  const logDesktopPerf = useCallback((eventName: string, detail?: Record<string, unknown>) => {
+    if (!desktopDebugPerfRef.current) {
+      return;
+    }
+    desktopPerfCounterRef.current[eventName] = (desktopPerfCounterRef.current[eventName] ?? 0) + 1;
+    const suffix = detail ? ` ${JSON.stringify(detail)}` : "";
+    console.info(`[remote-code-desktop][renderer][perf] ${eventName}#${desktopPerfCounterRef.current[eventName]}${suffix}`);
+  }, []);
+  const applyDesktopWindows = useCallback((windows: DesktopWindowSummary[]) => {
+    const key = buildDesktopWindowRegistryKey(windows);
+    if (key === lastDesktopWindowsKeyRef.current) {
+      logDesktopPerf("registry-skip", { windows: windows.length });
+      return;
+    }
+    lastDesktopWindowsKeyRef.current = key;
+    logDesktopPerf("registry-apply", { windows: windows.length });
+    setDesktopWindows(windows);
+  }, [logDesktopPerf]);
   const layoutSessionIds = useMemo(() => collectSessionIds(layoutRoot), [layoutRoot]);
   const visibleSessionIdsRef = useRef(layoutSessionIds);
   visibleSessionIdsRef.current = layoutSessionIds;
@@ -402,6 +472,11 @@ export default function App() {
   const resetClientState = useCallback((isAuthenticated: boolean) => {
     localStorage.removeItem("token");
     launchContextHandledRef.current = false;
+    lastPresencePayloadRef.current = "";
+    lastBadgeCountRef.current = null;
+    lastRecordedRecentProjectIdRef.current = null;
+    lastFocusContextRef.current = "";
+    lastDesktopWindowsKeyRef.current = "";
     setAuthenticated(isAuthenticated);
     setProjects([]);
     setProjectsLoadedOnce(false);
@@ -555,7 +630,8 @@ export default function App() {
     let cancelled = false;
 
     void (async () => {
-      const [launchContext, windows, preferences, version, manifest] = await Promise.all([
+      const [runtimeInfo, launchContext, windows, preferences, version, manifest] = await Promise.all([
+        getDesktopRuntimeInfo(),
         getLaunchContext(),
         listOpenWindows(),
         getDesktopPreferences(),
@@ -567,8 +643,9 @@ export default function App() {
         return;
       }
 
+      desktopDebugPerfRef.current = Boolean(runtimeInfo?.debugPerf);
       setDesktopLaunchContext(launchContext);
-      setDesktopWindows(windows);
+      applyDesktopWindows(windows);
       setDesktopPreferencesState(preferences);
       setDesktopVersion(version);
       setLatestUpdateManifest(manifest);
@@ -581,7 +658,7 @@ export default function App() {
     });
 
     const unsubscribeRegistry = subscribeDesktopWindowRegistry((windows) => {
-      setDesktopWindows(windows);
+      applyDesktopWindows(windows);
     });
 
     return () => {
@@ -589,7 +666,7 @@ export default function App() {
       unsubscribeCommand();
       unsubscribeRegistry();
     };
-  }, [authenticated]);
+  }, [applyDesktopWindows, authenticated]);
 
   useEffect(() => {
     let cancelled = false;
@@ -637,9 +714,18 @@ export default function App() {
         }
       }
     }
+    const nextFocusContextKey = buildDesktopFocusContextKey(nextContext);
     desktopFocusContextRef.current = nextContext;
+    if (nextFocusContextKey === lastFocusContextRef.current) {
+      return;
+    }
+    lastFocusContextRef.current = nextFocusContextKey;
+    logDesktopPerf("focus-context-send", {
+      kind: nextContext.kind,
+      sessionType: nextContext.sessionType ?? null,
+    });
     setDesktopFocusContext(nextContext);
-  }, [authenticated, focusedSessionId, projects]);
+  }, [authenticated, focusedSessionId, logDesktopPerf, projects]);
 
   useEffect(() => {
     const validIds = new Set(sessions.map((session) => session.id));
@@ -1286,29 +1372,60 @@ export default function App() {
       return;
     }
 
-    syncDesktopPresence({
+    const payload = {
       projectId: desktopWindowProject?.id ?? desktopLaunchContext.projectId ?? null,
       projectName: desktopWindowProject?.name ?? desktopLaunchContext.projectName ?? null,
       sessionId: desktopWindowSession?.id ?? desktopLaunchContext.sessionId ?? null,
       sessionName: desktopWindowSession?.name ?? desktopLaunchContext.sessionName ?? null,
       workPath: desktopWindowProject?.work_path ?? desktopWindowSession?.work_path ?? desktopLaunchContext.workPath ?? null,
       ownedSessionIds,
+    };
+    const nextPresencePayloadKey = buildDesktopPresencePayloadKey(payload);
+    if (nextPresencePayloadKey === lastPresencePayloadRef.current) {
+      return;
+    }
+    lastPresencePayloadRef.current = nextPresencePayloadKey;
+    logDesktopPerf("sync-presence-send", {
+      role: desktopLaunchContext.role,
+      ownedSessionCount: payload.ownedSessionIds.length,
     });
-  }, [desktopLaunchContext, desktopWindowProject, desktopWindowSession, ownedSessionIds]);
+    syncDesktopPresence(payload);
+  }, [desktopLaunchContext, desktopWindowProject, desktopWindowSession, logDesktopPerf, ownedSessionIds]);
 
   useEffect(() => {
     if (!isDesktopChromium()) {
       return;
     }
-    void setDesktopBadgeCount(readyBadgeCount);
-  }, [readyBadgeCount]);
-
-  useEffect(() => {
-    if (!isDesktopChromium() || !desktopWindowProject) {
+    if (lastBadgeCountRef.current === readyBadgeCount) {
       return;
     }
+    lastBadgeCountRef.current = readyBadgeCount;
+    logDesktopPerf("badge-send", { readyBadgeCount });
+    void setDesktopBadgeCount(readyBadgeCount);
+  }, [logDesktopPerf, readyBadgeCount]);
+
+  useEffect(() => {
+    if (!isDesktopChromium()) {
+      return;
+    }
+    if (!desktopWindowProject) {
+      lastRecordedRecentProjectIdRef.current = null;
+      return;
+    }
+    const recentProjectKey = JSON.stringify({
+      projectId: desktopWindowProject.id,
+      name: desktopWindowProject.name,
+      workPath: desktopWindowProject.work_path,
+    });
+    if (lastRecordedRecentProjectIdRef.current === recentProjectKey) {
+      return;
+    }
+    lastRecordedRecentProjectIdRef.current = recentProjectKey;
+    logDesktopPerf("recent-project-send", {
+      projectId: desktopWindowProject.id,
+    });
     void recordRecentProject(desktopWindowProject.id, desktopWindowProject.name, desktopWindowProject.work_path);
-  }, [desktopWindowProject]);
+  }, [desktopWindowProject, logDesktopPerf]);
 
   useEffect(() => {
     if (!isDesktopChromium() || !desktopLaunchContext) {

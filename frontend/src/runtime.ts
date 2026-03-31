@@ -2,6 +2,7 @@ export interface DesktopRuntimeInfo {
   runtime: "chromium";
   platform: string;
   version: string;
+  debugPerf?: boolean;
 }
 
 export interface DesktopFocusContext {

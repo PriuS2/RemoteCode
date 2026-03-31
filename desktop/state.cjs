@@ -147,10 +147,18 @@ function createDesktopStateManager(app) {
 
   function setPreferences(nextPreferences) {
     const state = load();
-    state.preferences = {
+    const mergedPreferences = {
       ...state.preferences,
       ...nextPreferences,
     };
+    if (
+      state.preferences.closeBehavior === mergedPreferences.closeBehavior
+      && state.preferences.launchAtLogin === mergedPreferences.launchAtLogin
+      && state.preferences.trayHintShown === mergedPreferences.trayHintShown
+    ) {
+      return { ...state.preferences };
+    }
+    state.preferences = mergedPreferences;
     cachedState = state;
     save();
     return { ...state.preferences };
@@ -201,6 +209,16 @@ function createDesktopStateManager(app) {
       lastOpenedAt: new Date().toISOString(),
     };
 
+    const currentTop = state.recentProjects[0];
+    if (
+      currentTop
+      && currentTop.projectId === nextProject.projectId
+      && currentTop.name === nextProject.name
+      && currentTop.workPath === nextProject.workPath
+    ) {
+      return [...state.recentProjects];
+    }
+
     state.recentProjects = [
       nextProject,
       ...state.recentProjects.filter((item) => item.projectId !== nextProject.projectId),
@@ -213,6 +231,9 @@ function createDesktopStateManager(app) {
 
   function removeRecentProject(projectId) {
     const state = load();
+    if (!state.recentProjects.some((item) => item.projectId === projectId)) {
+      return [...state.recentProjects];
+    }
     state.recentProjects = state.recentProjects.filter((item) => item.projectId !== projectId);
     cachedState = state;
     save();

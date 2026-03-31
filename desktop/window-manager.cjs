@@ -27,6 +27,17 @@ function createDesktopWindowManager({
     sessions: new Map(),
   };
   const sessionOwners = new Map();
+  const debugPerf = process.env.REMOTE_CODE_DESKTOP_DEBUG_PERF === "1";
+  const perfCounters = {
+    "badge-request": 0,
+    "badge-update": 0,
+    "menu-rebuild": 0,
+    "registry-broadcast": 0,
+    "sync-presence": 0,
+  };
+  let lastRegistrySnapshotKey = "";
+  let lastMenuStateKey = "";
+  let lastBadgePresentationKey = "";
 
   function getAssetPath(filename) {
     return path.join(__dirname, "assets", filename);
@@ -218,6 +229,26 @@ function createDesktopWindowManager({
     });
   }
 
+  function logDesktopPerf(eventName, detail) {
+    if (!debugPerf) {
+      return;
+    }
+    perfCounters[eventName] = (perfCounters[eventName] ?? 0) + 1;
+    const suffix = detail ? ` ${JSON.stringify(detail)}` : "";
+    console.info(`[remote-code-desktop][perf] ${eventName}#${perfCounters[eventName]}${suffix}`);
+  }
+
+  function normalizeOwnedSessionIds(values) {
+    return dedupeStrings(Array.isArray(values) ? values : []).sort();
+  }
+
+  function buildFocusContextKey(context) {
+    return JSON.stringify({
+      kind: context?.kind ?? "panel",
+      sessionType: typeof context?.sessionType === "string" ? context.sessionType : null,
+    });
+  }
+
   function computeWindowTitle(entry) {
     if (entry.role === "main") {
       return `Main - ${sharedAppName}`;
@@ -243,6 +274,19 @@ function createDesktopWindowManager({
     }
     entry.title = computeWindowTitle(entry);
     entry.win.setTitle(entry.title);
+  }
+
+  function buildEntryPresenceKey(entry) {
+    return JSON.stringify({
+      role: entry.role,
+      projectId: entry.projectId ?? null,
+      projectName: entry.projectName ?? null,
+      sessionId: entry.sessionId ?? null,
+      sessionName: entry.sessionName ?? null,
+      workPath: entry.workPath ?? null,
+      ownedSessionIds: normalizeOwnedSessionIds(entry.ownedSessionIds),
+      title: entry.title ?? computeWindowTitle(entry),
+    });
   }
 
   function buildWindowSummary(entry) {
@@ -276,8 +320,55 @@ function createDesktopWindowManager({
       .map(buildWindowSummary);
   }
 
-  function updateAppBadgePresentation() {
-    const totalBadgeCount = [...windowRegistry.values()].reduce((sum, entry) => sum + (entry.badgeCount ?? 0), 0);
+  function getTotalBadgeCount() {
+    return [...windowRegistry.values()].reduce((sum, entry) => sum + (entry.badgeCount ?? 0), 0);
+  }
+
+  function buildRegistrySnapshotKey(summaries) {
+    return JSON.stringify(
+      summaries.map((entry) => ({
+        windowId: entry.windowId,
+        role: entry.role,
+        projectId: entry.projectId ?? null,
+        sessionId: entry.sessionId ?? null,
+        title: entry.title,
+        hidden: Boolean(entry.hidden),
+        focused: Boolean(entry.focused),
+        ownedSessionIds: normalizeOwnedSessionIds(entry.ownedSessionIds),
+      })),
+    );
+  }
+
+  function buildMenuStateKey(summaries) {
+    const preferences = stateManager.getPreferences();
+    const recentProjects = stateManager.getRecentProjects();
+
+    return JSON.stringify({
+      launchAtLogin: Boolean(preferences.launchAtLogin),
+      recentProjects: recentProjects.map((project) => ({
+        projectId: project.projectId,
+        name: project.name,
+        workPath: project.workPath,
+      })),
+      openWindows: summaries.map((entry) => ({
+        windowId: entry.windowId,
+        role: entry.role,
+        projectId: entry.projectId ?? null,
+        sessionId: entry.sessionId ?? null,
+        title: entry.title,
+        hidden: Boolean(entry.hidden),
+      })),
+    });
+  }
+
+  function updateAppBadgePresentation(force = false) {
+    const totalBadgeCount = getTotalBadgeCount();
+    const badgeKey = JSON.stringify({ totalBadgeCount });
+    if (!force && badgeKey === lastBadgePresentationKey) {
+      return false;
+    }
+    lastBadgePresentationKey = badgeKey;
+    logDesktopPerf("badge-update", { totalBadgeCount, force });
 
     if (process.platform === "darwin" && typeof app.setBadgeCount === "function") {
       app.setBadgeCount(totalBadgeCount);
@@ -299,6 +390,7 @@ function createDesktopWindowManager({
         }
       }
     }
+    return true;
   }
 
   function focusWindowEntry(entry) {
@@ -524,24 +616,51 @@ function createDesktopWindowManager({
     }
   }
 
-  function rebuildSystemMenus() {
+  function rebuildSystemMenus(options = {}) {
+    const summaries = Array.isArray(options.summaries) ? options.summaries : listOpenWindowSummaries();
+    const nextMenuStateKey = buildMenuStateKey(summaries);
+    const force = Boolean(options.force);
+
+    if (!force && nextMenuStateKey === lastMenuStateKey) {
+      updateAppBadgePresentation(false);
+      return false;
+    }
+
+    lastMenuStateKey = nextMenuStateKey;
+    logDesktopPerf("menu-rebuild", {
+      reason: options.reason ?? "unknown",
+      force,
+      windows: summaries.length,
+    });
+
     Menu.setApplicationMenu(buildApplicationMenu());
     if (tray) {
       tray.setContextMenu(buildTrayContextMenu());
     }
     buildDockMenu();
     buildWindowsTaskbarExtensions();
-    updateAppBadgePresentation();
+    updateAppBadgePresentation(true);
+    return true;
   }
 
-  function broadcastWindowRegistry() {
+  function broadcastWindowRegistry(reason = "unknown") {
     const summaries = listOpenWindowSummaries();
+    const nextRegistrySnapshotKey = buildRegistrySnapshotKey(summaries);
+
+    if (nextRegistrySnapshotKey === lastRegistrySnapshotKey) {
+      rebuildSystemMenus({ summaries, reason });
+      return false;
+    }
+
+    lastRegistrySnapshotKey = nextRegistrySnapshotKey;
+    logDesktopPerf("registry-broadcast", { reason, windows: summaries.length });
     windowRegistry.forEach((entry) => {
       if (!entry.win.isDestroyed()) {
         entry.win.webContents.send("window:registry-updated", summaries);
       }
     });
-    rebuildSystemMenus();
+    rebuildSystemMenus({ summaries, reason });
+    return true;
   }
 
   function createTray() {
@@ -554,7 +673,7 @@ function createDesktopWindowManager({
     tray.on("click", () => {
       void ensureMainWindow();
     });
-    rebuildSystemMenus();
+    rebuildSystemMenus({ force: true, reason: "tray-created" });
     return tray;
   }
 
@@ -585,7 +704,7 @@ function createDesktopWindowManager({
     }
 
     const nextPreferences = stateManager.setPreferences({ launchAtLogin: Boolean(launchAtLogin) });
-    rebuildSystemMenus();
+    rebuildSystemMenus({ reason: "launch-at-login" });
     return nextPreferences;
   }
 
@@ -627,7 +746,7 @@ function createDesktopWindowManager({
   }
 
   function updateOwnedSessions(entry, requestedSessionIds) {
-    const nextOwned = dedupeStrings(Array.isArray(requestedSessionIds) ? requestedSessionIds : []);
+    const nextOwned = normalizeOwnedSessionIds(requestedSessionIds);
 
     entry.ownedSessionIds.forEach((sessionId) => {
       if (!nextOwned.includes(sessionId) && sessionOwners.get(sessionId) === entry.win.id) {
@@ -644,7 +763,7 @@ function createDesktopWindowManager({
       }
     });
 
-    entry.ownedSessionIds = granted;
+    entry.ownedSessionIds = normalizeOwnedSessionIds(granted);
   }
 
   function saveManagedWindowState(entry) {
@@ -670,7 +789,8 @@ function createDesktopWindowManager({
     }
 
     applyWindowTitle(entry);
-    broadcastWindowRegistry();
+    entry.lastPresenceKey = buildEntryPresenceKey(entry);
+    broadcastWindowRegistry("register-entry");
   }
 
   function unregisterEntry(entry) {
@@ -689,7 +809,7 @@ function createDesktopWindowManager({
     }
 
     windowRegistry.delete(entry.win.id);
-    broadcastWindowRegistry();
+    broadcastWindowRegistry("unregister-entry");
   }
 
   function isModifierShortcut(input) {
@@ -707,17 +827,20 @@ function createDesktopWindowManager({
   function attachWindowHandlers(entry) {
     const { win } = entry;
     const persist = () => saveManagedWindowState(entry);
+    const broadcastFor = (reason) => () => {
+      broadcastWindowRegistry(reason);
+    };
 
     win.on("maximize", persist);
     win.on("unmaximize", persist);
     win.on("resize", persist);
     win.on("move", persist);
-    win.on("show", broadcastWindowRegistry);
-    win.on("hide", broadcastWindowRegistry);
-    win.on("focus", broadcastWindowRegistry);
-    win.on("blur", broadcastWindowRegistry);
-    win.on("minimize", broadcastWindowRegistry);
-    win.on("restore", broadcastWindowRegistry);
+    win.on("show", broadcastFor("window-show"));
+    win.on("hide", broadcastFor("window-hide"));
+    win.on("focus", broadcastFor("window-focus"));
+    win.on("blur", broadcastFor("window-blur"));
+    win.on("minimize", broadcastFor("window-minimize"));
+    win.on("restore", broadcastFor("window-restore"));
 
     win.on("close", (event) => {
       persist();
@@ -725,7 +848,7 @@ function createDesktopWindowManager({
         event.preventDefault();
         win.hide();
         showTrayHintOnce();
-        broadcastWindowRegistry();
+        broadcastWindowRegistry("main-hide-to-tray");
       }
     });
 
@@ -759,7 +882,7 @@ function createDesktopWindowManager({
       if (entry.role === "main") {
         flushPendingMainCommands();
       }
-      broadcastWindowRegistry();
+      broadcastWindowRegistry("did-finish-load");
     });
   }
 
@@ -836,8 +959,10 @@ function createDesktopWindowManager({
       sessionName: context.sessionName ?? null,
       workPath: context.workPath ?? null,
       badgeCount: 0,
+      lastBadgeCount: 0,
       ownedSessionIds: [],
       focusContext: { kind: "panel" },
+      lastFocusContextKey: buildFocusContextKey({ kind: "panel" }),
       title: sharedAppName,
       launchContext: {
         ...context,
@@ -849,6 +974,7 @@ function createDesktopWindowManager({
       sessionOwners.set(entry.sessionId, win.id);
       entry.ownedSessionIds = [entry.sessionId];
     }
+    entry.lastPresenceKey = buildEntryPresenceKey(entry);
 
     registerEntry(entry);
     attachWindowHandlers(entry);
@@ -962,6 +1088,7 @@ function createDesktopWindowManager({
       runtime: "chromium",
       platform: process.platform,
       version: app.getVersion(),
+      debugPerf,
     }));
 
     ipcMain.handle("window:get-launch-context", (event) => {
@@ -977,14 +1104,21 @@ function createDesktopWindowManager({
     ipcMain.on("window:set-focus-context", (event, context) => {
       const entry = getEntryForWindow(BrowserWindow.fromWebContents(event.sender));
       if (!entry) return;
-      entry.focusContext = context && typeof context.kind === "string"
+      const nextFocusContext = context && typeof context.kind === "string"
         ? { kind: context.kind, sessionType: typeof context.sessionType === "string" ? context.sessionType : undefined }
         : { kind: "panel" };
+      const nextFocusContextKey = buildFocusContextKey(nextFocusContext);
+      if (nextFocusContextKey === entry.lastFocusContextKey) {
+        return;
+      }
+      entry.focusContext = nextFocusContext;
+      entry.lastFocusContextKey = nextFocusContextKey;
     });
 
     ipcMain.on("window:sync-presence", (event, payload) => {
       const entry = getEntryForWindow(BrowserWindow.fromWebContents(event.sender));
       if (!entry) return;
+      const previousPresenceKey = entry.lastPresenceKey ?? buildEntryPresenceKey(entry);
 
       if (payload && Object.prototype.hasOwnProperty.call(payload, "projectId")) {
         entry.projectId = typeof payload.projectId === "string" && payload.projectId ? payload.projectId : null;
@@ -1003,7 +1137,17 @@ function createDesktopWindowManager({
       }
       updateOwnedSessions(entry, payload?.ownedSessionIds);
       applyWindowTitle(entry);
-      broadcastWindowRegistry();
+      const nextPresenceKey = buildEntryPresenceKey(entry);
+      if (nextPresenceKey === previousPresenceKey) {
+        entry.lastPresenceKey = nextPresenceKey;
+        return;
+      }
+      entry.lastPresenceKey = nextPresenceKey;
+      logDesktopPerf("sync-presence", {
+        windowId: entry.win.id,
+        role: entry.role,
+      });
+      broadcastWindowRegistry("sync-presence");
     });
 
     ipcMain.handle("window:get-state", (event) => {
@@ -1049,26 +1193,35 @@ function createDesktopWindowManager({
         await updateLaunchAtLoginPreference(payload.launchAtLogin);
       }
       const nextPreferences = Object.keys(next).length > 0 ? stateManager.setPreferences(next) : stateManager.getPreferences();
-      rebuildSystemMenus();
+      rebuildSystemMenus({ reason: "desktop-preferences" });
       return nextPreferences;
     });
     ipcMain.handle("app:get-recent-projects", () => stateManager.getRecentProjects());
     ipcMain.handle("app:record-recent-project", (_event, payload) => {
       const recentProjects = stateManager.recordRecentProject(payload);
-      rebuildSystemMenus();
+      rebuildSystemMenus({ reason: "recent-project-recorded" });
       return recentProjects;
     });
     ipcMain.handle("app:remove-recent-project", (_event, projectId) => {
       const recentProjects = stateManager.removeRecentProject(projectId);
-      rebuildSystemMenus();
+      rebuildSystemMenus({ reason: "recent-project-removed" });
       return recentProjects;
     });
     ipcMain.handle("app:set-badge-count", (event, badgeCount) => {
       const entry = getEntryForWindow(BrowserWindow.fromWebContents(event.sender));
       if (!entry) return 0;
-      entry.badgeCount = Number.isFinite(badgeCount) ? Math.max(0, Math.trunc(badgeCount)) : 0;
+      const nextBadgeCount = Number.isFinite(badgeCount) ? Math.max(0, Math.trunc(badgeCount)) : 0;
+      if (entry.lastBadgeCount === nextBadgeCount) {
+        return entry.badgeCount;
+      }
+      entry.badgeCount = nextBadgeCount;
+      entry.lastBadgeCount = nextBadgeCount;
+      logDesktopPerf("badge-request", {
+        windowId: entry.win.id,
+        role: entry.role,
+        badgeCount: nextBadgeCount,
+      });
       updateAppBadgePresentation();
-      broadcastWindowRegistry();
       return entry.badgeCount;
     });
     ipcMain.handle("updater:get-current-version", () => app.getVersion());
@@ -1078,7 +1231,7 @@ function createDesktopWindowManager({
   function buildStartupMenuState() {
     createTray();
     syncLaunchAtLoginFromSystem();
-    rebuildSystemMenus();
+    rebuildSystemMenus({ force: true, reason: "startup" });
   }
 
   return {
