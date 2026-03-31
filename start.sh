@@ -47,10 +47,10 @@ if [ "$RUNTIME" = "chromium" ]; then
 
     echo ""
     echo "==============================="
-    echo "  Remote Code Chromium"
+    echo "  Remote Code Desktop"
     echo "==============================="
     echo ""
-    echo "  Runtime: Chromium desktop shell"
+    echo "  Runtime: Desktop shell"
     echo ""
 
     npm run desktop:start

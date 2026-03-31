@@ -42,7 +42,7 @@ if ($Runtime -eq "chromium") {
 
     $vitePort = if ($env:CCR_VITE_PORT) { $env:CCR_VITE_PORT } else { "5173" }
     Write-Host ""
-    Write-Host "Starting Remote Code (DEV MODE - Chromium)" -ForegroundColor Cyan
+    Write-Host "Starting Remote Code (DEV MODE - Desktop)" -ForegroundColor Cyan
     Write-Host "  Backend:  http://localhost:$($env:CCR_PORT)" -ForegroundColor Green
     Write-Host "  Frontend: http://127.0.0.1:$vitePort" -ForegroundColor Green
     Write-Host ""

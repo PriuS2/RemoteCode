@@ -9,6 +9,13 @@ Set-Location $PSScriptRoot
 $python = if (Test-Path ".\.venv\Scripts\python.exe") { ".\.venv\Scripts\python.exe" } else { "python" }
 
 $version = if ($env:BUILD_VERSION) { $env:BUILD_VERSION } else { "dev" }
+$appVersion = (& "node" ".\desktop\generate-update-manifest.cjs" --print-version --build-version $version).Trim()
+$publishedAt = if ($env:BUILD_PUBLISHED_AT) { $env:BUILD_PUBLISHED_AT } else { (Get-Date).ToUniversalTime().ToString("o") }
+$minimumSupportedVersion = if ($env:MINIMUM_SUPPORTED_VERSION) {
+    (& "node" ".\desktop\generate-update-manifest.cjs" --print-version --build-version $env:MINIMUM_SUPPORTED_VERSION).Trim()
+} else {
+    $appVersion
+}
 $machine = (& $python -c "import platform; print(platform.machine().lower())").Trim()
 if ($machine -in @("amd64", "x86_64")) {
     $arch = "x64"
@@ -60,15 +67,27 @@ if ($Target -in @("chromium", "all")) {
     New-Item -ItemType Directory -Force -Path "desktop-build-resources\backend" | Out-Null
     Copy-Item "dist\remote-code-server.exe" "desktop-build-resources\backend\remote-code-server.exe" -Force
 
-    Write-Host "[5/5] Packaging chromium desktop app..."
-    & "npm.cmd" run desktop:package:win
+    $chromiumArchiveName = "remote-code-chromium-$version-windows-$arch.zip"
+    & "node" ".\desktop\generate-update-manifest.cjs" `
+        --output "desktop-build-resources\update-manifest.json" `
+        --release-output "release\update-manifest-windows-$arch.json" `
+        --platform "windows" `
+        --arch $arch `
+        --asset-name $chromiumArchiveName `
+        --tag $version `
+        --current-version $appVersion `
+        --minimum-supported-version $minimumSupportedVersion `
+        --published-at $publishedAt
 
-    $stageRoot = "release\Remote Code Chromium"
+    Write-Host "[5/5] Packaging chromium desktop app..."
+    & "npm.cmd" run desktop:package:win -- --config.extraMetadata.version=$appVersion
+
+    $stageRoot = "release\Remote Code Desktop"
     Remove-IfExists $stageRoot
     New-Item -ItemType Directory -Force -Path $stageRoot | Out-Null
     Copy-Item "desktop-dist\win-unpacked\*" $stageRoot -Recurse -Force
 
-    $archive = "release\remote-code-chromium-$version-windows-$arch.zip"
+    $archive = "release\$chromiumArchiveName"
     if (Test-Path $archive) { Remove-Item $archive -Force }
     Compress-Archive -Path $stageRoot -DestinationPath $archive
     Remove-IfExists $stageRoot

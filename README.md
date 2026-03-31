@@ -120,12 +120,12 @@ Remote Code does not bundle those CLIs for you. The packaged app and the source 
 2. Extract the archive.
 3. Choose the packaged runtime you want:
    - `web`: starts the bundled backend and opens your default browser
-   - `chromium`: launches the bundled Chromium desktop shell directly
+   - `chromium`: launches the bundled Remote Code Desktop shell directly
 4. Launch the packaged app.
    - Windows `web`: run `Remote Code/Remote Code.exe`
-   - Windows `chromium`: run `Remote Code Chromium/Remote Code Chromium.exe`
+   - Windows `chromium`: run `Remote Code Desktop/Remote Code Desktop.exe`
    - macOS `web`: open `Remote Code.app`
-   - macOS `chromium`: open `Remote Code Chromium.app`
+   - macOS `chromium`: open `Remote Code Desktop.app`
 5. Sign in with the password stored in the runtime `.env` file and change it before exposing the app outside your machine.
 
 Runtime data is stored outside the repository:
@@ -243,6 +243,10 @@ The Chromium desktop runtime adds a few desktop-only behaviors on top of the sam
 - single-instance behavior
 - native folder picker for project creation
 - desktop notifications and external-link handoff to the system browser
+- tray/background keep-alive with `Hide to Tray` as the default close behavior
+- dedicated project windows and dedicated single-session windows
+- recent-project integration for tray, macOS dock menu, and Windows jump list/tasks
+- launch-at-login preference and desktop-only version/update-manifest visibility in Settings
 
 ## Basic Usage
 
@@ -309,6 +313,7 @@ make build-release
 ```
 
 The packaged output is written to `release/` and now includes separate `web` and `chromium` archives.
+Chromium builds also emit a platform-specific `update-manifest-*.json` file for future in-app update checks.
 
 ## Deployment and Advanced Topics
 

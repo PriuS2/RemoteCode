@@ -62,7 +62,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: release/*.zip
+          path: release/*
           if-no-files-found: error
 
   publish:
@@ -82,5 +82,5 @@ jobs:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
-          files: release-artifacts/*.zip
+          files: release-artifacts/*
           fail_on_unmatched_files: true

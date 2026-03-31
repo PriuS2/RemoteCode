@@ -38,10 +38,10 @@ if ($Runtime -eq "chromium") {
 
     Write-Host ""
     Write-Host "===============================" -ForegroundColor Cyan
-    Write-Host "  Remote Code Chromium" -ForegroundColor Cyan
+    Write-Host "  Remote Code Desktop" -ForegroundColor Cyan
     Write-Host "===============================" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "  Runtime: Chromium desktop shell" -ForegroundColor Green
+    Write-Host "  Runtime: Desktop shell" -ForegroundColor Green
     Write-Host ""
 
     & "npm.cmd" run desktop:start

@@ -70,7 +70,7 @@ if [ "$RUNTIME" = "chromium" ]; then
     fi
 
     echo ""
-    echo "Starting Remote Code (DEV MODE - Chromium)"
+    echo "Starting Remote Code (DEV MODE - Desktop)"
     echo "  Backend:  http://localhost:${CCR_PORT:-8080}"
     echo "  Frontend: http://127.0.0.1:${VITE_PORT}"
     echo ""

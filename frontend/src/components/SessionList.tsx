@@ -15,9 +15,11 @@ interface SessionListProps {
   sessionActivity: Record<string, ActivityState>;
   onSelect: (id: string, split?: boolean) => void;
   onOpenLayout: (projectId: string) => void;
+  onOpenProjectInNewWindow?: (project: Project) => void;
   onResume: (id: string) => void;
   onNewProject: () => void;
   onAddSession: (project: Project) => void;
+  onOpenSessionInNewWindow?: (session: Session, project: Project) => void;
   onDeleteSession: (id: string) => Promise<void>;
   onRenameSession: (id: string, newName: string) => Promise<void>;
   onSuspendSession: (id: string) => void;
@@ -155,9 +157,11 @@ export default function SessionList({
   sessionActivity,
   onSelect,
   onOpenLayout,
+  onOpenProjectInNewWindow,
   onResume,
   onNewProject,
   onAddSession,
+  onOpenSessionInNewWindow,
   onDeleteSession,
   onRenameSession,
   onSuspendSession,
@@ -440,6 +444,13 @@ export default function SessionList({
         closeContextMenu();
       },
     },
+    ...(onOpenProjectInNewWindow ? [{
+      label: "Open Project in New Window",
+      onClick: () => {
+        onOpenProjectInNewWindow(contextMenu.project);
+        closeContextMenu();
+      },
+    }] : []),
     {
       label: "Add Session",
       onClick: () => {
@@ -476,6 +487,13 @@ export default function SessionList({
         closeContextMenu();
       },
     },
+    ...(onOpenSessionInNewWindow ? [{
+      label: "Open Session in New Window",
+      onClick: () => {
+        onOpenSessionInNewWindow(contextMenu.session, contextMenu.project);
+        closeContextMenu();
+      },
+    }] : []),
     {
       label: "Rename Session",
       onClick: () => {

@@ -137,6 +137,10 @@ Chromium mode adds:
 - desktop notifications
 - external-link handoff to the system browser
 - window position and size restore
+- tray/background keep-alive with `Hide to Tray` as the default close behavior
+- dedicated project windows and dedicated single-session windows
+- recent-project menus in the tray, macOS dock menu, and Windows jump list/tasks
+- `Launch at login` and desktop version/update-manifest details in Settings
 
 ### Reverse proxy requirements
 

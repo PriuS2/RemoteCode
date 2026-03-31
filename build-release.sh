@@ -24,6 +24,13 @@ if [ -x ".venv/bin/python" ]; then
 fi
 
 VERSION="${BUILD_VERSION:-dev}"
+APP_VERSION="$(node ./desktop/generate-update-manifest.cjs --print-version --build-version "$VERSION")"
+PUBLISHED_AT="${BUILD_PUBLISHED_AT:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}"
+if [ -n "${MINIMUM_SUPPORTED_VERSION:-}" ]; then
+  MINIMUM_SUPPORTED_VERSION_NORMALIZED="$(node ./desktop/generate-update-manifest.cjs --print-version --build-version "$MINIMUM_SUPPORTED_VERSION")"
+else
+  MINIMUM_SUPPORTED_VERSION_NORMALIZED="$APP_VERSION"
+fi
 MACHINE="$("$PYTHON_BIN" -c 'import platform; print(platform.machine().lower())')"
 case "$MACHINE" in
   amd64|x86_64)
@@ -69,16 +76,28 @@ if [ "$TARGET" = "chromium" ] || [ "$TARGET" = "all" ]; then
   mkdir -p desktop-build-resources/backend
   cp "dist/remote-code-server" "desktop-build-resources/backend/remote-code-server"
 
-  echo "[5/5] Packaging chromium desktop app..."
-  npm run desktop:package:mac
+  CHROMIUM_ARCHIVE_NAME="remote-code-chromium-${VERSION}-macos-${ARCH}.zip"
+  node ./desktop/generate-update-manifest.cjs \
+    --output "desktop-build-resources/update-manifest.json" \
+    --release-output "release/update-manifest-macos-${ARCH}.json" \
+    --platform "macos" \
+    --arch "$ARCH" \
+    --asset-name "$CHROMIUM_ARCHIVE_NAME" \
+    --tag "$VERSION" \
+    --current-version "$APP_VERSION" \
+    --minimum-supported-version "$MINIMUM_SUPPORTED_VERSION_NORMALIZED" \
+    --published-at "$PUBLISHED_AT"
 
-  APP_BUNDLE="$(find desktop-dist -type d -name 'Remote Code Chromium.app' | head -n 1)"
+  echo "[5/5] Packaging chromium desktop app..."
+  npm run desktop:package:mac -- --config.extraMetadata.version="$APP_VERSION"
+
+  APP_BUNDLE="$(find desktop-dist -type d -name 'Remote Code Desktop.app' | head -n 1)"
   if [ -z "$APP_BUNDLE" ]; then
-    echo "[ERROR] Unable to find packaged Chromium app bundle."
+    echo "[ERROR] Unable to find packaged desktop app bundle."
     exit 1
   fi
 
-  ARCHIVE="release/remote-code-chromium-${VERSION}-macos-${ARCH}.zip"
+  ARCHIVE="release/${CHROMIUM_ARCHIVE_NAME}"
   rm -f "$ARCHIVE"
   ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE" "$ARCHIVE"
   echo "Created $ARCHIVE"
