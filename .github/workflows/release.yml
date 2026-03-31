@@ -9,6 +9,10 @@ on:
       tag_name:
         description: "Release tag to publish"
         required: true
+      distribution:
+        description: "Release package target"
+        required: true
+        default: "all"
 
 permissions:
   contents: write
@@ -22,9 +26,11 @@ jobs:
           - runner: windows-latest
             artifact_name: windows-x64
             build_command: .\build-release.ps1
+            target_prefix: -Target
           - runner: macos-14
             artifact_name: macos-arm64
             build_command: chmod +x build-release.sh && ./build-release.sh
+            target_prefix: --target
 
     runs-on: ${{ matrix.runner }}
 
@@ -42,12 +48,15 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
 
       - name: Build release package
         env:
           BUILD_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
-        run: ${{ matrix.build_command }}
+          BUILD_TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.distribution || 'all' }}
+        run: ${{ matrix.build_command }} ${{ matrix.target_prefix }}${{ env.BUILD_TARGET }}
 
       - name: Upload packaged artifact
         uses: actions/upload-artifact@v4

@@ -111,7 +111,8 @@ Remote Code stores UI preferences in the browser:
 ### Development
 
 ```bash
-make dev
+make dev RUNTIME=web
+make dev RUNTIME=chromium
 ```
 
 ### Production
@@ -120,8 +121,22 @@ make dev
 cd frontend
 npm run build
 cd ..
-make start
+make start RUNTIME=web
+make start RUNTIME=chromium
 ```
+
+### Runtime differences
+
+- `web` runtime: starts the FastAPI backend and opens your default browser
+- `chromium` runtime: starts the same backend inside an Electron shell with desktop-only integrations
+
+Chromium mode adds:
+
+- protected Claude Code and OpenCode shortcut handling
+- native folder picker for project creation
+- desktop notifications
+- external-link handoff to the system browser
+- window position and size restore
 
 ### Reverse proxy requirements
 

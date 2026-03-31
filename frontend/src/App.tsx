@@ -41,6 +41,13 @@ import { getSessionDragData, hasSessionDragData } from "./utils/sessionDragData"
 import type { Project } from "./types/project";
 import type { Session } from "./types/session";
 import type { ProjectLayoutResponse } from "./types/api";
+import {
+  canUseLocalDesktopFeatures,
+  installDesktopExternalLinkHandler,
+  installDesktopShortcutGuard,
+  setDesktopFocusContext,
+  type DesktopFocusContext,
+} from "./runtime";
 import "./App.css";
 
 type ThemeMode = "light" | "dark";
@@ -153,6 +160,7 @@ export default function App() {
   const sessions = useMemo(() => flattenProjects(projects), [projects]);
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
+  const desktopFocusContextRef = useRef<DesktopFocusContext>({ kind: "form" });
   const layoutSessionIds = useMemo(() => collectSessionIds(layoutRoot), [layoutRoot]);
   const visibleSessionIdsRef = useRef(layoutSessionIds);
   visibleSessionIdsRef.current = layoutSessionIds;
@@ -181,7 +189,7 @@ export default function App() {
         session && session.status === "active" && isPersistentTerminalSession(session),
       ));
   }, [persistentTerminalSessionIds, projects]);
-  const canOpenConfigPath = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  const canOpenConfigPath = canUseLocalDesktopFeatures();
   const layoutSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingLayoutSaveRef = useRef<{ projectId: string; layout: LayoutNode | null } | null>(null);
   const savingLayoutRef = useRef(false);
@@ -434,6 +442,10 @@ export default function App() {
     return detach;
   }, [resetClientState]);
 
+  useEffect(() => installDesktopExternalLinkHandler(), []);
+
+  useEffect(() => installDesktopShortcutGuard(() => desktopFocusContextRef.current), []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -465,6 +477,24 @@ export default function App() {
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, [authenticated, fetchProjects]);
+
+  useEffect(() => {
+    let nextContext: DesktopFocusContext = { kind: authenticated === true ? "panel" : "form" };
+    if (authenticated === true && focusedSessionId) {
+      const session = findSession(projects, focusedSessionId);
+      if (session) {
+        if (session.cli_type === "ide") {
+          nextContext = { kind: "ide", sessionType: session.cli_type };
+        } else if (session.cli_type === "folder" || session.cli_type === "git") {
+          nextContext = { kind: "panel", sessionType: session.cli_type };
+        } else {
+          nextContext = { kind: "terminal", sessionType: session.cli_type };
+        }
+      }
+    }
+    desktopFocusContextRef.current = nextContext;
+    setDesktopFocusContext(nextContext);
+  }, [authenticated, focusedSessionId, projects]);
 
   useEffect(() => {
     const validIds = new Set(sessions.map((session) => session.id));

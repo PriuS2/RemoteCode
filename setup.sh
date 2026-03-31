@@ -79,9 +79,15 @@ echo "[3/4] Installing backend dependencies..."
 pip install -r backend/requirements.txt
 echo "[OK] Backend dependencies installed"
 
-# 4. Frontend dependencies
+# 4. Root desktop dependencies
 echo ""
-echo "[4/4] Installing frontend dependencies..."
+echo "[4/5] Installing root desktop dependencies..."
+npm install
+echo "[OK] Root desktop dependencies installed"
+
+# 5. Frontend dependencies
+echo ""
+echo "[5/5] Installing frontend dependencies..."
 (cd frontend && npm install)
 echo "[OK] Frontend dependencies installed"
 
@@ -90,6 +96,8 @@ echo "==============================="
 echo "  Setup complete!"
 echo "==============================="
 echo ""
-echo "  Dev mode:  ./start-dev.sh"
-echo "  Prod mode: ./start.sh"
+echo "  Dev mode (web):       ./start-dev.sh --runtime web"
+echo "  Dev mode (chromium):  ./start-dev.sh --runtime chromium"
+echo "  Prod mode (web):      ./start.sh --runtime web"
+echo "  Prod mode (chromium): ./start.sh --runtime chromium"
 echo ""

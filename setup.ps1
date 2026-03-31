@@ -89,9 +89,21 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "[OK] Backend dependencies installed" -ForegroundColor Green
 
-# 4. Frontend dependencies
+# 4. Root desktop dependencies
 Write-Host ""
-Write-Host "[4/4] Installing frontend dependencies..." -ForegroundColor Yellow
+Write-Host "[4/5] Installing root desktop dependencies..." -ForegroundColor Yellow
+Set-Location $PSScriptRoot
+npm install
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ERROR] root npm install failed. Is Node.js installed?" -ForegroundColor Red
+    Read-Host "Press Enter to exit"
+    exit 1
+}
+Write-Host "[OK] Root desktop dependencies installed" -ForegroundColor Green
+
+# 5. Frontend dependencies
+Write-Host ""
+Write-Host "[5/5] Installing frontend dependencies..." -ForegroundColor Yellow
 Set-Location ".\frontend"
 npm install
 if ($LASTEXITCODE -ne 0) {
@@ -107,7 +119,9 @@ Write-Host "===============================" -ForegroundColor Cyan
 Write-Host "  Setup complete!" -ForegroundColor Green
 Write-Host "===============================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  Dev mode:  start-dev.bat" -ForegroundColor White
-Write-Host "  Prod mode: start.bat" -ForegroundColor White
+Write-Host "  Dev mode (web):       .\start-dev.ps1 -Runtime web" -ForegroundColor White
+Write-Host "  Dev mode (chromium):  .\start-dev.ps1 -Runtime chromium" -ForegroundColor White
+Write-Host "  Prod mode (web):      .\start.ps1 -Runtime web" -ForegroundColor White
+Write-Host "  Prod mode (chromium): .\start.ps1 -Runtime chromium" -ForegroundColor White
 Write-Host ""
 Read-Host "Press Enter to exit"

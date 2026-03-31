@@ -11,6 +11,7 @@ __pycache__/
 *.db-wal
 
 # Node
+node_modules/
 frontend/node_modules/
 frontend/dist/
 
@@ -19,6 +20,8 @@ backend/static/
 /build/
 /dist/
 /release/
+/desktop-build-resources/
+/desktop-dist/
 
 # IDE
 .vscode/

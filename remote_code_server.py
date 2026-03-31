@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import webbrowser
 
 from remote_code_bootstrap import (
     ENV_FILENAME,
@@ -19,8 +18,7 @@ from remote_code_bootstrap import (
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Launch Remote Code in web runtime mode.")
-    parser.add_argument("--no-browser", action="store_true", help="Do not open the browser automatically.")
+    parser = argparse.ArgumentParser(description="Launch the Remote Code backend without opening a browser.")
     parser.add_argument("--host", help="Bind host override.")
     parser.add_argument("--port", type=int, help="Bind port override.")
     parser.add_argument("--data-dir", help="App data directory override.")
@@ -40,8 +38,7 @@ def run() -> int:
 
     try:
         wait_for_health(port, handle)
-        if not args.no_browser:
-            webbrowser.open(f"http://127.0.0.1:{port}", new=2)
+        print(f"Remote Code backend ready on http://127.0.0.1:{port}", flush=True)
         while handle.thread.is_alive():
             handle.thread.join(timeout=0.5)
     except KeyboardInterrupt:

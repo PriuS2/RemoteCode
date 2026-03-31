@@ -1,6 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+RUNTIME="web"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --runtime)
+      RUNTIME="$2"
+      shift 2
+      ;;
+    *)
+      echo "[ERROR] Unknown argument: $1"
+      exit 1
+      ;;
+  esac
+done
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
@@ -9,15 +23,13 @@ if [ ! -f ".venv/bin/python" ]; then
     exit 1
 fi
 
-source .venv/bin/activate
-
-# Check .env exists
 if [ ! -f ".env" ]; then
     echo "[ERROR] .env not found. Run ./setup.sh first."
     exit 1
 fi
 
-# Load .env
+source .venv/bin/activate
+
 while IFS='=' read -r key value; do
     key="$(echo "$key" | xargs)"
     [ -z "$key" ] && continue
@@ -26,6 +38,24 @@ while IFS='=' read -r key value; do
     export "$key=$value"
 done < .env
 echo "[OK] .env loaded"
+
+if [ "$RUNTIME" = "chromium" ]; then
+    if [ ! -d "node_modules" ]; then
+        echo "[ERROR] root node_modules not found. Run ./setup.sh first."
+        exit 1
+    fi
+
+    echo ""
+    echo "==============================="
+    echo "  Remote Code Chromium"
+    echo "==============================="
+    echo ""
+    echo "  Runtime: Chromium desktop shell"
+    echo ""
+
+    npm run desktop:start
+    exit $?
+fi
 
 echo ""
 echo "==============================="
