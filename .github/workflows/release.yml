@@ -30,7 +30,7 @@ jobs:
           - runner: macos-14
             artifact_name: macos-arm64
             build_command: chmod +x build-release.sh && ./build-release.sh
-            target_prefix: --target
+            target_prefix: "--target "
 
     runs-on: ${{ matrix.runner }}
 
