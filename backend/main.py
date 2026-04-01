@@ -43,6 +43,11 @@ from .websocket import handle_terminal_ws
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Desktop survival check (auto-shutdown if desktop stops pinging)
+DESKTOP_PING_TIMEOUT_SEC = 15.0
+desktop_last_ping: float = 0.0
+desktop_monitor_task: asyncio.Task | None = None
+
 # Drive list cache (Windows only, TTL 30s)
 _drive_cache: list[str] = []
 _drive_cache_time: float = 0
@@ -82,6 +87,8 @@ limiter = Limiter(key_func=get_real_ip)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global desktop_last_ping, desktop_monitor_task
+
     if settings.jwt_secret == _INSECURE_JWT_SECRET:
         raise RuntimeError(
             "JWT secret is still the default value. "
@@ -89,11 +96,58 @@ async def lifespan(app: FastAPI):
         )
     await init_db()
     await mark_all_active_as_suspended()
+
+    # ServerHandle에서 server 인스턴스 저장 (graceful shutdown용)
+    try:
+        import remote_code_bootstrap
+
+        handle = remote_code_bootstrap.get_server_handle()
+        if handle:
+            app.state.server = handle.server
+    except Exception:
+        pass
+
+    # 데스크탑 모니터링 시작
+    desktop_last_ping = time.monotonic()
+    desktop_monitor_task = asyncio.create_task(_monitor_desktop())
+
     logger.info("Server started")
     yield
+
+    # 모니터링 중지
+    if desktop_monitor_task and not desktop_monitor_task.done():
+        desktop_monitor_task.cancel()
+        try:
+            await desktop_monitor_task
+        except asyncio.CancelledError:
+            pass
+
     pty_manager.terminate_all()
     await close_db()
     logger.info("Server stopped")
+
+
+async def _monitor_desktop() -> None:
+    """데스크탑에서 15초 이상 ping이 없으면 자동 종료"""
+    global desktop_last_ping
+    while True:
+        await asyncio.sleep(5)
+        elapsed = time.monotonic() - desktop_last_ping
+        if elapsed > DESKTOP_PING_TIMEOUT_SEC:
+            logger.info(f"Desktop ping timeout ({elapsed:.1f}s) - initiating self-shutdown")
+            await _graceful_shutdown()
+            return
+
+
+async def _graceful_shutdown() -> None:
+    """Uvicorn 서버 graceful shutdown"""
+    # app.state.server에 저장된 Uvicorn server 인스턴스로 graceful 종료
+    try:
+        if hasattr(app.state, "server") and app.state.server:
+            app.state.server.should_exit = True
+            logger.info("Graceful shutdown initiated via server.should_exit = True")
+    except Exception as e:
+        logger.error(f"Error during graceful shutdown: {e}")
 
 
 app = FastAPI(title="Remote Code", lifespan=lifespan)
@@ -355,6 +409,32 @@ async def auth_session(_user: str = Depends(get_current_user)):
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok"}
+
+
+# --- Desktop Desktop Survival Check (인증 불필요, localhost만) ---
+
+@app.post("/api/desktop/ping")
+async def desktop_ping(request: Request):
+    """데스크탑에서 5초 간격으로 호출하여 생존 신호 전송"""
+    global desktop_last_ping
+    # 로컬 요청만 허용
+    client_host = request.client.host if request.client else None
+    if client_host not in ("127.0.0.1", "localhost", "::1"):
+        raise HTTPException(status_code=403, detail="Only localhost allowed")
+    desktop_last_ping = time.monotonic()
+    return {"ok": True}
+
+
+@app.delete("/api/desktop/session")
+async def desktop_shutdown(request: Request):
+    """데스크탑 정상 종료 시 호출 - 즉시 종료"""
+    # 로컬 요청만 허용
+    client_host = request.client.host if request.client else None
+    if client_host not in ("127.0.0.1", "localhost", "::1"):
+        raise HTTPException(status_code=403, detail="Only localhost allowed")
+    logger.info("Desktop requested graceful shutdown")
+    asyncio.create_task(_graceful_shutdown())
+    return {"ok": True, "status": "shutting_down"}
 
 
 # --- Browse API (인증 필요) ---
