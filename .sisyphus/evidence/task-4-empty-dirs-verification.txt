@@ -1,0 +1,5 @@
+﻿Verification of deleted directories:
+Test-Path '.cursor': False
+Test-Path '.playwright': False
+Test-Path 'backend/routes': False
+Test-Path 'desktop-build-resources': False
