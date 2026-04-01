@@ -2108,6 +2108,18 @@ async def git_stash_drop(req: GitPullPushRequest, _user: str = Depends(get_curre
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/git/patch")
+async def git_patch(req: GitPullPushRequest, _user: str = Depends(get_current_user)):
+    """Generate a patch (git diff) for the working directory or a specific target."""
+    path = os.path.abspath(req.path)
+    if not await is_git_repo(path):
+        raise HTTPException(status_code=400, detail="Not a git repository")
+    try:
+        output = await run_git(path, ["diff", "HEAD"])
+        return {"success": True, "patch": output}
+    except GitError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 # --- Static Files & SPA Catch-All ---

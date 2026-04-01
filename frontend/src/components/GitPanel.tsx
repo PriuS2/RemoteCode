@@ -342,6 +342,23 @@ export default function GitPanel({
     setLoading(false);
   }, [workPath, headers, fetchStatus, fetchBranches]);
 
+  const doPatch = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await apiFetch("/api/git/patch", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ path: workPath }) });
+      if (!r.ok) throw new Error(await r.text());
+      const data = await r.json();
+      if (data.patch) {
+        await navigator.clipboard.writeText(data.patch);
+        setError("Patch copied to clipboard!");
+        setTimeout(() => setError(null), 2000);
+      }
+    } catch (e: any) {
+      setError(e.message);
+    }
+    setLoading(false);
+  }, [workPath, headers]);
+
   const doCreateBranch = useCallback(async (name: string) => {
     if (!name.trim()) return;
     setLoading(true);
