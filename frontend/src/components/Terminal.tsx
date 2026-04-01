@@ -195,6 +195,9 @@ export default function Terminal({
   const [scrollThumb, setScrollThumb] = useState<{ top: number; height: number } | null>(null);
   const [scrollbarActive, setScrollbarActive] = useState(false);
 
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+
   const refitAndRefresh = useCallback((restoreFocus = false) => {
     const term = termRef.current;
     const fitAddon = fitAddonRef.current;
@@ -645,6 +648,82 @@ export default function Terminal({
     }
   }, [visible, isFocused]);
 
+  // Ctrl+Shift+C copy handling
+  useEffect(() => {
+    const container = innerRef.current;
+    if (!container) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Shift+C: Copy selection to clipboard
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "c") {
+        e.preventDefault();
+        const term = termRef.current;
+        if (!term) return;
+        const selection = term.getSelection();
+        if (selection) {
+          void navigator.clipboard.writeText(selection);
+        }
+      }
+    };
+
+    container.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () => container.removeEventListener("keydown", handleKeyDown, { capture: true });
+  }, []);
+
+  // Context menu handlers
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  const handleCloseContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const handleCopy = useCallback(() => {
+    const term = termRef.current;
+    if (!term) return;
+    const selection = term.getSelection();
+    if (selection) {
+      void navigator.clipboard.writeText(selection);
+    }
+    handleCloseContextMenu();
+  }, [handleCloseContextMenu]);
+
+  const handlePaste = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        sendInput(text);
+      }
+    } catch {
+      // Clipboard access denied or empty
+    }
+    handleCloseContextMenu();
+  }, [sendInput, handleCloseContextMenu]);
+
+  const handleSelectAll = useCallback(() => {
+    const term = termRef.current;
+    if (!term) return;
+    term.selectAll();
+    handleCloseContextMenu();
+  }, [handleCloseContextMenu]);
+
+  const handleClear = useCallback(() => {
+    const term = termRef.current;
+    if (!term) return;
+    term.clear();
+    handleCloseContextMenu();
+  }, [handleCloseContextMenu]);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleClick = () => handleCloseContextMenu();
+    window.addEventListener("click", handleClick);
+    return () => window.removeEventListener("click", handleClick);
+  }, [contextMenu, handleCloseContextMenu]);
+
   const handleKeyBarInput = useCallback(
     (data: string) => {
       sendInput(data);
@@ -902,8 +981,33 @@ export default function Terminal({
             onMouseDown={handleGitPanelResizeStart}
           />
         )}
-        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+        <div style={{ flex: 1, minHeight: 0, position: "relative" }} onContextMenu={handleContextMenu}>
           <div ref={innerRef} data-testid="terminal-xterm" style={{ width: "100%", height: "100%" }} />
+          {/* Context Menu */}
+          {contextMenu && (
+            <div
+              className="terminal-context-menu"
+              style={{
+                position: "fixed",
+                left: contextMenu.x,
+                top: contextMenu.y,
+                zIndex: 1000,
+                background: "var(--panel-bg)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: 6,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                minWidth: 140,
+                padding: "4px 0",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ContextMenuItem label="Copy" onClick={handleCopy} disabled={!termRef.current?.getSelection()} />
+              <ContextMenuItem label="Paste" onClick={handlePaste} />
+              <ContextMenuItem label="Select All" onClick={handleSelectAll} />
+              <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 0" }} />
+              <ContextMenuItem label="Clear" onClick={handleClear} />
+            </div>
+          )}
           {/* Mobile custom scrollbar */}
           {scrollThumb && isMobile() && (
             <div
@@ -1052,3 +1156,34 @@ const FolderIcon = ({ size = 12 }: { size?: number }) => (
     <path d="M1 3C1 2.45 1.45 2 2 2h2.5l1 1.5H10c.55 0 1 .45 1 1V9.5c0 .55-.45 1-1 1H2c-.55 0-1-.45-1-1V3z" />
   </svg>
 );
+
+function ContextMenuItem({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        display: "block",
+        width: "100%",
+        padding: "6px 16px",
+        textAlign: "left",
+        background: "none",
+        border: "none",
+        color: disabled ? "var(--text-muted)" : "var(--text-primary)",
+        fontSize: 13,
+        cursor: disabled ? "not-allowed" : "pointer",
+        transition: "background 0.1s",
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled) {
+          e.currentTarget.style.background = "var(--hover-bg, rgba(255,255,255,0.05))";
+        }
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "none";
+      }}
+    >
+      {label}
+    </button>
+  );
+}

@@ -482,8 +482,8 @@ function createDesktopWindowManager({
       {
         label: "Window",
         submenu: process.platform === "darwin"
-          ? [{ role: "minimize" }, { role: "hide" }, { role: "hideOthers" }, { role: "unhide" }]
-          : [{ role: "minimize" }, { role: "close" }],
+          ? [{ role: "minimize" }, { role: "hide" }, { role: "hideOthers" }, { role: "unhide" }, { type: "separator" }, { role: "togglefullscreen" }]
+          : [{ role: "minimize" }, { role: "close" }, { type: "separator" }, { role: "togglefullscreen" }],
       },
     ]);
   }

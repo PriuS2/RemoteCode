@@ -153,10 +153,10 @@ function isLocalNetworkHost(hostname: string): boolean {
   );
 }
 
-function isGlobalBrowserShortcut(event: KeyboardEvent): boolean {
+function isGlobalBrowserShortcut(event: KeyboardEvent, context: DesktopFocusContext): boolean {
   const key = normalizeKey(event.key);
 
-  if (key === "f5" || key === "browserback" || key === "browserforward") {
+  if (key === "browserback" || key === "browserforward") {
     return true;
   }
 
@@ -165,6 +165,11 @@ function isGlobalBrowserShortcut(event: KeyboardEvent): boolean {
   }
 
   if (!hasCtrlOrMeta(event)) {
+    return false;
+  }
+
+  // Allow save shortcut in IDE (handled by Monaco editor)
+  if (key === "s" && context.kind === "ide") {
     return false;
   }
 
@@ -191,6 +196,11 @@ function isTerminalProtectedShortcut(event: KeyboardEvent): boolean {
   }
 
   if (!hasCtrlOrMeta(event)) {
+    return false;
+  }
+
+  // Allow Ctrl+Shift+C for copy to clipboard (handled by Terminal component)
+  if (key === "c" && event.shiftKey) {
     return false;
   }
 
@@ -375,7 +385,7 @@ export function installDesktopShortcutGuard(getContext: () => DesktopFocusContex
     const context = getContext();
     const editableTarget = isEditableTarget(event.target);
 
-    if (isGlobalBrowserShortcut(event)) {
+    if (isGlobalBrowserShortcut(event, context)) {
       event.preventDefault();
       return;
     }
