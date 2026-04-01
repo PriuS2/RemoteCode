@@ -1142,9 +1142,12 @@ export default function App() {
     setNewSessionProjectId(null);
     void (async () => {
       const latestProjects = await fetchProjects();
-      await openSessionEphemeral(sessionId, latestProjects);
+      const currentSessionIds = collectSessionIds(layoutRoot);
+      if (currentSessionIds.length === 0) {
+        await openSessionEphemeral(sessionId, latestProjects);
+      }
     })();
-  }, [fetchProjects, openSessionEphemeral]);
+  }, [fetchProjects, openSessionEphemeral, layoutRoot]);
 
   const handleSuspend = useCallback(async (sessionId: string) => {
     try {
