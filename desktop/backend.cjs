@@ -7,12 +7,14 @@ const DEFAULT_PORT = 8080;
 const HEALTH_TIMEOUT_MS = 30_000;
 const RENDERER_TIMEOUT_MS = 30_000;
 const BACKEND_READY_PATH = "/api/health";
+const DESKTOP_PING_INTERVAL_MS = 5_000;
 
 function createBackendManager({ app, appProductName, dialog }) {
   let backendProcess = null;
   let backendExitExpected = false;
   let isQuitting = false;
   let bootstrapPromise = null;
+  let pingInterval = null;
 
   function getProjectRoot() {
     return path.resolve(__dirname, "..");
@@ -154,7 +156,13 @@ function createBackendManager({ app, appProductName, dialog }) {
     });
   }
 
-  function stop() {
+  async function stop() {
+    // 먼저 ping 중지
+    stopDesktopPing();
+
+    // 백엔드에 종료 알림 (정상 종료 경로)
+    await notifyShutdown();
+
     if (!backendProcess || backendProcess.killed || backendProcess.exitCode !== null) {
       backendProcess = null;
       return;
@@ -162,25 +170,42 @@ function createBackendManager({ app, appProductName, dialog }) {
 
     backendExitExpected = true;
 
-    if (process.platform === "win32") {
-      const killer = spawn("taskkill", ["/pid", String(backendProcess.pid), "/t", "/f"], {
-        windowsHide: true,
-        stdio: "ignore",
-      });
-      killer.on("exit", () => {
-        backendProcess = null;
-      });
-      return;
-    }
-
-    const proc = backendProcess;
-    proc.kill("SIGTERM");
-    setTimeout(() => {
-      if (proc.exitCode === null && !proc.killed) {
-        proc.kill("SIGKILL");
+    return new Promise((resolve) => {
+      if (process.platform === "win32") {
+        const killer = spawn("taskkill", ["/pid", String(backendProcess.pid), "/t", "/f"], {
+          windowsHide: true,
+          stdio: "ignore",
+        });
+        killer.on("exit", () => {
+          backendProcess = null;
+          resolve();
+        });
+        // 2초 타임아웃
+        setTimeout(() => {
+          if (backendProcess) {
+            backendProcess = null;
+          }
+          resolve();
+        }, 2000);
+        return;
       }
-    }, 5_000);
-    backendProcess = null;
+
+      const proc = backendProcess;
+      proc.kill("SIGTERM");
+      const timeout = setTimeout(() => {
+        if (proc.exitCode === null && !proc.killed) {
+          proc.kill("SIGKILL");
+        }
+        backendProcess = null;
+        resolve();
+      }, 5_000);
+
+      proc.on("exit", () => {
+        clearTimeout(timeout);
+        backendProcess = null;
+        resolve();
+      });
+    });
   }
 
   async function ensureReady() {
@@ -191,10 +216,39 @@ function createBackendManager({ app, appProductName, dialog }) {
         if (process.env.REMOTE_CODE_DEV_SERVER_URL) {
           await waitForUrl(getAppUrl(), RENDERER_TIMEOUT_MS);
         }
+        startDesktopPing();
       })();
     }
 
     return bootstrapPromise;
+  }
+
+  function startDesktopPing() {
+    const url = `http://127.0.0.1:${getBackendPort()}/api/desktop/ping`;
+    pingInterval = setInterval(async () => {
+      try {
+        await fetch(url, { method: "POST", signal: AbortSignal.timeout(3000) });
+      } catch {
+        // Ignore ping failures - backend will self-shutdown after timeout
+      }
+    }, DESKTOP_PING_INTERVAL_MS);
+  }
+
+  function stopDesktopPing() {
+    if (pingInterval) {
+      clearInterval(pingInterval);
+      pingInterval = null;
+    }
+  }
+
+  async function notifyShutdown() {
+    // 정상 종료 시 백엔드에 즉시 종료 신호 전송
+    try {
+      const url = `http://127.0.0.1:${getBackendPort()}/api/desktop/session`;
+      await fetch(url, { method: "DELETE", signal: AbortSignal.timeout(3000) });
+    } catch {
+      // DELETE 실패 시 프로세스 종료로 fallback
+    }
   }
 
   function markQuitting() {

@@ -64,6 +64,15 @@ class ServerHandle:
     errors: list[BaseException]
 
 
+# 전역 ServerHandle 저장 (백엔드 모듈에서 접근용)
+_server_handle: ServerHandle | None = None
+
+
+def get_server_handle() -> ServerHandle | None:
+    """현재 실행 중인 서버 핸들러 반환"""
+    return _server_handle
+
+
 def default_data_dir() -> Path:
     if sys.platform == "win32":
         base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
@@ -242,6 +251,7 @@ def healthcheck_ok(port: int) -> bool:
 
 
 def start_server_thread(host: str, port: int) -> ServerHandle:
+    global _server_handle
     from backend.main import app
 
     config = uvicorn.Config(app, host=host, port=port, log_level="info")
@@ -257,7 +267,8 @@ def start_server_thread(host: str, port: int) -> ServerHandle:
 
     thread = threading.Thread(target=server_target, name="remote-code-server")
     thread.start()
-    return ServerHandle(server=server, thread=thread, errors=errors)
+    _server_handle = ServerHandle(server=server, thread=thread, errors=errors)
+    return _server_handle
 
 
 def wait_for_health(port: int, handle: ServerHandle) -> None:

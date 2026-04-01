@@ -49,10 +49,20 @@ app.on("window-all-closed", () => {
   // Intentionally keep the app alive in the tray/background.
 });
 
-app.on("before-quit", () => {
+let isShuttingDown = false;
+
+app.on("before-quit", async (event) => {
+  if (isShuttingDown) {
+    return; // 이미 종료 중이면 진행
+  }
+  isShuttingDown = true;
+
+  event.preventDefault(); // 종료 지연
   windowManager.markQuitting();
   backendManager.markQuitting();
-  backendManager.stop();
+  await backendManager.stop(); // 백엔드 종료 완료까지 대기
+
+  app.quit(); // 실제 종료 재개
 });
 
 app.on("activate", async () => {
