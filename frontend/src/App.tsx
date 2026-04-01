@@ -1726,161 +1726,166 @@ export default function App() {
   const activeSessionCount = sessions.filter((session) => session.status === "active").length;
   const isDraggingToWorkspace = Boolean(draggedLayoutSessionId) && !isMobileViewport;
 
+  // Only show sidebar and header in the main window (role === "main" or not in desktop mode)
+  const isMainWindow = !desktopLaunchContext || desktopLaunchContext.role === "main";
+
   return (
-    <div className="app-container" data-theme={theme} style={viewportHeight ? { height: viewportHeight } : undefined}>
-      <header className="app-header workbench-card">
-        <div className="header-left">
-          <button
-            className="chrome-btn sidebar-toggle"
-            onClick={() => setSidebarOpen((open) => !open)}
-            title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-          >
-            {"\u2630"}
-          </button>
-          <div className="app-brand">
-            <div className="app-brand-mark">RC</div>
-            <div className="app-brand-copy">
-              <span className="app-title">Remote Code</span>
-              <span className="app-subtitle">Console Workbench</span>
+    <div className="app-container" data-theme={theme} data-window-role={desktopLaunchContext?.role ?? "main"} style={viewportHeight ? { height: viewportHeight } : undefined}>
+      {isMainWindow && (
+        <header className="app-header workbench-card">
+          <div className="header-left">
+            <button
+              className="chrome-btn sidebar-toggle"
+              onClick={() => setSidebarOpen((open) => !open)}
+              title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+            >
+              {"\u2630"}
+            </button>
+            <div className="app-brand">
+              <div className="app-brand-mark">RC</div>
+              <div className="app-brand-copy">
+                <span className="app-title">Remote Code</span>
+                <span className="app-subtitle">Console Workbench</span>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="header-right" ref={settingsRef}>
-          <div className="header-badge">
-            <strong>{projects.length}</strong>
-            <span>projects</span>
-          </div>
-          <div className="header-badge">
-            <strong>{activeSessionCount}</strong>
-            <span>active sessions</span>
-          </div>
-          <button
-            className="chrome-btn theme-toggle"
-            onClick={toggleTheme}
-            title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
-            aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
-          >
-            {theme === "light" ? "Dark" : "Light"}
-          </button>
-          <button
-            className="chrome-btn settings-btn"
-            onClick={() => setShowSettings((open) => !open)}
-            title="Settings"
-          >
-            {"\u2699"}
-          </button>
-          {showSettings && (
-            <div className="settings-panel">
-              <div className="settings-section">
-                <label className="settings-label">Theme</label>
-                <div className="theme-toggle-group">
-                  <button
-                    className={`theme-chip${theme === "light" ? " is-active" : ""}`}
-                    onClick={() => applyTheme("light")}
-                  >
-                    Light
-                  </button>
-                  <button
-                    className={`theme-chip${theme === "dark" ? " is-active" : ""}`}
-                    onClick={() => applyTheme("dark")}
-                  >
-                    Dark
-                  </button>
+          <div className="header-right" ref={settingsRef}>
+            <div className="header-badge">
+              <strong>{projects.length}</strong>
+              <span>projects</span>
+            </div>
+            <div className="header-badge">
+              <strong>{activeSessionCount}</strong>
+              <span>active sessions</span>
+            </div>
+            <button
+              className="chrome-btn theme-toggle"
+              onClick={toggleTheme}
+              title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+              aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+            >
+              {theme === "light" ? "Dark" : "Light"}
+            </button>
+            <button
+              className="chrome-btn settings-btn"
+              onClick={() => setShowSettings((open) => !open)}
+              title="Settings"
+            >
+              {"\u2699"}
+            </button>
+            {showSettings && (
+              <div className="settings-panel">
+                <div className="settings-section">
+                  <label className="settings-label">Theme</label>
+                  <div className="theme-toggle-group">
+                    <button
+                      className={`theme-chip${theme === "light" ? " is-active" : ""}`}
+                      onClick={() => applyTheme("light")}
+                    >
+                      Light
+                    </button>
+                    <button
+                      className={`theme-chip${theme === "dark" ? " is-active" : ""}`}
+                      onClick={() => applyTheme("dark")}
+                    >
+                      Dark
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div className="settings-section">
-                <label className="settings-label">Web Font Size</label>
-                <div className="settings-control">
-                  <button className="size-btn" onClick={() => setWebFontSize((size) => Math.max(10, size - 1))}>-</button>
-                  <span className="size-value">{webFontSize}px</span>
-                  <button className="size-btn" onClick={() => setWebFontSize((size) => Math.min(24, size + 1))}>+</button>
+                <div className="settings-section">
+                  <label className="settings-label">Web Font Size</label>
+                  <div className="settings-control">
+                    <button className="size-btn" onClick={() => setWebFontSize((size) => Math.max(10, size - 1))}>-</button>
+                    <span className="size-value">{webFontSize}px</span>
+                    <button className="size-btn" onClick={() => setWebFontSize((size) => Math.min(24, size + 1))}>+</button>
+                  </div>
                 </div>
-              </div>
-              <div className="settings-section">
-                <label className="settings-label">Terminal Font Size</label>
-                <div className="settings-control">
-                  <button className="size-btn" onClick={() => setTerminalFontSize((size) => Math.max(8, size - 1))}>-</button>
-                  <span className="size-value">{terminalFontSize}px</span>
-                  <button className="size-btn" onClick={() => setTerminalFontSize((size) => Math.min(28, size + 1))}>+</button>
+                <div className="settings-section">
+                  <label className="settings-label">Terminal Font Size</label>
+                  <div className="settings-control">
+                    <button className="size-btn" onClick={() => setTerminalFontSize((size) => Math.max(8, size - 1))}>-</button>
+                    <span className="size-value">{terminalFontSize}px</span>
+                    <button className="size-btn" onClick={() => setTerminalFontSize((size) => Math.min(28, size + 1))}>+</button>
+                  </div>
                 </div>
-              </div>
-              {isDesktopChromium() && desktopPreferencesState && (
-                <>
-                  <div className="settings-section">
-                    <label className="settings-label">Desktop</label>
-                    <div className="theme-toggle-group">
+                {isDesktopChromium() && desktopPreferencesState && (
+                  <>
+                    <div className="settings-section">
+                      <label className="settings-label">Desktop</label>
+                      <div className="theme-toggle-group">
+                        <button
+                          className={`theme-chip${desktopPreferencesState.closeBehavior === "tray" ? " is-active" : ""}`}
+                          onClick={() => {
+                            void updateDesktopPreferences({ closeBehavior: "tray" }).then((next) => {
+                              if (next) setDesktopPreferencesState(next);
+                            });
+                          }}
+                        >
+                          Hide to Tray
+                        </button>
+                        <button
+                          className={`theme-chip${desktopPreferencesState.closeBehavior === "quit" ? " is-active" : ""}`}
+                          onClick={() => {
+                            void updateDesktopPreferences({ closeBehavior: "quit" }).then((next) => {
+                              if (next) setDesktopPreferencesState(next);
+                            });
+                          }}
+                        >
+                          Quit App
+                        </button>
+                      </div>
                       <button
-                        className={`theme-chip${desktopPreferencesState.closeBehavior === "tray" ? " is-active" : ""}`}
+                        className="settings-action"
                         onClick={() => {
-                          void updateDesktopPreferences({ closeBehavior: "tray" }).then((next) => {
+                          void updateDesktopPreferences({ launchAtLogin: !desktopPreferencesState.launchAtLogin }).then((next) => {
                             if (next) setDesktopPreferencesState(next);
                           });
                         }}
                       >
-                        Hide to Tray
-                      </button>
-                      <button
-                        className={`theme-chip${desktopPreferencesState.closeBehavior === "quit" ? " is-active" : ""}`}
-                        onClick={() => {
-                          void updateDesktopPreferences({ closeBehavior: "quit" }).then((next) => {
-                            if (next) setDesktopPreferencesState(next);
-                          });
-                        }}
-                      >
-                        Quit App
+                        {desktopPreferencesState.launchAtLogin ? "Disable launch at login" : "Enable launch at login"}
                       </button>
                     </div>
+                    <div className="settings-section">
+                      <label className="settings-label">Version</label>
+                      <div className="settings-control">
+                        <span className="size-value" style={{ textAlign: "left" }}>
+                          {desktopVersion ?? "Unknown"}
+                          {latestUpdateManifest?.version ? `  |  manifest ${latestUpdateManifest.version}` : ""}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
+                <div className="settings-divider" />
+                {canOpenConfigPath && (
+                  <>
                     <button
                       className="settings-action"
                       onClick={() => {
-                        void updateDesktopPreferences({ launchAtLogin: !desktopPreferencesState.launchAtLogin }).then((next) => {
-                          if (next) setDesktopPreferencesState(next);
-                        });
+                        void handleOpenConfigPath();
                       }}
+                      disabled={openingConfigPath}
                     >
-                      {desktopPreferencesState.launchAtLogin ? "Disable launch at login" : "Enable launch at login"}
+                      {openingConfigPath ? "Opening..." : "Open config path"}
                     </button>
-                  </div>
-                  <div className="settings-section">
-                    <label className="settings-label">Version</label>
-                    <div className="settings-control">
-                      <span className="size-value" style={{ textAlign: "left" }}>
-                        {desktopVersion ?? "Unknown"}
-                        {latestUpdateManifest?.version ? `  |  manifest ${latestUpdateManifest.version}` : ""}
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
-              <div className="settings-divider" />
-              {canOpenConfigPath && (
-                <>
-                  <button
-                    className="settings-action"
-                    onClick={() => {
-                      void handleOpenConfigPath();
-                    }}
-                    disabled={openingConfigPath}
-                  >
-                    {openingConfigPath ? "Opening..." : "Open config path"}
-                  </button>
-                  <div className="settings-divider" />
-                </>
-              )}
-              <button className="settings-logout" onClick={handleLogout}>
-                Logout
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
+                    <div className="settings-divider" />
+                  </>
+                )}
+                <button className="settings-logout" onClick={handleLogout}>
+                  Logout
+                </button>
+              </div>
+            )}
+          </div>
+        </header>
+      )}
 
       <div className="app-body">
-        {sidebarOpen && (
+        {isMainWindow && sidebarOpen && (
           <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
         )}
 
-        {sidebarOpen && (
+        {isMainWindow && sidebarOpen && (
           <>
             <aside className="sidebar workbench-card" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
               <SessionList

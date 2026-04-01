@@ -934,13 +934,6 @@ export default function Terminal({
               onClick={(e) => { e.stopPropagation(); onMaximize(); }}
             />
           )}
-          <TitleBarBtn
-            icon={<CloseIcon size={iconSize} />}
-            title="Kill"
-            hoverColor="var(--danger)"
-            fontSize={fontSize}
-            onClick={(e) => { e.stopPropagation(); onTerminate(); }}
-          />
         </div>
       </div>
 
