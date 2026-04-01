@@ -452,6 +452,16 @@ export default function SessionList({
       },
     }] : []),
     {
+      label: "Reveal in File Explorer",
+      onClick: () => {
+        const remoteCodeDesktop = (window as unknown as { remoteCodeDesktop?: { revealInFileExplorer?: (filePath: string) => Promise<boolean> } }).remoteCodeDesktop;
+        if (remoteCodeDesktop?.revealInFileExplorer) {
+          void remoteCodeDesktop.revealInFileExplorer(contextMenu.project.work_path);
+        }
+        closeContextMenu();
+      },
+    },
+    {
       label: "Add Session",
       onClick: () => {
         onAddSession(contextMenu.project);

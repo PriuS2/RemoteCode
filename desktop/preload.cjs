@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld("remoteCodeDesktop", {
   getRecentProjects: () => ipcRenderer.invoke("app:get-recent-projects"),
   recordRecentProject: (payload) => ipcRenderer.invoke("app:record-recent-project", payload),
   removeRecentProject: (projectId) => ipcRenderer.invoke("app:remove-recent-project", projectId),
+  revealInFileExplorer: (filePath) => ipcRenderer.invoke("app:reveal-in-file-explorer", filePath),
   setBadgeCount: (badgeCount) => ipcRenderer.invoke("app:set-badge-count", badgeCount),
   getCurrentVersion: () => ipcRenderer.invoke("updater:get-current-version"),
   getLatestManifest: () => ipcRenderer.invoke("updater:get-latest-manifest"),

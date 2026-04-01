@@ -1207,6 +1207,11 @@ function createDesktopWindowManager({
       rebuildSystemMenus({ reason: "recent-project-removed" });
       return recentProjects;
     });
+    ipcMain.handle("app:reveal-in-file-explorer", async (_event, filePath) => {
+      if (typeof filePath !== "string" || !filePath.trim()) return false;
+      shell.showItemInFolder(filePath);
+      return true;
+    });
     ipcMain.handle("app:set-badge-count", (event, badgeCount) => {
       const entry = getEntryForWindow(BrowserWindow.fromWebContents(event.sender));
       if (!entry) return 0;

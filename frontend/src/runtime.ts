@@ -96,6 +96,7 @@ type DesktopApi = {
   getRecentProjects: () => Promise<RecentProject[]>;
   recordRecentProject: (payload: RecentProject | Omit<RecentProject, "lastOpenedAt">) => Promise<RecentProject[]>;
   removeRecentProject: (projectId: string) => Promise<RecentProject[]>;
+  revealInFileExplorer: (filePath: string) => Promise<boolean>;
   setBadgeCount: (badgeCount: number) => Promise<number>;
   getCurrentVersion: () => Promise<string>;
   getLatestManifest: () => Promise<UpdateManifest | null>;
