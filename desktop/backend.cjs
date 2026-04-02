@@ -20,6 +20,24 @@ function createBackendManager({ app, appProductName, dialog }) {
     return path.resolve(__dirname, "..");
   }
 
+  function getShellPath() {
+    return new Promise((resolve) => {
+      const proc = spawn("zsh", ["-l", "-c", "printf '%s' \"$PATH\""]);
+      let output = "";
+      proc.stdout.on("data", (d) => { output += d; });
+      proc.on("close", (code) => {
+        if (code === 0 && output.trim()) {
+          resolve(output.trim());
+        } else {
+          resolve(process.env.PATH || "");
+        }
+      });
+      proc.on("error", () => {
+        resolve(process.env.PATH || "");
+      });
+    });
+  }
+
   function getBackendPort() {
     const parsed = Number.parseInt(process.env.CCR_PORT || `${DEFAULT_PORT}`, 10);
     if (Number.isFinite(parsed) && parsed > 0) {
@@ -118,7 +136,7 @@ function createBackendManager({ app, appProductName, dialog }) {
     });
   }
 
-  function start() {
+  async function start() {
     if (backendProcess && backendProcess.exitCode === null) {
       return;
     }
@@ -127,6 +145,8 @@ function createBackendManager({ app, appProductName, dialog }) {
     const spec = getBackendCommandSpec();
     backendExitExpected = false;
 
+    const shellPath = await getShellPath();
+
     backendProcess = spawn(
       spec.command,
       [...spec.args, "--host", "127.0.0.1", "--port", String(port)],
@@ -134,6 +154,7 @@ function createBackendManager({ app, appProductName, dialog }) {
         cwd: spec.cwd,
         env: {
           ...process.env,
+          PATH: shellPath || process.env.PATH,
           CCR_HOST: "127.0.0.1",
           CCR_PORT: String(port),
         },
@@ -211,7 +232,7 @@ function createBackendManager({ app, appProductName, dialog }) {
   async function ensureReady() {
     if (!bootstrapPromise) {
       bootstrapPromise = (async () => {
-        start();
+        await start();
         await waitForUrl(`http://127.0.0.1:${getBackendPort()}${BACKEND_READY_PATH}`, HEALTH_TIMEOUT_MS);
         if (process.env.REMOTE_CODE_DEV_SERVER_URL) {
           await waitForUrl(getAppUrl(), RENDERER_TIMEOUT_MS);
