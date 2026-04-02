@@ -42,7 +42,16 @@ from .project_layouts import (
 logger = logging.getLogger(__name__)
 
 NON_PTY_CLI_TYPES = {"folder", "git", "ide"}
-SUPPORTED_CLI_TYPES = {"claude", "kilo", "opencode", "terminal", "custom", "folder", "git", "ide"}
+SUPPORTED_CLI_TYPES = {
+    "claude",
+    "kilo",
+    "opencode",
+    "terminal",
+    "custom",
+    "folder",
+    "git",
+    "ide",
+}
 CLI_TYPES_WITH_OPTIONS = {"claude", "kilo", "opencode", "terminal"}
 
 
@@ -56,10 +65,16 @@ class SessionValidationError(ValueError):
 class SessionManager:
     def _validate_cli_type(self, cli_type: str) -> None:
         if cli_type not in SUPPORTED_CLI_TYPES:
-            raise SessionValidationError("invalid_command", f"Unsupported session type: {cli_type}")
+            raise SessionValidationError(
+                "invalid_command", f"Unsupported session type: {cli_type}"
+            )
 
-    def _normalize_cli_options(self, cli_type: str, cli_options: Optional[str] = None) -> Optional[str]:
-        normalized = cli_options.strip() if cli_options and cli_options.strip() else None
+    def _normalize_cli_options(
+        self, cli_type: str, cli_options: Optional[str] = None
+    ) -> Optional[str]:
+        normalized = (
+            cli_options.strip() if cli_options and cli_options.strip() else None
+        )
         if normalized and cli_type not in CLI_TYPES_WITH_OPTIONS:
             raise SessionValidationError(
                 "invalid_command",
@@ -67,7 +82,9 @@ class SessionManager:
             )
         return normalized
 
-    def _default_command(self, cli_type: str, custom_command: Optional[str] = None) -> Optional[str]:
+    def _default_command(
+        self, cli_type: str, custom_command: Optional[str] = None
+    ) -> Optional[str]:
         self._validate_cli_type(cli_type)
         if cli_type == "kilo":
             return settings.kilo_command
@@ -108,7 +125,9 @@ class SessionManager:
         try:
             parts = shlex.split(command, posix=os.name != "nt")
         except ValueError as exc:
-            raise SessionValidationError("invalid_command", f"Invalid command syntax: {exc}") from exc
+            raise SessionValidationError(
+                "invalid_command", f"Invalid command syntax: {exc}"
+            ) from exc
         if not parts:
             raise SessionValidationError("invalid_command", "Command is empty.")
         return parts
@@ -116,23 +135,7 @@ class SessionManager:
     def _validate_command_parts(self, parts: list[str]) -> list[str]:
         if not parts:
             raise SessionValidationError("invalid_command", "Command is empty.")
-
-        executable = parts[0]
-
-        resolved = shutil.which(executable)
-        if resolved:
-            return parts
-
-        has_path_separator = any(sep in executable for sep in (os.sep, "/", "\\"))
-        if has_path_separator or os.path.isabs(executable):
-            candidate = os.path.abspath(executable)
-            if os.path.exists(candidate) and not os.access(candidate, os.X_OK):
-                raise SessionValidationError(
-                    "permission_denied",
-                    f"Permission denied: {candidate}",
-                )
-
-        raise SessionValidationError("cli_not_found", f"CLI not found: {executable}")
+        return parts
 
     def _validate_work_path(self, work_path: str, create_folder: bool) -> str:
         normalized = work_path.strip()
@@ -166,7 +169,11 @@ class SessionManager:
                 break
             parent = next_parent
 
-        if parent and os.path.exists(parent) and not os.access(parent, os.W_OK | os.X_OK):
+        if (
+            parent
+            and os.path.exists(parent)
+            and not os.access(parent, os.W_OK | os.X_OK)
+        ):
             raise SessionValidationError(
                 "permission_denied",
                 f"Permission denied: {parent}",
@@ -228,18 +235,23 @@ class SessionManager:
             os.makedirs(validated_path, exist_ok=True)
 
         if not os.path.isdir(validated_path):
-            raise SessionValidationError("directory_not_found", f"Directory does not exist: {validated_path}")
+            raise SessionValidationError(
+                "directory_not_found", f"Directory does not exist: {validated_path}"
+            )
 
         display_name = name or os.path.basename(validated_path)
         project = await db_create_project(display_name, validated_path)
-        logger.info(f"Project created: {project['id']} ({display_name}) at {validated_path}")
+        logger.info(
+            f"Project created: {project['id']} ({display_name}) at {validated_path}"
+        )
         return project
 
     async def list_projects(self) -> list[dict]:
         projects = await db_list_projects()
         for project in projects:
             project["sessions"] = [
-                session for session in project.get("sessions", [])
+                session
+                for session in project.get("sessions", [])
                 if session.get("cli_type") in SUPPORTED_CLI_TYPES
             ]
         return projects
@@ -248,10 +260,14 @@ class SessionManager:
         project = await db_get_project(project_id)
         if not project:
             raise ValueError(f"Project not found: {project_id}")
-        await db_update_project(project_id, name=name.strip(), updated_at=self._timestamp())
+        await db_update_project(
+            project_id, name=name.strip(), updated_at=self._timestamp()
+        )
         return await db_get_project(project_id)
 
-    async def _prune_missing_sessions_from_layout(self, layout: LayoutNode | None) -> LayoutNode | None:
+    async def _prune_missing_sessions_from_layout(
+        self, layout: LayoutNode | None
+    ) -> LayoutNode | None:
         if not layout:
             return None
 
@@ -259,7 +275,9 @@ class SessionManager:
         if not referenced_session_ids:
             return None
 
-        existing_session_ids = await db_list_existing_session_ids(referenced_session_ids)
+        existing_session_ids = await db_list_existing_session_ids(
+            referenced_session_ids
+        )
         removed_session_ids = set(referenced_session_ids) - existing_session_ids
         if not removed_session_ids:
             return layout
@@ -279,7 +297,9 @@ class SessionManager:
             await db_update_project_layout(project_id, pruned_layout)
         return pruned_layout
 
-    async def save_project_layout(self, project_id: str, layout: LayoutNode | None) -> LayoutNode | None:
+    async def save_project_layout(
+        self, project_id: str, layout: LayoutNode | None
+    ) -> LayoutNode | None:
         project = await db_get_project(project_id)
         if not project:
             raise ValueError(f"Project not found: {project_id}")
@@ -311,13 +331,17 @@ class SessionManager:
                 await language_server_manager.close_session(session["id"])
 
         await db_delete_project_record(project_id)
-        await db_prune_project_layouts(removed_session_ids, exclude_project_ids={project_id})
+        await db_prune_project_layouts(
+            removed_session_ids, exclude_project_ids={project_id}
+        )
         logger.info(f"Project deleted: {project_id}")
 
     async def update_project_order(self, ordered_ids: list[str]) -> None:
         await db_update_project_order(ordered_ids)
 
-    async def update_project_session_order(self, project_id: str, ordered_ids: list[str]) -> None:
+    async def update_project_session_order(
+        self, project_id: str, ordered_ids: list[str]
+    ) -> None:
         project = await db_get_project(project_id)
         if not project:
             raise ValueError(f"Project not found: {project_id}")
@@ -350,7 +374,9 @@ class SessionManager:
         work_path = preflight["work_path"]
 
         if not os.path.isdir(work_path):
-            raise SessionValidationError("directory_not_found", f"Directory does not exist: {work_path}")
+            raise SessionValidationError(
+                "directory_not_found", f"Directory does not exist: {work_path}"
+            )
 
         session_id = str(uuid.uuid4())
         display_name = name or f"{project['name']} Session"
@@ -377,7 +403,9 @@ class SessionManager:
 
         # Non-PTY session types only persist state and render dedicated UI panels.
         if cli_type in NON_PTY_CLI_TYPES:
-            logger.info(f"Session created: {session_id} ({display_name}) at {work_path} ({cli_type}, no PTY)")
+            logger.info(
+                f"Session created: {session_id} ({display_name}) at {work_path} ({cli_type}, no PTY)"
+            )
             return session
 
         # PTY 생성 (10초 타임아웃)
@@ -394,14 +422,17 @@ class SessionManager:
         except Exception as e:
             logger.error(f"PTY spawn failed for {session_id}: {e}")
             await db_delete_session(session_id)
-            raise SessionValidationError("spawn_failed", f"Failed to start terminal: {e}") from e
+            raise SessionValidationError(
+                "spawn_failed", f"Failed to start terminal: {e}"
+            ) from e
 
         logger.info(f"Session created: {session_id} ({display_name}) at {work_path}")
         return session
 
     async def list_sessions(self) -> list[dict]:
         return [
-            session for session in await db_list_sessions()
+            session
+            for session in await db_list_sessions()
             if session.get("cli_type") in SUPPORTED_CLI_TYPES
         ]
 
@@ -441,7 +472,7 @@ class SessionManager:
             else:
                 exit_cmd = "/exit"
 
-            #명령을 한 글자씩 보내고, Enter를 딜레이 후 전송
+            # 명령을 한 글자씩 보내고, Enter를 딜레이 후 전송
             for ch in exit_cmd:
                 instance.write(ch)
                 await asyncio.sleep(0.02)
@@ -471,15 +502,21 @@ class SessionManager:
                 resume_pattern = None
             else:
                 # Claude Code: "--resume ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})" 패턴
-                resume_pattern = re.compile(r"--resume\s+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})")
+                resume_pattern = re.compile(
+                    r"--resume\s+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
+                )
 
             match = resume_pattern.search(output) if resume_pattern else None
             if match:
                 cli_sid = match.group(1)
                 await db_update_session(session_id, claude_session_id=cli_sid)
-                logger.info(f"Captured session_id from output: {cli_sid} [cli_type={cli_type}]")
+                logger.info(
+                    f"Captured session_id from output: {cli_sid} [cli_type={cli_type}]"
+                )
             else:
-                logger.warning(f"Could not find resume ID in output buffer ({len(output)} chars) [cli_type={cli_type}]")
+                logger.warning(
+                    f"Could not find resume ID in output buffer ({len(output)} chars) [cli_type={cli_type}]"
+                )
 
             # PTY 정리
             pty_manager.remove(session_id)
@@ -554,7 +591,10 @@ class SessionManager:
         elif cli_type == "custom":
             custom = session.get("custom_command")
             if not custom:
-                raise SessionValidationError("custom_command_missing", "Custom command is required for Custom CLI.")
+                raise SessionValidationError(
+                    "custom_command_missing",
+                    "Custom command is required for Custom CLI.",
+                )
             parts = self._validate_command_available(custom)
             command = parts[0]
             command_args = parts[1:]
@@ -632,5 +672,6 @@ class SessionManager:
         await db_delete_session(session_id)
         await db_prune_project_layouts({session_id})
         logger.info(f"Session deleted: {session_id}")
+
 
 session_manager = SessionManager()
