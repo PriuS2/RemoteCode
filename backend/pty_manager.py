@@ -127,12 +127,22 @@ else:
         rows: int,
         cols: int,
     ) -> _PtyAdapter:
+        env = os.environ.copy()
+        env.update(
+            {
+                "TERM": "xterm-256color",
+                "CLICOLOR": "1",
+                "COLORTERM": "truecolor",
+                "FORCE_COLOR": "1",
+            }
+        )
         proc = pexpect.spawn(
             command,
             args=args,
             cwd=cwd,
             dimensions=(rows, cols),
             encoding="utf-8",
+            env=env,
         )
         return _PtyAdapter(proc)
 
@@ -140,6 +150,7 @@ else:
 # ---------------------------------------------------------------------------
 # PTY instance & manager (platform-agnostic)
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class PtyInstance:
@@ -200,20 +211,20 @@ class PtyInstance:
         x = event_data.get("x", 1)
         y = event_data.get("y", 1)
         modifiers = event_data.get("modifiers", {})
-        
+
         shift = modifiers.get("shift", False)
         ctrl = modifiers.get("ctrl", False)
         alt = modifiers.get("alt", False)
-        
+
         modifier_flag = (shift << 2) | (ctrl << 1) | (alt << 0)
-        
+
         if event == "scroll":
             if button == 64:
                 return f"\x1b[<64;{x + 1};{y + 1}M"
             elif button == 65:
                 return f"\x1b[<65;{x + 1};{y + 1}M"
             return None
-        
+
         if event == "press":
             sgr_button = button | modifier_flag
             return f"\x1b[<{sgr_button};{x + 1};{y + 1}M"
@@ -226,7 +237,7 @@ class PtyInstance:
         elif event == "drag":
             sgr_button = button | modifier_flag | 32
             return f"\x1b[<{sgr_button};{x + 1};{y + 1}M"
-        
+
         return None
 
     def is_alive(self) -> bool:
@@ -279,7 +290,9 @@ class PtyManager:
             work_path=work_path,
         )
         self._instances[session_id] = instance
-        logger.info(f"[SPAWN] {session_id}: OK, total instances: {len(self._instances)}")
+        logger.info(
+            f"[SPAWN] {session_id}: OK, total instances: {len(self._instances)}"
+        )
         return instance
 
     def get(self, session_id: str) -> Optional[PtyInstance]:
@@ -288,7 +301,9 @@ class PtyManager:
     def remove(self, session_id: str) -> None:
         instance = self._instances.pop(session_id, None)
         if instance:
-            logger.warning(f"[REMOVE] {session_id}: removing from manager, remaining: {len(self._instances)}")
+            logger.warning(
+                f"[REMOVE] {session_id}: removing from manager, remaining: {len(self._instances)}"
+            )
             instance.terminate()
         else:
             logger.warning(f"[REMOVE] {session_id}: NOT FOUND in manager")
