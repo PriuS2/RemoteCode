@@ -128,14 +128,17 @@ else:
         cols: int,
     ) -> _PtyAdapter:
         env = os.environ.copy()
+        logger.info(f"[_create_pty] os.environ PATH: {os.environ.get('PATH', '')}")
         env.update(
             {
                 "TERM": "xterm-256color",
                 "CLICOLOR": "1",
                 "COLORTERM": "truecolor",
                 "FORCE_COLOR": "1",
+                "PATH": os.environ.get("PATH", ""),
             }
         )
+        logger.info(f"[_create_pty] final env PATH: {env.get('PATH', '')}")
         proc = pexpect.spawn(
             command,
             args=args,
