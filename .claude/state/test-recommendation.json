@@ -1,7 +1,0 @@
-{
-  "timestamp": "2026-04-01T13:59:33Z",
-  "changed_file": "C:\Users\STOICPC_QQQ\Documents\RemoteCode\frontend\src\App.tsx",
-  "test_command": "pytest",
-  "related_test": "",
-  "recommendation": "テストの実行を推奨します"
-}

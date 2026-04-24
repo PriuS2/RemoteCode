@@ -1,8 +1,0 @@
-Verification: test-results directory deletion
-==============================================
-Date: 2026-04-02
-
-Command: Test-Path "test-results"
-Result: False
-
-Status: SUCCESS - test-results directory has been deleted
